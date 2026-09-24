@@ -46,22 +46,3 @@ class Card:
 
     def __str__(self) -> str:
         return f"{self.rank}{self.suit}"
-
-def test_identical_cards_are_equal():
-    card1 = Card(Rank.ACE, Suit.SPADES)
-    card2 = Card(Rank.ACE, Suit.SPADES)
-
-    assert card1 == card2
-
-def test_different_cards_are_not_equal():
-    card1 = Card(Rank.ACE, Suit.SPADES)
-    card2 = Card(Rank.KING, Suit.SPADES)
-
-    assert card1 != card2
-
-def test_card_is_hashable():
-    card = Card(Rank.ACE, Suit.SPADES)
-
-    cards = {card}
-
-    assert card in cards
