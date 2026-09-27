@@ -7,7 +7,7 @@ class DeckEmptyError(IndexError):
 
 class Deck:
     def __init__(self) -> None:
-        self.cards: list[Card] = self.create_new_deck()
+        self._deck: list[Card] = self.create_new_deck()
 
     @staticmethod
     def create_new_deck() -> list[Card]:
