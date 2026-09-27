@@ -29,55 +29,55 @@ class Position(Enum):
 
 POSITIONS_BY_PLAYER_COUNT: dict[int, tuple[Position, ...]] = {
     9: (
+        Position.BTN,
+        Position.SB,
+        Position.BB,
         Position.UTG,
         Position.UTG1,
         Position.MP,
         Position.LJ,
         Position.HJ,
         Position.CO,
+    ),
+    8: (
         Position.BTN,
         Position.SB,
         Position.BB,
-    ),
-    8: (
         Position.UTG,
         Position.UTG1,
         Position.LJ,
         Position.HJ,
         Position.CO,
+    ),
+    7: (
         Position.BTN,
         Position.SB,
         Position.BB,
-    ),
-    7: (
         Position.UTG,
         Position.LJ,
         Position.HJ,
         Position.CO,
+    ),
+    6: (
         Position.BTN,
         Position.SB,
         Position.BB,
-    ),
-    6: (
         Position.UTG,
         Position.HJ,
         Position.CO,
-        Position.BTN,
-        Position.SB,
-        Position.BB,
     ),
     5: (
+        Position.BTN,
+        Position.SB,
+        Position.BB,
         Position.UTG,
         Position.CO,
-        Position.BTN,
-        Position.SB,
-        Position.BB,
     ),
     4: (
-        Position.UTG,
         Position.BTN,
         Position.SB,
         Position.BB,
+        Position.UTG,
     ),
     3: (
         Position.BTN,

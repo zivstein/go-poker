@@ -7,12 +7,12 @@ def test_six_player_positions():
     positions = positions_for_player_count(6)
 
     assert positions == (
-        Position.UTG,
-        Position.HJ,
-        Position.CO,
         Position.BTN,
         Position.SB,
         Position.BB,
+        Position.UTG,
+        Position.HJ,
+        Position.CO
     )
 
 def test_heads_up_positions():
