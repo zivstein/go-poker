@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class InvalidPlayerCount(IndexError):
+class InvalidPlayerCount(ValueError):
     """ Raised when player count provided is not valid (2-9) """
     
 class Blind(Enum):
