@@ -4,23 +4,23 @@ from .seat import Seat
 class InvalidSeatNumber(IndexError):
     ...
 
+class InvalidTableSize(ValueError):
+    ...
 
 class PlayerAlreadySeatedError(ValueError):
     ...
 
-
 class EmptySeatError(ValueError):
     ...
 
-
-class ButtonUndefinedError(TypeError):
+class ButtonUndefinedError(RuntimeError):
     ...
 
 
 class Table:
     def __init__(self, max_seats: int) -> None:
         if max_seats < 2 or max_seats > 9:
-            raise InvalidSeatNumber("A table can only contain a max seats of 2-9 ")
+            raise InvalidTableSize("A table can only contain a max seats of 2-9 ")
         self.max_seats = max_seats
         self._seats: list[Seat] = self.create_new_empty_seats()
         self.button_seat_number: int | None = None
