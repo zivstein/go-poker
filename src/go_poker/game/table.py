@@ -1,3 +1,4 @@
+from .player import Player
 from .seat import Seat
 
 
@@ -32,12 +33,13 @@ class Table:
             raise InvalidSeatNumber("You have requested to get a seat that does not exist.")
         return self._seats[seat_number - 1]
 
-    def sit_in(self, player_id: str, seat_number: int) -> None:
+    def sit_in(self, player: Player, seat_number: int) -> None:
         seat = self.get_seat(seat_number)
         for check_seat in self._seats:
-            if player_id == check_seat.player_id:
+            seated_player = check_seat.player
+            if seated_player is not None and seated_player.player_id == player.player_id:
                 raise PlayerAlreadySeatedError(f"Player is already seated at seat {check_seat.number}")
-        seat.sit_in(player_id)
+        seat.sit_in(player)
 
     def stand_up(self, seat_number: int) -> None:
         self.get_seat(seat_number).stand_up()

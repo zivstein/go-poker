@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from .player import Player
+
 
 class SeatOccupiedError(ValueError):
     """Raised when trying to occupy an occupied seat."""
@@ -8,17 +10,17 @@ class SeatOccupiedError(ValueError):
 @dataclass
 class Seat:
     number: int
-    player_id: str | None = None
+    player: Player | None = None
 
     @property
     def is_occupied(self) -> bool:
-        return self.player_id is not None
+        return self.player is not None
 
-    def sit_in(self, player_id: str) -> None:
+    def sit_in(self, player: Player) -> None:
         if self.is_occupied:
             raise SeatOccupiedError("This seat is already occupied")
 
-        self.player_id = player_id
+        self.player = player
 
     def stand_up(self) -> None:
-        self.player_id = None
+        self.player = None
