@@ -1,16 +1,16 @@
 [project]
 name = "go-poker"
 version = "0.1.0"
-description = "Add your description here"
+description = "A modular No-Limit Texas Hold'em engine built in Python."
 readme = "README.md"
 authors = [
-    { name = "zivstein" }
+    { name = "Ziv Stein" }
 ]
 requires-python = ">=3.14"
 dependencies = []
 
-[project.scripts]
-go-poker = "go_poker:main"
+[project.urls]
+Repository = "https://github.com/zivstein/go-poker"
 
 [build-system]
 requires = ["uv_build>=0.12.13,<0.13.0"]
@@ -23,19 +23,39 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
 ]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra"
 
 [tool.ruff]
 line-length = 120
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["go_poker"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
+warn_unreachable = true
 check_untyped_defs = true
 disallow_untyped_defs = true
+
+[tool.coverage.run]
+branch = true
+source = ["go_poker"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
