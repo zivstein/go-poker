@@ -30,18 +30,18 @@ def test_table_can_be_created_with_nine_seats(empty_table_max_9: Table) -> None:
 def test_table_rejects_less_than_two_seats() -> None:
     """Fewer than two seats raises InvalidTableSize."""
     with pytest.raises(InvalidTableSize):
-         Table(1)
+        Table(1)
 
 
 def test_table_rejects_more_than_nine_seats() -> None:
     """More than nine seats raises InvalidTableSize."""
     with pytest.raises(InvalidTableSize):
-            Table(10)
+        Table(10)
 
 
 def test_table_creates_correct_seat_numbers(empty_table_max_9: Table) -> None:
     """Seats are numbered consecutively from one through the table size."""
-    assert [seat.number for seat in empty_table_max_9._seats] == list(range(1, 10))      
+    assert [seat.number for seat in empty_table_max_9._seats] == list(range(1, 10))
 
 
 @pytest.mark.parametrize("seat_number", [1, 2, 4, 9])
@@ -113,6 +113,7 @@ def test_player_count_starts_at_zero() -> None:
     table = Table(9)
     assert table.player_count == 0
 
+
 def test_player_count_changes_after_sit_in_and_stand_up() -> None:
     """The player count increases on seating and decreases on leaving."""
     table = Table(9)
@@ -141,6 +142,7 @@ def test_occupied_seats_are_in_seat_order() -> None:
     table.sit_in("Player 2", 2)
     assert table.occupied_seats[0] == Seat(2, "Player 2")
     assert table.occupied_seats[1] == Seat(3, "Player 1")
+
 
 def test_next_occupied_seat_can_be_immediate_next_seat() -> None:
     """The next seat is returned when it is occupied."""
@@ -193,10 +195,12 @@ def test_button_can_be_set_on_occupied_seat() -> None:
     table.set_button(2)
     assert table.button_seat_number == 2
 
+
 def test_button_cannot_be_set_on_empty_seat(empty_table_max_9: Table) -> None:
     """Setting the button to an empty seat raises EmptySeatError."""
     with pytest.raises(EmptySeatError):
         empty_table_max_9.set_button(2)
+
 
 def test_move_button_requires_button_to_be_defined(empty_table_max_9: Table) -> None:
     """Moving an unset button raises ButtonUndefinedError."""

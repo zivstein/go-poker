@@ -6,14 +6,8 @@ from go_poker.game.position import InvalidPlayerCount, Position, positions_for_p
 def test_six_player_positions():
     positions = positions_for_player_count(6)
 
-    assert positions == (
-        Position.BTN,
-        Position.SB,
-        Position.BB,
-        Position.UTG,
-        Position.HJ,
-        Position.CO
-    )
+    assert positions == (Position.BTN, Position.SB, Position.BB, Position.UTG, Position.HJ, Position.CO)
+
 
 def test_heads_up_positions():
     positions = positions_for_player_count(2)
@@ -22,6 +16,7 @@ def test_heads_up_positions():
         Position.BTN,
         Position.BB,
     )
+
 
 def test_too_many_players_raises_error():
     with pytest.raises(InvalidPlayerCount):

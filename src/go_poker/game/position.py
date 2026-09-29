@@ -2,8 +2,9 @@ from enum import Enum
 
 
 class InvalidPlayerCount(ValueError):
-    """ Raised when player count provided is not valid (2-9) """
-    
+    """Raised when player count provided is not valid (2-9)"""
+
+
 class Blind(Enum):
     NONE = "NONE"
     SMALL = "SB"
@@ -26,6 +27,7 @@ class Position(Enum):
 
     def __str__(self) -> str:
         return self.value
+
 
 POSITIONS_BY_PLAYER_COUNT: dict[int, tuple[Position, ...]] = {
     9: (
@@ -87,8 +89,9 @@ POSITIONS_BY_PLAYER_COUNT: dict[int, tuple[Position, ...]] = {
     2: (
         Position.BTN,
         Position.BB,
-    )             
+    ),
 }
+
 
 def positions_for_player_count(player_count: int) -> tuple[Position, ...]:
     if player_count < 2 or player_count > 9:

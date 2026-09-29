@@ -123,7 +123,8 @@ def test_button_not_in_hand_raises_error(assign: Callable[[tuple[int, ...], int]
 @pytest.mark.parametrize("seat_numbers", [(1,), tuple(range(1, 11))])
 @pytest.mark.parametrize("assign", [assign_positions, assign_hand_seats])
 def test_invalid_player_count_raises_error(
-    assign: Callable[[tuple[int, ...], int], object], seat_numbers: tuple[int, ...],
+    assign: Callable[[tuple[int, ...], int], object],
+    seat_numbers: tuple[int, ...],
 ) -> None:
     """Reject hands with fewer than two or more than nine players."""
     with pytest.raises(InvalidPlayerCount):

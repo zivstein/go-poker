@@ -2,8 +2,10 @@ from random import shuffle
 
 from .card import Card, Rank, Suit
 
+
 class DeckEmptyError(IndexError):
     """Raised when drawing from an empty deck."""
+
 
 class Deck:
     def __init__(self) -> None:
