@@ -34,5 +34,3 @@ def test_player_status_can_change(status: PlayerStatus) -> None:
     assert player.status == status
     assert player.player_id == "Ziv"
     assert player.stack == 1000
-
-
