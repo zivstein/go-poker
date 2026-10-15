@@ -1,10 +1,10 @@
-# Go! Poker Development Guidelines
+# Go! Poker Engineering Guidelines
 
-- Keep the core poker engine independent from API, CLI, web, and mobile layers.
-- New behavior should include automated tests.
+- Keep the poker engine independent from API, CLI, web, and mobile layers.
+- Poker rules and game-state decisions belong in the engine, not in clients.
+- Reuse existing domain logic; do not create duplicate sources of truth.
+- New behavior must include automated tests.
 - Prefer typed, focused domain models and small functions.
-- Avoid duplicated game-state logic.
-- Poker rules belong in the engine, not in clients.
-- Prefer explicit domain state over implicit UI-driven state.
-- Do not introduce abstractions before they are needed.
-- Do not modify Git history automatically.
+- Prefer explicit domain state over UI-driven or implicit state.
+- Do not introduce abstractions before they have a clear responsibility.
+- Do not commit, push, amend, rebase, reset, or rewrite Git history unless explicitly requested.
