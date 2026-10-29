@@ -8,14 +8,14 @@ At the end of this milestone, the engine represents a real hand with participant
 
 Out of scope for this milestone: betting and legal actions, pots, all-in handling, showdown and settlement, variants other than Texas Hold'em, and hand history.
 
-The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#pokerhand-planned-cycle-1).
+The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#pokerhand).
 
 ## Cycles
 
 | Cycle | Title | Status |
 | --- | --- | --- |
-| 1 | PokerHand aggregate | Not started |
-| 2 | Deterministic deck + Texas Hold'em private-card dealing | Not started |
+| 1 | PokerHand aggregate | Complete |
+| 2 | Deterministic deck + Texas Hold'em private-card dealing | Current |
 | 3 | Streets + board dealing | Not started |
 | 4 | Integration hardening | Not started |
 

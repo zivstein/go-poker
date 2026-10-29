@@ -1,5 +1,7 @@
 import pytest
 
+from go_poker.core.card import Card, Rank, Suit
+from go_poker.core.deck import Deck
 from go_poker.game.game_lifecycle import (
     GameAlreadyStartedError,
     GameNotStartedError,
@@ -8,6 +10,7 @@ from go_poker.game.game_lifecycle import (
 )
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
+from go_poker.game.poker_hand import PokerHand
 from go_poker.game.position import Blind, InvalidPlayerCount, Position
 from go_poker.game.position_assignment import ButtonSeatNotInHandError
 from go_poker.game.table import ButtonUndefinedError, Table
@@ -17,6 +20,8 @@ WAITING = PlayerStatus.WAITING
 SITTING_OUT = PlayerStatus.SITTING_OUT
 
 SETUP_HAND_PATH = "go_poker.game.game_lifecycle.setup_hand"
+
+FULL_DECK = {Card(rank, suit) for rank in Rank for suit in Suit}
 
 
 def seat_players(table: Table, statuses: dict[int, PlayerStatus]) -> dict[int, Player]:
@@ -28,8 +33,16 @@ def seat_players(table: Table, statuses: dict[int, PlayerStatus]) -> dict[int, P
     return players
 
 
-def summarize(hand_players: tuple[HandPlayerState, ...]) -> list[tuple[int, Position, Blind]]:
-    return [(state.seat_number, state.position, state.blind) for state in hand_players]
+def summarize(hand: PokerHand) -> list[tuple[int, Position, Blind]]:
+    return [(state.seat_number, state.position, state.blind) for state in hand.players]
+
+
+def assert_fresh_hand(hand: PokerHand) -> None:
+    assert isinstance(hand, PokerHand)
+    assert isinstance(hand.deck, Deck)
+    assert len(hand.deck) == 52
+    assert {hand.deck.draw() for _ in range(52)} == FULL_DECK
+    assert hand.board == []
 
 
 def statuses_of(players: dict[int, Player]) -> dict[int, PlayerStatus]:
@@ -132,6 +145,13 @@ def test_start_game_readies_every_waiting_player_and_sets_up_first_hand(
     assert table.button_seat_number == button_seat
 
 
+def test_start_game_returns_hand_with_fresh_deck_and_empty_board() -> None:
+    """The first hand is a PokerHand with its own full deck and no community cards yet."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
+    assert_fresh_hand(start_game(table, RecordingChooser(1)))
+
+
 def test_sitting_out_players_are_not_starters() -> None:
     """Sitting-out players are not offered to the chooser, not dealt in, and keep sitting out."""
     table = Table(9)
@@ -161,9 +181,9 @@ def test_start_game_replaces_stale_button() -> None:
     seat_players(table, dict.fromkeys((1, 2, 3, 4), WAITING))
     table.set_button(1)
     table.stand_up(1)
-    hand_players = start_game(table, RecordingChooser(3))
+    hand = start_game(table, RecordingChooser(3))
     assert table.button_seat_number == 3
-    assert summarize(hand_players) == [
+    assert summarize(hand) == [
         (3, Position.BTN, Blind.NONE),
         (4, Position.SB, Blind.SMALL),
         (2, Position.BB, Blind.BIG),
@@ -307,6 +327,26 @@ def test_button_moves_to_next_ready_player(
     assert table.button_seat_number == expected[0][0]
 
 
+def test_start_next_hand_returns_hand_with_fresh_deck_and_empty_board() -> None:
+    """Each next hand is a PokerHand with its own full deck and no community cards yet."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), READY))
+    table.set_button(1)
+    assert_fresh_hand(start_next_hand(table))
+
+
+def test_consecutive_hands_get_distinct_decks_and_boards() -> None:
+    """A new hand never reuses the previous hand's deck or board."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
+    first_hand = start_game(table, RecordingChooser(1))
+    first_hand.board.append(first_hand.deck.draw())
+    second_hand = start_next_hand(table)
+    assert second_hand.deck is not first_hand.deck
+    assert second_hand.board is not first_hand.board
+    assert_fresh_hand(second_hand)
+
+
 def test_button_skips_waiting_player() -> None:
     """A waiting player cannot receive the button, though hand setup may still deal them in."""
     table = Table(9)
@@ -441,8 +481,8 @@ def test_button_rotates_across_hands() -> None:
     first_hand = start_game(table, RecordingChooser(4))
     later_hands = [start_next_hand(table) for _ in range(3)]
     hands = [first_hand, *later_hands]
-    assert [hand[0].seat_number for hand in hands] == [4, 7, 2, 4]
-    assert all(hand[0].position is Position.BTN for hand in hands)
+    assert [hand.players[0].seat_number for hand in hands] == [4, 7, 2, 4]
+    assert all(hand.players[0].position is Position.BTN for hand in hands)
     assert summarize(later_hands[0]) == [
         (7, Position.BTN, Blind.NONE),
         (2, Position.SB, Blind.SMALL),

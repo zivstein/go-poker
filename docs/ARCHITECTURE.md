@@ -16,7 +16,7 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | Layer | Status | Responsibility | Must not depend on |
 | --- | --- | --- | --- |
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
-| `game/` | Current | Players, seats, table, game lifecycle, hand setup, and (planned) the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
+| `game/` | Current | Players, seats, table, game lifecycle, hand setup, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
 | `game/variants/` | Planned (Cycle 2) | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`, starting with dealing | Accounts, persistence, APIs, clients |
 | `game/betting/` | Planned (milestone 2) | Betting-structure–specific rules | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
@@ -41,28 +41,30 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 **Rules that operate on that state**
 
 - `hand_setup` — owns hand participation and `WAITING` entry rules: which seated players take part in the next hand, and when a waiting player may enter (big blind or a non-blind position, never button or small blind).
-- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Seating alone never starts a game.
+- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both return the new hand as a `PokerHand`. Seating alone never starts a game.
 - `position` / `position_assignment` — positions and blinds relative to the button for a given set of seats.
 
 **Per-hand state**
 
+- `PokerHand` — the aggregate for one hand (see [below](#pokerhand)).
 - `HandPlayerState` — one player's state for one hand: seat, position, blind, and hand flags. It references the persistent `Player` rather than copying it.
 
-## PokerHand (planned, Cycle 1)
+## PokerHand
 
-`PokerHand` will be the aggregate for one hand. It owns:
+`PokerHand` is the aggregate for one hand. It owns:
 
-- the participating `HandPlayerState` objects
-- the hand's `Deck`
-- the community board
-- later hand-level state, such as street, action, and pot state, added as those responsibilities appear
+- the participating `HandPlayerState` objects, in the order `setup_hand` produces them (clockwise from the button)
+- the hand's own `Deck`: a fresh 52-card deck per hand, never shared between hands
+- the community board, empty until board dealing exists
 
-Hand-starting lifecycle functions will return a `PokerHand` instead of a bare tuple of `HandPlayerState`.
+Later hand-level state, such as street, action, and pot state, is added as those responsibilities appear. No cards are dealt yet.
+
+`PokerHand` is a plain container. It does not re-validate participation; `hand_setup` remains the single owner of those rules. The hand-starting lifecycle functions (`start_game`, `start_next_hand`) return a `PokerHand` built from `setup_hand`'s participants.
 
 ### Card ownership
 
 - Community board cards belong to `PokerHand`.
-- Private (hole) cards belong to each `HandPlayerState`.
+- Private (hole) cards belong to each `HandPlayerState` (planned, Cycle 2).
 - A player's combined board + hole cards are never stored as separate state. They are derived when needed, for example at evaluation.
 - Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count.
 

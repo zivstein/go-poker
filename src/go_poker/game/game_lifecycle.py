@@ -1,8 +1,8 @@
 from collections.abc import Callable
 
 from .hand_setup import setup_hand
-from .hand_state import HandPlayerState
 from .player import Player, PlayerStatus
+from .poker_hand import PokerHand
 from .position import validate_player_count
 from .position_assignment import ButtonSeatNotInHandError, order_seats_from_button
 from .table import ButtonUndefinedError, Table
@@ -32,8 +32,8 @@ def _next_ready_seat(ready_seats: tuple[int, ...], anchor: int) -> int:
     return seats_from_anchor[1] if len(seats_from_anchor) > 1 else seats_from_anchor[0]
 
 
-def start_game(table: Table, choose_button: ButtonChooser) -> tuple[HandPlayerState, ...]:
-    """Start a game with every waiting player, place the chosen button and set up the first hand."""
+def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
+    """Start a game with every waiting player, place the chosen button and return the first hand."""
     if _seated_players_with_status(table, PlayerStatus.READY):
         raise GameAlreadyStartedError("The game has already started")
 
@@ -50,7 +50,7 @@ def start_game(table: Table, choose_button: ButtonChooser) -> tuple[HandPlayerSt
         for player in starters.values():
             player.status = PlayerStatus.READY
         table.set_button(button_seat_number)
-        return setup_hand(table)
+        return PokerHand(players=setup_hand(table))
     except Exception:
         for player in starters.values():
             player.status = PlayerStatus.WAITING
@@ -58,8 +58,8 @@ def start_game(table: Table, choose_button: ButtonChooser) -> tuple[HandPlayerSt
         raise
 
 
-def start_next_hand(table: Table) -> tuple[HandPlayerState, ...]:
-    """Move the button to the next ready player and set up the next hand."""
+def start_next_hand(table: Table) -> PokerHand:
+    """Move the button to the next ready player and return the next hand."""
     ready_seats = tuple(_seated_players_with_status(table, PlayerStatus.READY))
     if not ready_seats:
         raise GameNotStartedError("No ready players are seated; start the game again")
@@ -70,7 +70,7 @@ def start_next_hand(table: Table) -> tuple[HandPlayerState, ...]:
 
     try:
         table.set_button(_next_ready_seat(ready_seats, previous_button_seat_number))
-        return setup_hand(table)
+        return PokerHand(players=setup_hand(table))
     except Exception:
         table.button_seat_number = previous_button_seat_number
         raise
