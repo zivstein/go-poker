@@ -1,8 +1,8 @@
 # Current Cycle
 
-**Milestone 1: PokerHand + Dealing Foundation** (see [ROADMAP.md](ROADMAP.md)) — **Complete**
+**Milestone 1: PokerHand + Dealing Foundation** (see [ROADMAP.md](ROADMAP.md)) — **COMPLETE**
 
-All four cycles are complete, so there is no next cycle. The next milestone (Betting engine + legal actions) is broken into cycles when it starts.
+All five cycles are complete, so there is no current cycle. The next milestone, **Milestone 2 — Betting Engine + Legal Actions**, is next but not started. It is broken into cycles when it starts.
 
 ## Goal
 
@@ -20,6 +20,7 @@ The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE
 | 2 | Deterministic deck + Texas Hold'em private-card dealing | Complete |
 | 3 | Streets + board dealing | Complete |
 | 4 | Integration hardening | Complete |
+| 5 | Simplification + milestone closeout | Complete |
 
 ### Cycle 1 — PokerHand aggregate
 
@@ -45,6 +46,18 @@ The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE
 
 - Deal-order and deck-consumption invariants.
 - Heads-up and 2–9 player coverage.
-- Duplicate-card protection.
+- Duplicate-card protection (removed in Cycle 5; uniqueness holds by construction).
 - Invalid transition coverage.
 - Deterministic tests.
+
+### Cycle 5 — Simplification + milestone closeout
+
+- Remove the runtime duplicate-card scan (`ensure_unique_cards`, `DuplicateCardError`, `card in deck`). Card uniqueness holds by construction and is proven by one test-only 52-card accounting invariant.
+- Simplify the milestone's tests: one focused test per domain rule, representative boundaries, and a small number of strong integration tests.
+- Tighten randomness boundaries: `_rng` stays only on `Deck.shuffle` as a test seam and is removed from `start_game` / `start_next_hand`. Lifecycle and dealing tests that need determinism patch `Deck.shuffle` to forward a seeded `_rng`.
+- `PokerHand` requires an explicit `deck`; the lifecycle owns the shuffle policy.
+- The Texas Hold'em `InvalidHoleCardCountError` (exactly two hole cards before board dealing) replaces `HoleCardsNotDealtError`.
+- Keep Texas Hold'em's street transitions variant-owned.
+- Document the `PokerHand` family (Texas Hold'em, Omaha, Pineapple) and Chinese Poker as a separate game family in [ARCHITECTURE.md](ARCHITECTURE.md).
+- Renumber the [roadmap](ROADMAP.md).
+- Use pytest's `importlib` import mode so same-named test modules in different variant directories do not collide.

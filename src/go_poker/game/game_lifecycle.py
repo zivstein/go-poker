@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from random import Random
 
 from go_poker.core.deck import Deck
 
@@ -35,18 +34,15 @@ def _next_ready_seat(ready_seats: tuple[int, ...], anchor: int) -> int:
     return seats_from_anchor[1] if len(seats_from_anchor) > 1 else seats_from_anchor[0]
 
 
-def _new_hand(table: Table, _rng: Random | None) -> PokerHand:
+def _new_hand(table: Table) -> PokerHand:
     # Shuffle before setup_hand, which promotes entering players, so a shuffle failure happens before that change.
     deck = Deck()
-    deck.shuffle(_rng=_rng)
+    deck.shuffle()
     return PokerHand(players=setup_hand(table), deck=deck)
 
 
-def start_game(table: Table, choose_button: ButtonChooser, *, _rng: Random | None = None) -> PokerHand:
-    """Start a game with every waiting player, place the chosen button and return the first hand.
-
-    ``_rng`` is test-only and reaches ``Deck.shuffle``; engine code must never pass it.
-    """
+def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
+    """Start a game with every waiting player, place the chosen button and return the first hand."""
     if _seated_players_with_status(table, PlayerStatus.READY):
         raise GameAlreadyStartedError("The game has already started")
 
@@ -63,7 +59,7 @@ def start_game(table: Table, choose_button: ButtonChooser, *, _rng: Random | Non
         for player in starters.values():
             player.status = PlayerStatus.READY
         table.set_button(button_seat_number)
-        return _new_hand(table, _rng)
+        return _new_hand(table)
     except Exception:
         for player in starters.values():
             player.status = PlayerStatus.WAITING
@@ -71,11 +67,8 @@ def start_game(table: Table, choose_button: ButtonChooser, *, _rng: Random | Non
         raise
 
 
-def start_next_hand(table: Table, *, _rng: Random | None = None) -> PokerHand:
-    """Move the button to the next ready player and return the next hand.
-
-    ``_rng`` is test-only and reaches ``Deck.shuffle``; engine code must never pass it.
-    """
+def start_next_hand(table: Table) -> PokerHand:
+    """Move the button to the next ready player and return the next hand."""
     ready_seats = tuple(_seated_players_with_status(table, PlayerStatus.READY))
     if not ready_seats:
         raise GameNotStartedError("No ready players are seated; start the game again")
@@ -86,7 +79,7 @@ def start_next_hand(table: Table, *, _rng: Random | None = None) -> PokerHand:
 
     try:
         table.set_button(_next_ready_seat(ready_seats, previous_button_seat_number))
-        return _new_hand(table, _rng)
+        return _new_hand(table)
     except Exception:
         table.button_seat_number = previous_button_seat_number
         raise

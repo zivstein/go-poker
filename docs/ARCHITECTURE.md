@@ -16,11 +16,11 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | Layer | Status | Responsibility | Must not depend on |
 | --- | --- | --- | --- |
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
-| `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, the `PokerHand` aggregate, and card uniqueness | Accounts, persistence, APIs, clients |
+| `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
 | `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
 | `game/betting/` | Planned (milestone 2) | Betting-structure–specific rules | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
-| Accounts, persistence, API, clients | Planned (milestones 10+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
+| Accounts, persistence, API, clients | Planned (milestones 13+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
 
 Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` does not exist yet.
 
@@ -28,7 +28,12 @@ Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` 
 
 `core/` is pure card, deck, and hand-evaluation functionality: `Card`, `Rank`, `Suit`, `Deck`, `HandRank`, and the evaluator. It has no knowledge of tables, players, hands in play, accounts, APIs, or clients, and it stays that way.
 
-**Randomness rule.** A new `Deck()` is in creation order until shuffled. `Deck.shuffle()` uses the OS CSPRNG (`random.SystemRandom`, which cannot be seeded), so engine shuffles are never reproducible. `Deck.shuffle()`, `start_game`, and `start_next_hand` accept an underscored `_rng` keyword (a `random.Random`) that is test-only: tests pass a seeded generator to get a reproducible deck order, and engine code must never pass it.
+**Randomness rule.** A new `Deck()` is in creation order until shuffled. `Deck.shuffle()` uses the OS CSPRNG through the module-private `random.SystemRandom` instance `_SYSTEM_RANDOM` (it cannot be seeded), so engine shuffles are never reproducible.
+
+- The security boundary is that production APIs and clients never control the shuffle RNG. No lifecycle or dealing function takes an RNG argument; `start_game` and `start_next_hand` always call `Deck.shuffle()` with no arguments.
+- The only RNG input is the test seam `Deck.shuffle(*, _rng=None)`: tests pass a seeded `random.Random` to get a reproducible deck order. Engine code never passes it.
+- The leading underscore on `_rng` and `_SYSTEM_RANDOM` is a naming convention that marks test-only or private use. It is not a security mechanism.
+- Tests that need deterministic (or failing) shuffles above the `Deck` layer, for example through the lifecycle, patch `Deck.shuffle` inside the test to forward a seeded (or failing) `_rng` to the original method, so `_rng` stays the only seam. Only `Deck`'s own tests replace `_SYSTEM_RANDOM`, to check the deck's default generator at the layer that owns it.
 
 ## Game domain (current)
 
@@ -43,7 +48,7 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 **Rules that operate on that state**
 
 - `hand_setup` — owns hand participation and `WAITING` entry rules: which seated players take part in the next hand, and when a waiting player may enter (big blind or a non-blind position, never button or small blind).
-- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both return the new hand as a `PokerHand` with a fresh deck, shuffled before hand setup with the OS CSPRNG (or the test-only `_rng`). Seating alone never starts a game. The lifecycle is variant-agnostic: it deals no cards, so the new hand starts on `PREFLOP` with an empty board and no burned cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`, then `deal_next_street`) to the returned `PokerHand`.
+- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both create a fresh `Deck()`, shuffle it securely before hand setup (so a shuffle failure is rolled back like any other), and pass it to the new `PokerHand`. The lifecycle owns the shuffle policy. Seating alone never starts a game. The lifecycle is variant-agnostic: it deals no cards, so the new hand starts on `PREFLOP` with an empty board and no burned cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`, then `deal_next_street`) to the returned `PokerHand`.
 - `position` / `position_assignment` — positions and blinds relative to the button for a given set of seats.
 
 **Per-hand state**
@@ -56,7 +61,7 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 `PokerHand` is the aggregate for one hand. It owns:
 
 - the participating `HandPlayerState` objects, in the order `setup_hand` produces them (clockwise from the button)
-- the hand's own `Deck`: a fresh 52-card deck per hand, never shared between hands. `PokerHand`'s default deck is unshuffled (in creation order); only the lifecycle shuffles it, so engine code creates hands through `start_game` / `start_next_hand`
+- the hand's own `Deck`, a required constructor argument (`PokerHand(players=..., deck=...)`, with no default). `PokerHand` owns the deck's state for the hand but not its shuffle policy. The lifecycle creates a fresh 52-card deck per hand, shuffles it securely, and passes it in, so engine code creates hands through `start_game` / `start_next_hand`. Tests that want a known order pass an unshuffled `Deck()` explicitly
 - the community board, empty until variant rules deal it
 - the current `Street` (`PREFLOP`, `FLOP`, `TURN`, `RIVER`), starting on `PREFLOP`
 - the burned cards, empty until variant rules burn cards before dealing the board, kept so every card drawn from the deck stays accounted for
@@ -73,13 +78,42 @@ Later hand-level state, such as action and pot state, is added as those responsi
 - Burned cards belong to `PokerHand`.
 - Private (hole) cards belong to each `HandPlayerState`, as a list that is empty until dealt.
 - A player's combined board + hole cards are never stored as separate state. They are derived when needed, for example at evaluation.
-- Every card appears at most once across the hand's hole cards, board, burned cards, and deck. `ensure_unique_cards` (in `game/poker_hand.py`) enforces this and raises `DuplicateCardError`; it lives in `game/`, not in a variant, because the rule applies to every variant. Variant dealing checks it before drawing, so a hand with a duplicated card, or a dealt card still in its deck, is rejected unchanged.
 - Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count: Texas Hold'em (`game/variants/texas_holdem/dealing.py`) deals two, one card at a time starting clockwise of the button and ending with the button, with no burn card. Hole cards are dealt only on `PREFLOP`.
-- Texas Hold'em board dealing (`deal_next_street`) moves the hand from `PREFLOP` to `FLOP`, `TURN`, and `RIVER`. Entering each street burns one card and then deals that street's board cards in draw order: three on the flop, one on the turn, one on the river. The board is dealt only after every participant holds their hole cards, and there is no street after `RIVER`.
+- Texas Hold'em board dealing (`deal_next_street`) moves the hand from `PREFLOP` to `FLOP`, `TURN`, and `RIVER`. Entering each street burns one card and then deals that street's board cards in draw order: three on the flop, one on the turn, one on the river. The board is dealt only once every participant holds exactly two hole cards; otherwise `deal_next_street` raises the Hold'em-owned `InvalidHoleCardCountError` (for zero, one, or three or more cards) without changing the hand. There is no street after `RIVER`. Texas Hold'em owns its street transitions (the `PREFLOP` → `FLOP` → `TURN` → `RIVER` mapping in `dealing.py`); `Street` itself only names the streets.
+
+### Card integrity
+
+Legal engine-generated state keeps every card unique by construction:
+
+- each hand gets a fresh deck of 52 distinct cards;
+- shuffling only reorders the deck;
+- drawing removes the card from the deck;
+- dealing moves cards only by drawing them.
+
+There is therefore no runtime duplicate-card scan. A test-only card-accounting invariant proves the guarantee: after a legal complete Texas Hold'em deal, the remaining deck plus every hole card, burned card, and board card are exactly the original 52 distinct cards. Externally deserialized, reconstructed, or network-provided state is not engine-generated. Validating it belongs at that external boundary, once such a boundary exists.
 
 ## Variants and betting structures
 
 These are separate, independent dimensions.
+
+### The PokerHand family
+
+`PokerHand` is the normal (default) community-card poker hand abstraction. It serves Texas Hold'em, the default product variant, and later Omaha and Pineapple. All three may reuse shared hand infrastructure (participants, deck, board, streets, burned cards, and later betting and pots). Rules that differ between them, such as hole-card counts, discards, and evaluation constraints, stay variant-owned under `game/variants/`. There are no premature base classes, protocols, or factories for the family; shared abstractions are extracted when the second implementation shows what is shared (see [Extensibility policy](#extensibility-policy)).
+
+A future private-table or session layer may choose the variant per table or per hand, for example by rotation, explicit request, or voting (roadmap milestone 10). It is not implemented.
+
+### Chinese Poker (separate game family)
+
+Chinese Poker is not a `PokerHand` variant. A future implementation uses a distinct model, such as `ChinesePokerHand`, with its own:
+
+- hand state and player state
+- placement / round lifecycle
+- scoring, multipliers, and royalties
+- rules
+
+It may reuse `core/` card and evaluation primitives, and later platform infrastructure such as accounts, history, and persistence. `PokerHand`, `Street`, blinds, betting, the board, and the folded / all-in flags are not made universal to fit Chinese Poker. No source-tree refactor is made for it now (roadmap milestone 11).
+
+### Variant rules
 
 **Poker variants** — for example Texas Hold'em, Omaha, Pineapple. Variant rules may control:
 
@@ -91,11 +125,11 @@ These are separate, independent dimensions.
 
 **Betting structures** — No Limit, Pot Limit, Fixed Limit.
 
-A variant is never coupled to one betting structure. A game is a composition of the two: PLO is Omaha rules + Pot-Limit betting, and No-Limit Hold'em is Texas Hold'em rules + No-Limit betting.
+A variant is never coupled to one betting structure. A game is a composition of the two: No-Limit Hold'em is Texas Hold'em rules + No-Limit betting, PLO is Omaha rules + Pot-Limit betting, and Pineapple pairs Pineapple rules with an appropriate betting structure.
 
 ### Extensibility policy
 
-- Do not create abstract base classes or protocols for future variants or betting structures yet.
+- Do not create abstract base classes, protocols, factories, or registries for future variants, betting structures, or game families yet.
 - Variant-specific poker rules live under `src/go_poker/game/variants/`, with the first implementation in `src/go_poker/game/variants/texas_holdem/`. Betting-structure–specific rules live under `src/go_poker/game/betting/`.
 - These boundaries are namespaces only: no abstract base classes, protocols, factories, or speculative implementations.
 - Extract common abstractions only when a second implementation (planned: Omaha + Pot-Limit, milestone 8) proves what is shared.

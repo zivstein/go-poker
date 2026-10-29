@@ -1,5 +1,5 @@
+import random
 from collections.abc import MutableSequence
-from random import Random
 from typing import Any
 
 import pytest
@@ -74,25 +74,20 @@ class SetupFailure(Exception):
 
 
 class ShuffleFailure(Exception):
-    """Sentinel raised by FailingRandom."""
+    """Sentinel raised by FailingShuffler."""
 
 
-class FailingRandom(Random):
-    """Test generator whose shuffle always fails."""
+class FailingShuffler(random.Random):
+    """Test rng whose shuffle always fails."""
 
     def shuffle(self, x: MutableSequence[Any]) -> None:
         raise ShuffleFailure
 
 
-def deck_order(hand: PokerHand) -> list[Card]:
-    return [hand.deck.draw() for _ in range(len(hand.deck))]
-
-
-def expected_deck_order(seed: int) -> list[Card]:
-    """The draw order of a fresh deck shuffled once with Random(seed)."""
-    cards = Deck.create_new_deck()
-    Random(seed).shuffle(cards)
-    return list(reversed(cards))
+def shuffle_decks_with(monkeypatch: pytest.MonkeyPatch, rng: random.Random) -> None:
+    """Make every Deck.shuffle forward the given test rng through Deck's own _rng seam."""
+    original = Deck.shuffle
+    monkeypatch.setattr(Deck, "shuffle", lambda deck, *, _rng=None: original(deck, _rng=rng))
 
 
 # =============================================================================
@@ -173,13 +168,6 @@ def test_start_game_readies_every_waiting_player_and_sets_up_first_hand(
     assert chooser.calls == [starter_seats]
     assert all(player.status == READY for player in players.values())
     assert table.button_seat_number == button_seat
-
-
-def test_start_game_returns_hand_with_fresh_deck_and_empty_board() -> None:
-    """The first hand is a PokerHand with its own full deck and no community cards yet."""
-    table = Table(9)
-    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-    assert_fresh_hand(start_game(table, RecordingChooser(1)))
 
 
 def test_sitting_out_players_are_not_starters() -> None:
@@ -355,35 +343,6 @@ def test_button_moves_to_next_ready_player(
     table.set_button(previous_button)
     assert summarize(start_next_hand(table)) == expected
     assert table.button_seat_number == expected[0][0]
-
-
-def test_start_next_hand_returns_hand_with_fresh_deck_and_empty_board() -> None:
-    """Each next hand is a PokerHand with its own full deck and no community cards yet."""
-    table = Table(9)
-    seat_players(table, dict.fromkeys((1, 2, 3), READY))
-    table.set_button(1)
-    assert_fresh_hand(start_next_hand(table))
-
-
-def test_new_hands_start_preflop_without_burned_cards() -> None:
-    """Both the first hand and each next hand start on the preflop street with nothing burned."""
-    table = Table(9)
-    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-    for hand in (start_game(table, RecordingChooser(1)), start_next_hand(table)):
-        assert hand.street is Street.PREFLOP
-        assert hand.burned_cards == []
-
-
-def test_consecutive_hands_get_distinct_decks_and_boards() -> None:
-    """A new hand never reuses the previous hand's deck or board."""
-    table = Table(9)
-    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-    first_hand = start_game(table, RecordingChooser(1))
-    first_hand.board.append(first_hand.deck.draw())
-    second_hand = start_next_hand(table)
-    assert second_hand.deck is not first_hand.deck
-    assert second_hand.board is not first_hand.board
-    assert_fresh_hand(second_hand)
 
 
 def test_button_skips_waiting_player() -> None:
@@ -580,86 +539,59 @@ def test_next_hand_failure_restores_button(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 # =============================================================================
-# DECK SHUFFLING
+# NEW-HAND DECKS
 # =============================================================================
 
 
-def test_every_new_hand_is_shuffled_without_a_test_rng(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without a test rng, game start and every next hand shuffle a fresh full deck with the default generator."""
-    shuffles: list[tuple[int, Random | None]] = []
+def test_each_new_hand_gets_its_own_fresh_deck_with_nothing_dealt() -> None:
+    """Game start and each next hand return a hand with a new full deck and board, on preflop with nothing dealt."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
+    first_hand = start_game(table, RecordingChooser(1))
+    second_hand = start_next_hand(table)
+    assert second_hand.deck is not first_hand.deck
+    assert second_hand.board is not first_hand.board
+    assert_fresh_hand(first_hand)
+    assert_fresh_hand(second_hand)
 
-    def recording_shuffle(deck: Deck, *, _rng: Random | None = None) -> None:
-        shuffles.append((len(deck), _rng))
+
+def test_every_new_hand_shuffles_its_full_deck_once_without_a_test_rng(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Game start and each next hand shuffle the new hand's full deck once, never passing the test-only _rng."""
+    original = Deck.shuffle
+    shuffles: list[tuple[Deck, int, random.Random | None]] = []
+
+    def recording_shuffle(deck: Deck, *, _rng: random.Random | None = None) -> None:
+        shuffles.append((deck, len(deck), _rng))
+        original(deck, _rng=_rng)
 
     monkeypatch.setattr(Deck, "shuffle", recording_shuffle)
     table = Table(9)
     seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-    start_game(table, RecordingChooser(1))
-    start_next_hand(table)
-    start_next_hand(table)
-    assert shuffles == [(52, None)] * 3
+    hands = [start_game(table, RecordingChooser(1)), start_next_hand(table), start_next_hand(table)]
+    assert [(len_, rng) for _, len_, rng in shuffles] == [(52, None)] * 3
+    assert all(deck is hand.deck for (deck, _, _), hand in zip(shuffles, hands, strict=True))
 
 
-def test_start_game_shuffles_the_deck_with_the_test_rng() -> None:
-    """Equal seeds give the first hand the same deck order, and the order comes from the given rng."""
-    orders = []
-    for _ in range(2):
-        table = Table(9)
-        seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-        orders.append(deck_order(start_game(table, RecordingChooser(1), _rng=Random(11))))
-    assert orders[0] == orders[1] == expected_deck_order(11)
-
-
-def test_start_next_hand_shuffles_the_deck_with_the_test_rng() -> None:
-    """Equal seeds give the next hand the same deck order, and the order comes from the given rng."""
-    orders = []
-    for _ in range(2):
-        table = Table(9)
-        seat_players(table, dict.fromkeys((1, 2, 3), READY))
-        table.set_button(1)
-        orders.append(deck_order(start_next_hand(table, _rng=Random(23))))
-    assert orders[0] == orders[1] == expected_deck_order(23)
-
-
-def test_shared_test_rng_reproduces_a_sequence_of_hands() -> None:
-    """Replaying a game with the same seeded generator reproduces every hand's deck order."""
-    games = []
-    for _ in range(2):
-        table = Table(9)
-        seat_players(table, dict.fromkeys((2, 4, 7), WAITING))
-        rng = Random(5)
-        hands = [start_game(table, RecordingChooser(4), _rng=rng)]
-        hands += [start_next_hand(table, _rng=rng) for _ in range(3)]
-        games.append([deck_order(hand) for hand in hands])
-    assert games[0] == games[1]
-    assert len({tuple(order) for order in games[0]}) == 4
-
-
-@pytest.mark.parametrize("seed", [0, 99])
-def test_seeded_hands_have_full_deck_and_no_dealt_cards(seed: int) -> None:
-    """A seeded shuffle still gives each hand all 52 cards, and starting a hand deals nothing."""
-    table = Table(9)
-    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-    assert_fresh_hand(start_game(table, RecordingChooser(1), _rng=Random(seed)))
-    assert_fresh_hand(start_next_hand(table, _rng=Random(seed)))
-
-
-def test_start_game_shuffle_failure_restores_statuses_and_button() -> None:
+def test_start_game_shuffle_failure_restores_statuses_and_button(monkeypatch: pytest.MonkeyPatch) -> None:
     """A failing shuffle undoes the start like any other failure while the hand is being created."""
+    shuffle_decks_with(monkeypatch, FailingShuffler())
     table = Table(9)
     players = seat_players(table, {1: WAITING, 2: WAITING, 3: SITTING_OUT})
     with pytest.raises(ShuffleFailure):
-        start_game(table, RecordingChooser(2), _rng=FailingRandom())
+        start_game(table, RecordingChooser(2))
     assert statuses_of(players) == {1: WAITING, 2: WAITING, 3: SITTING_OUT}
     assert table.button_seat_number is None
 
 
-def test_start_next_hand_shuffle_failure_restores_button_and_keeps_entrant_waiting() -> None:
+def test_start_next_hand_shuffle_failure_restores_button_and_keeps_entrant_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A failing shuffle restores the button and leaves a would-be entrant waiting."""
+    shuffle_decks_with(monkeypatch, FailingShuffler())
     table = Table(9)
     players = seat_players(table, {1: READY, 2: READY, 3: READY, 4: WAITING})
     table.set_button(1)
     with pytest.raises(ShuffleFailure):
-        start_next_hand(table, _rng=FailingRandom())
+        start_next_hand(table)
     assert table.button_seat_number == 1
     assert statuses_of(players) == {1: READY, 2: READY, 3: READY, 4: WAITING}

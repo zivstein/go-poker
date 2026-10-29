@@ -1,5 +1,5 @@
 from go_poker.core.deck import DeckEmptyError
-from go_poker.game.poker_hand import PokerHand, ensure_unique_cards
+from go_poker.game.poker_hand import PokerHand
 from go_poker.game.street import Street
 
 HOLE_CARD_COUNT = 2
@@ -18,8 +18,8 @@ class HandPastPreflopError(RuntimeError):
     """Raised when dealing hole cards to a hand that is no longer on the preflop street."""
 
 
-class HoleCardsNotDealtError(RuntimeError):
-    """Raised when dealing board cards before every participant holds their hole cards."""
+class InvalidHoleCardCountError(RuntimeError):
+    """Raised when dealing board cards while a participant does not hold exactly two hole cards."""
 
 
 class NoNextStreetError(RuntimeError):
@@ -30,16 +30,13 @@ def deal_hole_cards(hand: PokerHand) -> None:
     """Deal HOLE_CARD_COUNT cards to every participant from the hand's deck, one card per player per round.
 
     Each round starts with the player clockwise of the button and ends with the button. No card is burned.
-    The hand is validated before any card is drawn, so a failure leaves it unchanged; a hand whose cards are
-    duplicated or still in the deck is rejected with DuplicateCardError.
+    The hand is validated before any card is drawn, so a failure leaves it unchanged.
     """
     if hand.street is not Street.PREFLOP:
         raise HandPastPreflopError(f"Hole cards are dealt preflop, but the hand is on the {hand.street.value}")
 
     if any(state.hole_cards for state in hand.players):
         raise HoleCardsAlreadyDealtError("Hole cards have already been dealt in this hand")
-
-    ensure_unique_cards(hand)
 
     cards_needed = HOLE_CARD_COUNT * len(hand.players)
     if len(hand.deck) < cards_needed:
@@ -55,18 +52,18 @@ def deal_hole_cards(hand: PokerHand) -> None:
 def deal_next_street(hand: PokerHand) -> None:
     """Move the hand to its next street: burn BURN_CARD_COUNT cards, then deal that street's board cards.
 
-    Streets go preflop, flop, turn, river. Burned cards go to the hand's burned cards and board cards onto its
-    board, in draw order. The hand is validated before any card is drawn, so a failure leaves it unchanged; a hand
-    whose cards are duplicated or still in the deck is rejected with DuplicateCardError.
+    Streets go preflop, flop, turn, river. Every participant must hold exactly HOLE_CARD_COUNT hole cards first.
+    Burned cards go to the hand's burned cards and board cards onto its board, in draw order. The hand is validated
+    before any card is drawn, so a failure leaves it unchanged.
     """
     next_street = _NEXT_STREET.get(hand.street)
     if next_street is None:
         raise NoNextStreetError(f"There is no street after the {hand.street.value}")
 
     if any(len(state.hole_cards) != HOLE_CARD_COUNT for state in hand.players):
-        raise HoleCardsNotDealtError("Board cards cannot be dealt before every participant holds hole cards")
-
-    ensure_unique_cards(hand)
+        raise InvalidHoleCardCountError(
+            f"Board cards are dealt only once every participant holds exactly {HOLE_CARD_COUNT} hole cards"
+        )
 
     board_card_count = BOARD_CARD_COUNTS[next_street]
     cards_needed = BURN_CARD_COUNT + board_card_count

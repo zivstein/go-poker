@@ -25,7 +25,8 @@ class Deck:
     def shuffle(self, *, _rng: random.Random | None = None) -> None:
         """Shuffle the remaining cards with the OS CSPRNG.
 
-        ``_rng`` is test-only: tests pass a seeded generator for a reproducible order. Engine code must never pass it.
+        ``_rng`` is the only test seam for shuffle randomness: tests pass a seeded generator for a reproducible order.
+        Engine code never passes it. The leading underscore is a naming convention, not a security mechanism.
         """
         (_SYSTEM_RANDOM if _rng is None else _rng).shuffle(self._deck)
 
@@ -36,7 +37,3 @@ class Deck:
 
     def __len__(self) -> int:
         return len(self._deck)
-
-    def __contains__(self, card: object) -> bool:
-        """Whether the card is still in the deck, that is, not drawn yet."""
-        return card in self._deck

@@ -33,15 +33,6 @@ def test_draw_from_empty_deck():
         deck.draw()
 
 
-def test_card_is_in_deck_until_drawn() -> None:
-    """Membership is true for every undrawn card and false for a card once it has been drawn."""
-    deck = Deck()
-    assert all(Card(rank, suit) in deck for rank in Rank for suit in Suit)
-    drawn = deck.draw()
-    assert drawn not in deck
-    assert all(card in deck for card in Deck.create_new_deck() if card != drawn)
-
-
 def test_deck_contains_expected_cards():
     deck = Deck()
     _test_deck_contains_expected_cards(deck)
@@ -88,12 +79,6 @@ def draw_all_in_order(deck: Deck) -> list[Card]:
     return [deck.draw() for _ in range(len(deck))]
 
 
-def shuffled_with_seed(seed: int) -> list[Card]:
-    deck = Deck()
-    deck.shuffle(_rng=random.Random(seed))
-    return draw_all_in_order(deck)
-
-
 def test_new_deck_is_in_creation_order() -> None:
     """A new deck is not shuffled; it draws its creation order from the end."""
     assert draw_all_in_order(Deck()) == list(reversed(Deck.create_new_deck()))
@@ -114,41 +99,10 @@ def test_plain_shuffle_uses_the_module_generator(monkeypatch: pytest.MonkeyPatch
     assert draw_all_in_order(deck) == list(reversed(expected))
 
 
-def test_default_shuffles_differ() -> None:
-    """Two default shuffles give different orders; equal orders have probability 1 in 52!."""
-    first, second = Deck(), Deck()
-    first.shuffle()
-    second.shuffle()
-    assert draw_all_in_order(first) != draw_all_in_order(second)
-
-
-def test_shuffle_with_same_seed_gives_same_order() -> None:
-    """Two decks shuffled with equally seeded test generators deal the same cards in the same order."""
-    assert shuffled_with_seed(42) == shuffled_with_seed(42)
-
-
-def test_shuffle_with_different_seeds_gives_different_orders() -> None:
-    """Different seeds produce different deck orders."""
-    assert shuffled_with_seed(1) != shuffled_with_seed(2)
-
-
 def test_shuffle_uses_the_given_test_rng() -> None:
-    """The deck order is exactly the given generator's shuffle of a fresh deck."""
+    """With the test seam, the deck order is exactly the given generator's shuffle of a fresh deck."""
+    deck = Deck()
+    deck.shuffle(_rng=random.Random(7))
     expected = Deck.create_new_deck()
     random.Random(7).shuffle(expected)
-    assert shuffled_with_seed(7) == list(reversed(expected))
-
-
-def test_shuffle_with_rng_preserves_cards() -> None:
-    """Shuffling with a test generator keeps the same 52 cards."""
-    deck = Deck()
-    deck.shuffle(_rng=random.Random(3))
-    _test_deck_contains_expected_cards(deck)
-
-
-def test_shuffle_with_rng_partially_drawn_deck() -> None:
-    """Shuffling a partially drawn deck with a test generator keeps exactly the undrawn cards."""
-    deck = Deck()
-    drawn_cards = [deck.draw() for _ in range(10)]
-    deck.shuffle(_rng=random.Random(3))
-    _test_deck_contains_expected_cards(deck, drawn_cards)
+    assert draw_all_in_order(deck) == list(reversed(expected))
