@@ -16,8 +16,8 @@ The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE
 | --- | --- | --- |
 | 1 | PokerHand aggregate | Complete |
 | 2 | Deterministic deck + Texas Hold'em private-card dealing | Complete |
-| 3 | Streets + board dealing | Current |
-| 4 | Integration hardening | Not started |
+| 3 | Streets + board dealing | Complete |
+| 4 | Integration hardening | Current |
 
 ### Cycle 1 — PokerHand aggregate
 

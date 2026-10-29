@@ -28,7 +28,7 @@ The core engine is intentionally independent from presentation and networking la
 
 - Explicit game start: `start_game()` starts a game with every seated `WAITING` player (2–9; `SITTING_OUT` players are excluded), the first button comes from an injected chooser, and seating alone never starts a game
 - Button movement between hands: `start_next_hand()` moves the button clockwise from the previous button seat to the next `READY` player, skipping `WAITING` and `SITTING_OUT` players and empty seats; with no `READY` players, the game must be started again
-- Both return the new hand as a `PokerHand` that owns its participants, a freshly and securely shuffled 52-card deck, and an empty community board; starting a hand deals no cards
+- Both return the new hand as a `PokerHand` that owns its participants, a freshly and securely shuffled 52-card deck, and an empty community board, on `PREFLOP` with no burned cards; starting a hand deals no cards
 - Both accept the same test-only `_rng` keyword, passed to the new hand's deck shuffle so tests can reproduce hands; engine code must never pass it
 - Both leave table and player state unchanged if they fail
 
@@ -37,7 +37,8 @@ The core engine is intentionally independent from presentation and networking la
 - Position assignment for 2–9 players relative to the button, skipping empty seats
 - Small- and big-blind seat assignment, including the heads-up rule where the button holds the small blind
 - Per-hand player state (seat, position, blind, and private hole cards) kept separate from the persistent table-level player; hole cards are an empty list until dealt, with no fixed card count
-- `PokerHand`, the aggregate for one hand: its participants in order from the button, its own deck, and the community board
+- `PokerHand`, the aggregate for one hand: its participants in order from the button, its own deck, the community board, the current street, and the burned cards
+- Street progression: a hand moves through `PREFLOP`, `FLOP`, `TURN`, and `RIVER`, starting on `PREFLOP`
 - Hand participant setup: `READY` players take part, `SITTING_OUT` players are skipped, and a hand needs at least two participants regardless of table size
 - Waiting-player entry rules: a `WAITING` player joins as the big blind or in a non-blind position, and keeps waiting if they would be the button or small blind
 
@@ -45,7 +46,9 @@ The core engine is intentionally independent from presentation and networking la
 
 - `deal_hole_cards()` deals two hole cards to every participant of a `PokerHand` from the hand's own deck
 - Cards go out one at a time in rounds, starting with the player clockwise of the button and ending with the button (heads-up, the big blind gets the first card); no card is burned before hole cards
-- Dealing is rejected without changing the hand if hole cards were already dealt or the deck has too few cards
+- Dealing hole cards is rejected without changing the hand if the hand is past preflop, hole cards were already dealt, or the deck has too few cards
+- `deal_next_street()` moves a `PokerHand` to its next street: it burns one card into the hand's burned cards, then deals that street's board cards onto the hand's board in draw order (three on the flop, one on the turn, one on the river)
+- Board dealing is rejected without changing the hand if any participant does not yet hold their hole cards, the hand is already on the river, or the deck has too few cards for the burn and the street's board cards
 
 **Tooling**
 
@@ -72,13 +75,14 @@ src/go_poker/
     ├── position_assignment.py  # position and blind per seat for one hand
     ├── hand_state.py           # HandPlayerState, per-hand player state
     ├── hand_setup.py           # setup_hand, selects a hand's participants
-    ├── poker_hand.py           # PokerHand: participants, deck, and board of one hand
+    ├── street.py               # Street: PREFLOP, FLOP, TURN, RIVER
+    ├── poker_hand.py           # PokerHand: participants, deck, board, street, and burned cards of one hand
     └── variants/               # variant-specific poker rules
         └── texas_holdem/
-            └── dealing.py      # Texas Hold'em hole-card dealing
+            └── dealing.py      # Texas Hold'em hole-card, burn, and board dealing
 ```
 
-`core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. `game_lifecycle` owns game start and button movement, while `Table` only stores the button seat and stays unaware of player status. Game start and each next hand return a `PokerHand`, the aggregate for one hand, which owns the participants, a fresh securely shuffled deck, and the community board. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `PokerHand` and its `HandPlayerState` participants, including each player's hole cards. The lifecycle is variant-agnostic: variant rules such as Texas Hold'em dealing live in `game/variants/` and are applied by the caller to the returned `PokerHand`. Future APIs and clients will consume the engine rather than reimplement poker rules.
+`core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. `game_lifecycle` owns game start and button movement, while `Table` only stores the button seat and stays unaware of player status. Game start and each next hand return a `PokerHand`, the aggregate for one hand, which owns the participants, a fresh securely shuffled deck, the community board, the current street, and the burned cards. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `PokerHand` and its `HandPlayerState` participants, including each player's hole cards. `Street` lives in `game` because `PokerHand` owns it. The lifecycle is variant-agnostic: variant rules such as Texas Hold'em hole-card and board dealing live in `game/variants/`, are applied by the caller to the returned `PokerHand`, and advance its street. Future APIs and clients will consume the engine rather than reimplement poker rules.
 
 Ownership boundaries and the planned direction for hands, variants, betting structures, and hand history are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -156,6 +160,6 @@ The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active m
 
 **Work in progress.**
 
-The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, and empty board, and Texas Hold'em hole-card dealing. It does not yet play out a hand: there is no board dealing, street progression, betting, pot handling, or showdown, and no CLI, API, or client.
+The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. It does not yet play out a hand: there is no betting, pot handling, or showdown, and no CLI, API, or client.
 
 The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. The active milestone is PokerHand + Dealing Foundation.

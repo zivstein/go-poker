@@ -16,8 +16,8 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | Layer | Status | Responsibility | Must not depend on |
 | --- | --- | --- | --- |
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
-| `game/` | Current | Players, seats, table, game lifecycle, hand setup, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
-| `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card dealing | Accounts, persistence, APIs, clients |
+| `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
+| `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
 | `game/betting/` | Planned (milestone 2) | Betting-structure–specific rules | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
 | Accounts, persistence, API, clients | Planned (milestones 10+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
@@ -43,7 +43,7 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 **Rules that operate on that state**
 
 - `hand_setup` — owns hand participation and `WAITING` entry rules: which seated players take part in the next hand, and when a waiting player may enter (big blind or a non-blind position, never button or small blind).
-- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both return the new hand as a `PokerHand` with a fresh deck, shuffled before hand setup with the OS CSPRNG (or the test-only `_rng`). Seating alone never starts a game. The lifecycle is variant-agnostic: it deals no cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`) to the returned `PokerHand`.
+- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both return the new hand as a `PokerHand` with a fresh deck, shuffled before hand setup with the OS CSPRNG (or the test-only `_rng`). Seating alone never starts a game. The lifecycle is variant-agnostic: it deals no cards, so the new hand starts on `PREFLOP` with an empty board and no burned cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`, then `deal_next_street`) to the returned `PokerHand`.
 - `position` / `position_assignment` — positions and blinds relative to the button for a given set of seats.
 
 **Per-hand state**
@@ -57,18 +57,24 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 
 - the participating `HandPlayerState` objects, in the order `setup_hand` produces them (clockwise from the button)
 - the hand's own `Deck`: a fresh 52-card deck per hand, never shared between hands. `PokerHand`'s default deck is unshuffled (in creation order); only the lifecycle shuffles it, so engine code creates hands through `start_game` / `start_next_hand`
-- the community board, empty until board dealing exists
+- the community board, empty until variant rules deal it
+- the current `Street` (`PREFLOP`, `FLOP`, `TURN`, `RIVER`), starting on `PREFLOP`
+- the burned cards, empty until variant rules burn cards before dealing the board, kept so every card drawn from the deck stays accounted for
 
-Later hand-level state, such as street, action, and pot state, is added as those responsibilities appear. Hole cards are dealt by variant rules from the hand's deck; board dealing does not exist yet.
+`Street` lives in `game/` (`game/street.py`), not in a variant, because `PokerHand` owns the street and `game/` must not depend on `game/variants/`. Variant rules decide how the hand moves between streets.
+
+Later hand-level state, such as action and pot state, is added as those responsibilities appear. Hole cards, burned cards, and the board are dealt by variant rules from the hand's deck, and the same rules advance the street.
 
 `PokerHand` is a plain container. It does not re-validate participation; `hand_setup` remains the single owner of those rules. The hand-starting lifecycle functions (`start_game`, `start_next_hand`) return a `PokerHand` built from `setup_hand`'s participants.
 
 ### Card ownership
 
 - Community board cards belong to `PokerHand`.
+- Burned cards belong to `PokerHand`.
 - Private (hole) cards belong to each `HandPlayerState`, as a list that is empty until dealt.
 - A player's combined board + hole cards are never stored as separate state. They are derived when needed, for example at evaluation.
-- Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count: Texas Hold'em (`game/variants/texas_holdem/dealing.py`) deals two, one card at a time starting clockwise of the button and ending with the button, with no burn card.
+- Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count: Texas Hold'em (`game/variants/texas_holdem/dealing.py`) deals two, one card at a time starting clockwise of the button and ending with the button, with no burn card. Hole cards are dealt only on `PREFLOP`.
+- Texas Hold'em board dealing (`deal_next_street`) moves the hand from `PREFLOP` to `FLOP`, `TURN`, and `RIVER`. Entering each street burns one card and then deals that street's board cards in draw order: three on the flop, one on the turn, one on the river. The board is dealt only after every participant holds their hole cards, and there is no street after `RIVER`.
 
 ## Variants and betting structures
 

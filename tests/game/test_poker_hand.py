@@ -4,6 +4,7 @@ from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.position import Blind, Position
+from go_poker.game.street import Street
 
 FULL_DECK = {Card(rank, suit) for rank in Rank for suit in Suit}
 
@@ -57,3 +58,21 @@ def test_hands_do_not_share_deck_or_board() -> None:
     assert len(first.deck) == 51
     assert len(second.deck) == 52
     assert second.board == []
+
+
+def test_new_hand_starts_preflop_without_burned_cards() -> None:
+    """A new hand starts on the preflop street with an empty board and nothing burned."""
+    hand = PokerHand(players=make_players())
+    assert hand.street is Street.PREFLOP
+    assert hand.board == []
+    assert hand.burned_cards == []
+
+
+def test_hands_do_not_share_burned_cards() -> None:
+    """Each hand gets its own burned cards, so burning in one hand never affects another."""
+    first = PokerHand(players=make_players())
+    second = PokerHand(players=make_players())
+    assert first.burned_cards is not second.burned_cards
+
+    first.burned_cards.append(first.deck.draw())
+    assert second.burned_cards == []

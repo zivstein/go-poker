@@ -17,6 +17,7 @@ from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.position import Blind, InvalidPlayerCount, Position
 from go_poker.game.position_assignment import ButtonSeatNotInHandError
+from go_poker.game.street import Street
 from go_poker.game.table import ButtonUndefinedError, Table
 
 READY = PlayerStatus.READY
@@ -47,6 +48,8 @@ def assert_fresh_hand(hand: PokerHand) -> None:
     assert len(hand.deck) == 52
     assert {hand.deck.draw() for _ in range(52)} == FULL_DECK
     assert hand.board == []
+    assert hand.street is Street.PREFLOP
+    assert hand.burned_cards == []
     assert all(state.hole_cards == [] for state in hand.players)
 
 
@@ -360,6 +363,15 @@ def test_start_next_hand_returns_hand_with_fresh_deck_and_empty_board() -> None:
     seat_players(table, dict.fromkeys((1, 2, 3), READY))
     table.set_button(1)
     assert_fresh_hand(start_next_hand(table))
+
+
+def test_new_hands_start_preflop_without_burned_cards() -> None:
+    """Both the first hand and each next hand start on the preflop street with nothing burned."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
+    for hand in (start_game(table, RecordingChooser(1)), start_next_hand(table)):
+        assert hand.street is Street.PREFLOP
+        assert hand.burned_cards == []
 
 
 def test_consecutive_hands_get_distinct_decks_and_boards() -> None:
