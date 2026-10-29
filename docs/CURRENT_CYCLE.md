@@ -2,7 +2,7 @@
 
 **Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
 
-The milestone plan is approved. Cycles 1 and 2 are complete and Cycle 3 is next. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
+The milestone plan is approved. Cycles 1, 2, and 3 are complete and Cycle 4 is next. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
 
 ## Goal
 
@@ -18,8 +18,8 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 | --- | --- | --- |
 | 1 | Betting state, stakes and blind posting | Complete |
 | 2 | Action model + legal actions | Complete |
-| 3 | Apply actions + betting-round progression | Next (not started) |
-| 4 | Integration hardening | Planned |
+| 3 | Apply actions + betting-round progression | Complete |
+| 4 | Integration hardening | Next (not started) |
 
 ### Cycle 1 — Betting state, stakes and blind posting (complete)
 
@@ -53,9 +53,9 @@ No user betting actions yet.
 
 Do not apply actions yet.
 
-### Cycle 3 — Apply actions + betting-round progression
+### Cycle 3 — Apply actions + betting-round progression (complete)
 
-- Apply an action.
+- Apply an action (`apply_action(hand, seat_number, action)`; out-of-turn actions raise `NotPlayersTurnError` and illegal ones `IllegalActionError`, validated through `legal_actions`).
 - Validate the current actor.
 - Validate the requested action.
 - Move chips.
@@ -66,7 +66,7 @@ Do not apply actions yet.
 - Determine round completion.
 - End the round immediately when only one non-folded player remains (no actor, no pending players, no chips awarded).
 - When no opponent can respond (every other non-folded player is all-in): the round completes after the remaining player resolves any outstanding bet with `CALL` or `FOLD`, and completes automatically, with no actor and nobody pending, if they owe nothing. This also applies when a round starts.
-- Start the `FLOP` / `TURN` / `RIVER` betting round after the dealing layer advances the street:
+- Start the `FLOP` / `TURN` / `RIVER` betting round after the dealing layer advances the street (`start_betting_round(hand)`; rejections raise `BettingRoundNotCompleteError` or `BettingRoundAlreadyStartedError`):
   - requires the previous round to be complete
   - requires `hand.street` to differ from `betting_state.street`, then records the new street, so a street's round cannot start twice; rejection is atomic
   - does not validate the variant's street sequence, which dealing owns
@@ -110,4 +110,4 @@ Use representative boundaries and a small number of integration tests. Avoid:
 
 ## Decisions
 
-All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress). No decisions remain open. Cycles 1 and 2 are implemented; Cycles 3 and 4 are not.
+All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress). No decisions remain open. Cycles 1–3 are implemented; Cycle 4 is not.

@@ -65,13 +65,16 @@ The core engine is intentionally independent from presentation and networking la
 - Actions: `Action(type, amount)` with `ActionType` `FOLD`, `CHECK`, `CALL`, `BET`, and `RAISE` (no separate all-in action); `BET` and `RAISE` carry a positive target amount, the street contribution after the action ("bet to" / "raise to"), and the others carry none
 - No-Limit sizing: a bet's minimum target is the big blind, a raise's is the current bet plus the last full raise size, and the maximum is the player's street contribution plus their whole stack
 - `legal_actions(hand)` derives the current actor's options on request (never stored): fold always, check with nothing to call, call when the whole call is covered, and bet or raise when the stack reaches the minimum target and another player who has not folded or gone all-in can respond, with the call amount and the minimum and maximum targets; nothing is legal when no one is to act
-- Short all-in calls and raises are not legal yet (milestone 3); applying actions and betting-round progression are planned for the rest of milestone 2
+- `apply_action(hand, seat_number, action)` applies the current actor's action after checking the turn and the legal actions, rejecting out-of-turn or illegal actions without changing the hand: fold, check, call, and bet or raise to a target (adding the target minus the player's street contribution and setting the next minimum raise); a full action that uses the whole stack puts the player all-in
+- Betting rounds progress until nobody owes an action: a bet or raise makes every other player who can still act owe a response, the action passes to the next pending player clockwise, and the round ends early when everyone else folds (no chips are awarded yet) or when nobody could respond and nothing is owed
+- `start_betting_round(hand)` starts the flop, turn, or river betting round once dealing has moved the hand to a new street and the previous round is complete: street contributions reset (totals are kept), there is no bet, the minimum bet is the big blind, and the first player after the button acts (the big blind heads-up)
+- Short all-in calls and raises are not legal yet (milestone 3)
 
 **Tooling**
 
 - Automated test suite with pytest (`importlib` import mode, so same-named test modules in different variant directories do not collide); deterministic shuffles come from a seeded `random.Random` passed to `Deck.shuffle(_rng=...)`, the only randomness seam; tests above the `Deck` layer patch `Deck.shuffle` to forward a seeded `_rng`
 - Texas Hold'em tests for heads-up and multiway deal order, street progression, invalid transitions, deck-size boundaries, a complete hand from game start to the river, and a 52-card accounting invariant
-- Betting tests for stakes validation, chip commitment, heads-up, three-handed and multiway blind posting and first actor, atomic rejection, blinds that put a player all-in, and the game start → betting initialization → hole-card dealing sequence; action shape; and legal actions preflop, for the big blind's option, in an unopened round, facing a raise, at stack boundaries, when no opponent can respond, and with nobody to act
+- Betting tests for stakes validation, chip commitment, heads-up, three-handed and multiway blind posting and first actor, atomic rejection, blinds that put a player all-in, and the game start → betting initialization → hole-card dealing sequence; action shape; and legal actions preflop, for the big blind's option, in an unopened round, facing a raise, at stack boundaries, when no opponent can respond, and with nobody to act; applying actions (turn and legality checks, target chip movement, raise sizing, reopening after a bet, all-in through a full action, early round endings), starting later rounds (including heads-up order and atomic rejections), and a multi-street stack plus total-contribution invariant
 - Linting and formatting with Ruff, static type checking with mypy
 - GitHub Actions CI running all of the above
 
@@ -100,11 +103,12 @@ src/go_poker/
     │   ├── stakes.py           # Stakes: small and big blind
     │   ├── state.py            # BettingState: street, stakes, current bet, raise size, actor, pending players
     │   ├── chips.py            # commit_chips: stack into street and total contributions
-    │   ├── round_start.py      # pending players and first actor when a betting round starts
+    │   ├── rounds.py           # eligibility, pending players, first actor, round completion, start_betting_round
     │   ├── initialization.py   # initialize_betting: blind posting and the preflop betting state
     │   ├── actions.py          # ActionType and Action with "bet to" / "raise to" targets
     │   ├── no_limit.py         # No-Limit minimum and maximum targets
-    │   └── legal_actions.py    # LegalActions and legal_actions for the current actor
+    │   ├── legal_actions.py    # LegalActions and legal_actions for the current actor
+    │   └── apply.py            # apply_action: validate and apply the current actor's action
     └── variants/               # variant-specific poker rules
         └── texas_holdem/
             └── dealing.py      # Texas Hold'em hole-card, burn, and board dealing
@@ -188,6 +192,6 @@ The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active m
 
 **Work in progress.**
 
-The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. Betting has started: stakes, blind posting, the preflop betting state with its first actor and pending players, the action model, and No-Limit legal actions for the current actor. It does not yet play out a hand: actions cannot be applied yet, betting rounds do not progress, and there is no pot handling, showdown, CLI, API, or client.
+The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. Betting has started: stakes, blind posting, the preflop betting state with its first actor and pending players, the action model, No-Limit legal actions, applying actions, betting-round progression, and later-street betting rounds. It does not yet play out a complete hand: there is no orchestration of the deal-and-bet sequence, no short all-ins, pot handling, or showdown, and no CLI, API, or client.
 
-The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete. The current milestone, Milestone 2 — Betting Engine + Legal Actions, is in progress: Cycle 1 (betting state, stakes, and blind posting) and Cycle 2 (action model and legal actions) are complete, and Cycle 3 (applying actions and betting-round progression) is next.
+The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete. The current milestone, Milestone 2 — Betting Engine + Legal Actions, is in progress: Cycles 1–3 (betting state and blinds, action model and legal actions, applying actions and betting-round progression) are complete, and Cycle 4 (integration hardening) is next.

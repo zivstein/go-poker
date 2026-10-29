@@ -1,5 +1,5 @@
 from go_poker.game.betting.chips import commit_chips
-from go_poker.game.betting.round_start import first_pending_after, pending_at_round_start
+from go_poker.game.betting.rounds import first_pending_after, pending_at_round_start
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
 from go_poker.game.hand_state import HandPlayerState

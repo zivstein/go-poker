@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from go_poker.game.betting.no_limit import max_target, min_bet_target, min_raise_target
-from go_poker.game.betting.round_start import is_eligible
+from go_poker.game.betting.rounds import is_eligible
 from go_poker.game.betting.state import BettingNotInitializedError
 from go_poker.game.poker_hand import PokerHand
 
