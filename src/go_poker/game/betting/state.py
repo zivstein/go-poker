@@ -4,6 +4,10 @@ from go_poker.game.betting.stakes import Stakes
 from go_poker.game.street import Street
 
 
+class BettingNotInitializedError(RuntimeError):
+    """Raised when a betting operation needs the hand's betting state but betting has not been initialized."""
+
+
 @dataclass
 class BettingState:
     """The progress of one hand's betting, for the street its current or completed betting round belongs to.

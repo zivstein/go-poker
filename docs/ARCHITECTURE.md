@@ -18,7 +18,7 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
 | `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
 | `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
-| `game/betting/` | Current (milestone 2 in progress) | Betting-structure–specific rules; first implementation: No-Limit betting. Current: stakes, betting state, chip commitment, and betting initialization with blind posting. Planned: actions, legal actions, and betting-round progression (see [Betting](#betting-milestone-2-in-progress)) | Accounts, persistence, APIs, clients |
+| `game/betting/` | Current (milestone 2 in progress) | Betting-structure–specific rules; first implementation: No-Limit betting. Current: stakes, betting state, chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, and legal actions. Planned: applying actions and betting-round progression (see [Betting](#betting-milestone-2-in-progress)) | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
 | Accounts, persistence, API, clients | Planned (milestones 13+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
 
@@ -99,7 +99,7 @@ There is therefore no runtime duplicate-card scan. A test-only card-accounting i
 
 ## Betting (milestone 2, in progress)
 
-This section records the approved Milestone 2 design. Cycle 1 is implemented: `Stakes`, `BettingState`, the player contributions, chip commitment, and betting initialization with blind posting (the [Stakes](#stakes), [BettingState](#bettingstate), and [Betting initialization](#betting-initialization) sections, and the round-start pending and first-actor rules they use). Actions, legal actions, applying actions, round progression, and later betting rounds are planned; progress is tracked in [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
+This section records the approved Milestone 2 design. Cycle 1 is implemented: `Stakes`, `BettingState`, the player contributions, chip commitment, and betting initialization with blind posting (the [Stakes](#stakes), [BettingState](#bettingstate), and [Betting initialization](#betting-initialization) sections, and the round-start pending and first-actor rules they use). Cycle 2 is implemented: the action model, No-Limit sizing, and legal-action calculation (the [Actions](#actions), [No-Limit sizing](#no-limit-sizing), and [Legal actions](#legal-actions) sections, and the no-opponent rule for bets and raises). Applying actions, round progression, and later betting rounds are planned; progress is tracked in [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
 
 ### Scope
 
@@ -166,16 +166,20 @@ Posting a blind is not an action, so the blinds still owe an action in the prefl
 
 ### Actions
 
-The normal action set is `FOLD`, `CHECK`, `CALL`, `BET`, and `RAISE`. There is no separate `ALL_IN` action.
+The normal action set is `FOLD`, `CHECK`, `CALL`, `BET`, and `RAISE` (`ActionType` in `game/betting/actions.py`). There is no separate `ALL_IN` action.
 
 `BET` and `RAISE` carry a **target** amount: the player's street contribution after the action ("bet to" / "raise to"), never the number of chips added. If a player has contributed 100 on this street and raises to 500, the action amount is `500`, not the additional 400. This semantic is used consistently in engine APIs, tests, and future history and API design. `FOLD`, `CHECK`, and `CALL` carry no amount; the call amount is the current bet minus the player's street contribution.
 
+An action is an `Action(type, amount=None)` value. Construction checks only its shape and raises `InvalidActionError` otherwise: `BET` and `RAISE` need a positive target amount, and `FOLD`, `CHECK`, and `CALL` must have none. Whether a target is in range for the current hand is decided by the legal actions, and validating a requested action against them belongs to applying actions (Cycle 3, planned).
+
 ### No-Limit sizing
+
+The sizing rules are small No-Limit helpers in `game/betting/no_limit.py` (`min_bet_target`, `min_raise_target`, `max_target`), used by the legal-action calculation.
 
 - `BET` is used when `current_bet == 0`; the minimum bet target is the big blind.
 - `RAISE` is used when `current_bet > 0`; the minimum raise target is `current_bet + last_full_raise_size`.
 - The maximum target is `street_contribution + stack`. There is no artificial cap to keep a stack above zero.
-- After a full bet or raise, `last_full_raise_size = new_current_bet - previous_current_bet`.
+- After a full bet or raise, `last_full_raise_size = new_current_bet - previous_current_bet` (applied when actions are applied; Cycle 3, planned).
 
 Preflop starts with `current_bet = big_blind` and `last_full_raise_size = big_blind`, so the first minimum raise target is two big blinds.
 
@@ -194,7 +198,9 @@ Legal actions are derived state, calculated from the current hand state on reque
 - whether bet or raise is legal
 - the minimum and maximum target amounts
 
-`FOLD` is legal whenever a live, eligible player is the current actor, including when `CHECK` is also available. `CHECK` is legal when the call amount is zero, and `CALL` when it is positive and the player can cover it. `BET` and `RAISE` additionally require at least one other player who can respond: someone who has not folded, is not all-in, and can still take a future betting action. When every other non-folded player is all-in, the actor may only resolve the outstanding bet (see [No opponent can respond](#no-opponent-can-respond)). The exact representation is an implementation choice within these boundaries.
+`legal_actions(hand)` (`game/betting/legal_actions.py`) returns a frozen `LegalActions` value for the current actor: `can_fold`, `can_check`, `can_call`, `call_amount`, `can_bet`, `can_raise`, and `min_target` / `max_target`, which are set only when a bet or raise is legal. When the round has no current actor, nothing is legal (every flag false, a call amount of zero, no targets). A hand without a betting state raises `BettingNotInitializedError` (`game/betting/state.py`).
+
+`FOLD` is legal whenever a live, eligible player is the current actor, including when `CHECK` is also available. `CHECK` is legal when the call amount is zero, and `CALL` when it is positive and the player can cover it. `BET` and `RAISE` additionally require at least one other player who can respond: someone who has not folded, is not all-in, and can still take a future betting action. "Can respond" reuses the round-start eligibility predicate (`is_eligible`: not folded, not all-in); like the rest of the betting layer it adds no stack checks. When every other non-folded player is all-in, the actor may only resolve the outstanding bet (see [No opponent can respond](#no-opponent-can-respond)). The exact representation is an implementation choice within these boundaries.
 
 ### Action order
 

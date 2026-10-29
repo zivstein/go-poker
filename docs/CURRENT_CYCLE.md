@@ -2,7 +2,7 @@
 
 **Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
 
-The milestone plan is approved. Cycle 1 is complete and Cycle 2 is next. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
+The milestone plan is approved. Cycles 1 and 2 are complete and Cycle 3 is next. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
 
 ## Goal
 
@@ -17,8 +17,8 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 | Cycle | Title | Status |
 | --- | --- | --- |
 | 1 | Betting state, stakes and blind posting | Complete |
-| 2 | Action model + legal actions | Next (not started) |
-| 3 | Apply actions + betting-round progression | Planned |
+| 2 | Action model + legal actions | Complete |
+| 3 | Apply actions + betting-round progression | Next (not started) |
 | 4 | Integration hardening | Planned |
 
 ### Cycle 1 — Betting state, stakes and blind posting (complete)
@@ -41,13 +41,14 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 
 No user betting actions yet.
 
-### Cycle 2 — Action model + legal actions
+### Cycle 2 — Action model + legal actions (complete)
 
 - `FOLD`, `CHECK`, `CALL`, `BET`, `RAISE`; no `ALL_IN` action.
-- Action representation, with target ("bet to" / "raise to") street-contribution amounts for `BET` and `RAISE`.
+- Action representation (`Action`, `ActionType`), with target ("bet to" / "raise to") street-contribution amounts for `BET` and `RAISE`; malformed actions raise `InvalidActionError`.
 - Call amount.
 - No-Limit sizing: `BET` when the current bet is zero with a big-blind minimum, `RAISE` otherwise with a `current_bet + last_full_raise_size` minimum, and a `street_contribution + stack` maximum.
 - Legal-action calculation: `FOLD` for any current actor (even when `CHECK` is available), `CHECK` with nothing to call, `CALL` when the player can cover the full amount, `BET` / `RAISE` when the player's maximum target reaches the minimum and at least one other player (not folded, not all-in) can respond. Short all-in calls and raises are not legal in this milestone.
+- `legal_actions(hand)` returns `LegalActions` for the current actor; nothing is legal when no one is to act, and a hand without betting raises `BettingNotInitializedError`.
 - Focused tests include: no `BET` / `RAISE` when every other non-folded player is all-in, with only `CALL` (if fully covered) or `FOLD` offered when the player still owes chips.
 
 Do not apply actions yet.
@@ -109,4 +110,4 @@ Use representative boundaries and a small number of integration tests. Avoid:
 
 ## Decisions
 
-All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress). No decisions remain open. Cycle 1 is implemented; Cycles 2–4 are not.
+All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress). No decisions remain open. Cycles 1 and 2 are implemented; Cycles 3 and 4 are not.

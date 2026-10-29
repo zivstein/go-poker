@@ -62,13 +62,16 @@ The core engine is intentionally independent from presentation and networking la
 - Short blind all-ins (posting a whole stack smaller than the blind and being all-in for less) are real poker behavior deferred to Milestone 3, with pots; Milestone 2 rejects them
 - Betting relies on hands containing only players who started with chips and adds no stack checks of its own
 - The intended hand start is `start_game` / `start_next_hand` → `initialize_betting` → `deal_hole_cards`; the lifecycle itself knows nothing about betting
-- Actions, legal actions, and betting-round progression are planned for the rest of milestone 2
+- Actions: `Action(type, amount)` with `ActionType` `FOLD`, `CHECK`, `CALL`, `BET`, and `RAISE` (no separate all-in action); `BET` and `RAISE` carry a positive target amount, the street contribution after the action ("bet to" / "raise to"), and the others carry none
+- No-Limit sizing: a bet's minimum target is the big blind, a raise's is the current bet plus the last full raise size, and the maximum is the player's street contribution plus their whole stack
+- `legal_actions(hand)` derives the current actor's options on request (never stored): fold always, check with nothing to call, call when the whole call is covered, and bet or raise when the stack reaches the minimum target and another player who has not folded or gone all-in can respond, with the call amount and the minimum and maximum targets; nothing is legal when no one is to act
+- Short all-in calls and raises are not legal yet (milestone 3); applying actions and betting-round progression are planned for the rest of milestone 2
 
 **Tooling**
 
 - Automated test suite with pytest (`importlib` import mode, so same-named test modules in different variant directories do not collide); deterministic shuffles come from a seeded `random.Random` passed to `Deck.shuffle(_rng=...)`, the only randomness seam; tests above the `Deck` layer patch `Deck.shuffle` to forward a seeded `_rng`
 - Texas Hold'em tests for heads-up and multiway deal order, street progression, invalid transitions, deck-size boundaries, a complete hand from game start to the river, and a 52-card accounting invariant
-- Betting tests for stakes validation, chip commitment, heads-up, three-handed and multiway blind posting and first actor, atomic rejection, blinds that put a player all-in, and the game start → betting initialization → hole-card dealing sequence
+- Betting tests for stakes validation, chip commitment, heads-up, three-handed and multiway blind posting and first actor, atomic rejection, blinds that put a player all-in, and the game start → betting initialization → hole-card dealing sequence; action shape; and legal actions preflop, for the big blind's option, in an unopened round, facing a raise, at stack boundaries, when no opponent can respond, and with nobody to act
 - Linting and formatting with Ruff, static type checking with mypy
 - GitHub Actions CI running all of the above
 
@@ -98,7 +101,10 @@ src/go_poker/
     │   ├── state.py            # BettingState: street, stakes, current bet, raise size, actor, pending players
     │   ├── chips.py            # commit_chips: stack into street and total contributions
     │   ├── round_start.py      # pending players and first actor when a betting round starts
-    │   └── initialization.py   # initialize_betting: blind posting and the preflop betting state
+    │   ├── initialization.py   # initialize_betting: blind posting and the preflop betting state
+    │   ├── actions.py          # ActionType and Action with "bet to" / "raise to" targets
+    │   ├── no_limit.py         # No-Limit minimum and maximum targets
+    │   └── legal_actions.py    # LegalActions and legal_actions for the current actor
     └── variants/               # variant-specific poker rules
         └── texas_holdem/
             └── dealing.py      # Texas Hold'em hole-card, burn, and board dealing
@@ -182,6 +188,6 @@ The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active m
 
 **Work in progress.**
 
-The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. Betting has started: stakes, blind posting, and the preflop betting state with its first actor and pending players. It does not yet play out a hand: there are no betting actions or legal actions yet, no pot handling or showdown, and no CLI, API, or client.
+The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. Betting has started: stakes, blind posting, the preflop betting state with its first actor and pending players, the action model, and No-Limit legal actions for the current actor. It does not yet play out a hand: actions cannot be applied yet, betting rounds do not progress, and there is no pot handling, showdown, CLI, API, or client.
 
-The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete. The current milestone, Milestone 2 — Betting Engine + Legal Actions, is in progress: Cycle 1 (betting state, stakes, and blind posting) is complete and Cycle 2 (action model and legal actions) is next.
+The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete. The current milestone, Milestone 2 — Betting Engine + Legal Actions, is in progress: Cycle 1 (betting state, stakes, and blind posting) and Cycle 2 (action model and legal actions) are complete, and Cycle 3 (applying actions and betting-round progression) is next.
