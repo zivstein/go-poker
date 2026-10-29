@@ -39,6 +39,9 @@ Rules:
 - The Lead owns orchestration and never delegates architecture or product decisions.
 - Give the Engineer and Reviewer the approved requirements and constraints relevant to their task.
 - Give the Reviewer the requirement and approved architecture, not the Engineer's justification, so the review stays independent.
+- Documentation is part of Definition of Done. When a change affects documented behavior, architecture, public API, usage, project status, or roadmap status, the Engineer updates the relevant README/docs in the same task, without separate user approval, and the Reviewer checks that affected docs are still accurate.
+- `CLAUDE.md`, `AGENTS.md`, and `.claude/agents/` are control files. No role modifies them during feature work; the Lead proposes improvements to the user, and they are made only as a dedicated workflow change.
+- At the end of a milestone, the Lead adds a short `Process improvements` section to its report when it noticed recurring friction, missing instructions, repeated mistakes, or a way to improve the workflow.
 
 # Verification
 

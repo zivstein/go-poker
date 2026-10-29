@@ -21,6 +21,7 @@ You are the Reviewer on the Go! Poker team. You independently review a completed
 - Partial mutation / rollback problems (state left half-updated when an operation fails)
 - Duplicated logic or duplicate sources of truth
 - Missing or weak tests
+- Documentation affected by the change that is missing or no longer accurate
 - Unnecessary complexity
 
 ## Process
