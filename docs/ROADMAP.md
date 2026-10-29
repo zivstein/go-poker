@@ -2,13 +2,13 @@
 
 High-level milestones in intended order. This is the single source of truth for the project roadmap; the [README](../README.md) links here rather than repeating it.
 
-The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It currently records the completed milestone 1; milestone 2's cycles are planned when it starts. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
+The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It currently records milestone 2's cycle plan. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | # | Milestone | Status |
 | --- | --- | --- |
 | 0 | Engine foundation | Complete |
 | 1 | PokerHand + dealing + streets | **COMPLETE** |
-| 2 | Betting engine + legal actions | **Next** (not started) |
+| 2 | Betting engine + legal actions | **CURRENT** (planned for implementation) |
 | 3 | All-ins + main/side pots | Planned |
 | 4 | Showdown + settlement | Planned |
 | 5 | Complete continuous PokerHand/game loop | Planned |
@@ -31,9 +31,11 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 
 **0. Engine foundation** — cards, deck, and hand evaluation; players, seats, and table; explicit game start and button movement; positions, blinds, and hand setup.
 
-**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression; integration tests including heads-up and multiway. Card uniqueness holds by construction and is proven by a test-only 52-card accounting invariant. No betting. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
+**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression; integration tests including heads-up and multiway. Card uniqueness holds by construction and is proven by a test-only 52-card accounting invariant. No betting.
 
-**2. Betting engine + legal actions** — betting-structure behavior under `src/go_poker/game/betting/`, starting with No Limit.
+**2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md) and [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-planned).
+
+**3. All-ins + main/side pots** — picks up what milestone 2 defers: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, blinds that cannot be posted in full, main and side pots, and pot eligibility.
 
 **6. Structured Hand History / Event Log** — raw hand events become the source of truth that later stats, persistence, and AI features build on.
 

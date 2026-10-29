@@ -164,4 +164,4 @@ The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active m
 
 The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. It does not yet play out a hand: there is no betting, pot handling, or showdown, and no CLI, API, or client.
 
-The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete. The next milestone, Milestone 2 — Betting Engine + Legal Actions, is next but not started.
+The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete. The current milestone, Milestone 2 — Betting Engine + Legal Actions, is planned and its first cycle has not started.
