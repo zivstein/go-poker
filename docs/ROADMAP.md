@@ -2,14 +2,14 @@
 
 High-level milestones in intended order. This is the single source of truth for the project roadmap; the [README](../README.md) links here rather than repeating it.
 
-The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It currently records milestone 2's cycle plan. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
+The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It currently records the completed milestone 2; milestone 3's cycles are planned when it starts. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | # | Milestone | Status |
 | --- | --- | --- |
 | 0 | Engine foundation | Complete |
 | 1 | PokerHand + dealing + streets | **COMPLETE** |
-| 2 | Betting engine + legal actions | **CURRENT** (in progress) |
-| 3 | All-ins + main/side pots | Planned |
+| 2 | Betting engine + legal actions | **COMPLETE** |
+| 3 | All-ins + main/side pots | **Next** (not started) |
 | 4 | Showdown + settlement | Planned |
 | 5 | Complete continuous PokerHand/game loop | Planned |
 | 6 | Structured Hand History / Event Log | Planned |
@@ -33,7 +33,7 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 
 **1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression; integration tests including heads-up and multiway. Card uniqueness holds by construction and is proven by a test-only 52-card accounting invariant. No betting.
 
-**2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md) and [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress).
+**2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md) and [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
 **3. All-ins + main/side pots** — picks up what milestone 2 defers: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less; Milestone 2 rejects this case), main and side pots, and pot eligibility.
 

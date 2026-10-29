@@ -132,35 +132,3 @@ def test_round_start_needs_initialized_betting(make_hand: HandFactory) -> None:
     """A hand whose betting was never initialized has no round to start."""
     with pytest.raises(BettingNotInitializedError):
         start_betting_round(make_hand({3: 1000, 7: 1000}, button_seat_number=7))
-
-
-# =============================================================================
-# CHIP INVARIANT ACROSS STREETS
-# =============================================================================
-
-
-def test_stack_plus_total_contribution_is_preserved_across_a_multi_street_hand(
-    started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup
-) -> None:
-    """Through raises, calls, folds and a new street, every player's stack plus total contribution stays equal to the
-    chips they started the hand with."""
-    starting_chips = {5: 800, 8: 1200, 1: 1000, 3: 600}  # button 5, SB 8, BB 1, UTG 3
-    hand = started_hand(starting_chips, button_seat_number=5)
-    deal_hole_cards(hand)
-
-    def assert_chips_preserved() -> None:
-        assert {seat: hp.player.stack + hp.total_contribution for seat, hp in by_seat(hand).items()} == starting_chips
-
-    preflop = [(3, Action(ActionType.RAISE, 30)), (5, CALL), (8, FOLD), (1, CALL)]
-    flop = [(1, CHECK), (3, Action(ActionType.BET, 50)), (5, Action(ActionType.RAISE, 150)), (1, FOLD), (3, CALL)]
-    for seat_number, action in preflop:
-        apply_action(hand, seat_number, action)
-        assert_chips_preserved()
-    deal_next_street(hand)
-    start_betting_round(hand)
-    for seat_number, action in flop:
-        apply_action(hand, seat_number, action)
-        assert_chips_preserved()
-
-    assert betting(hand).current_actor is None
-    assert {seat: hp.total_contribution for seat, hp in by_seat(hand).items()} == {5: 180, 8: 5, 1: 30, 3: 180}

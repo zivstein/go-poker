@@ -1,8 +1,8 @@
 # Current Cycle
 
-**Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
+**Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **COMPLETE**
 
-The milestone plan is approved. Cycles 1, 2, and 3 are complete and Cycle 4 is next. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
+All four cycles are complete, so there is no current cycle. **Milestone 3 — All-ins + main/side pots** is next and has not started. It is broken into cycles when it starts. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is also complete.
 
 ## Goal
 
@@ -10,7 +10,7 @@ At the end of this milestone, `PokerHand` supports normal No-Limit betting: bett
 
 Out of scope for this milestone: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less), main and side pots, pot eligibility, showdown and settlement, automatic complete-hand orchestration, Pot-Limit, and Fixed-Limit. All-ins are supported only when they are otherwise normal full actions.
 
-The approved design, ownership rules, invariants, and boundaries this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress).
+The approved design, ownership rules, invariants, and boundaries this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
 ## Cycles
 
@@ -19,7 +19,7 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 | 1 | Betting state, stakes and blind posting | Complete |
 | 2 | Action model + legal actions | Complete |
 | 3 | Apply actions + betting-round progression | Complete |
-| 4 | Integration hardening | Next (not started) |
+| 4 | Integration hardening | Complete |
 
 ### Cycle 1 — Betting state, stakes and blind posting (complete)
 
@@ -36,7 +36,7 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
   - builds the pending players from the eligible players, blinds included
   - marks a player all-in if posting their blind in full uses their last chips
 - Initialization is rejected atomically when the hand is already initialized, is no longer on `PREFLOP`, or a blind player's stack is below their blind (`ShortBlindAllInNotSupportedError`: the short blind all-in is deferred to Milestone 3).
-- Start-of-hand chip rule: a player with no chips is not dealt into a new hand and cannot receive the button (`start_game`, `start_next_hand`, `setup_hand`); a positive stack below a blind still plays. `PlayerStatus` is unchanged and there is no bust or rebuy policy. Betting relies on this and adds no stack checks.
+- Start-of-hand chip rule: a player with no chips is not dealt into a new hand and cannot receive the button (`start_game`, `start_next_hand`, `setup_hand`); a positive stack below a blind still plays. `PlayerStatus` is unchanged and there is no bust or rebuy policy. Betting relies on this and adds no zero-stack or eligibility stack checks (the short-blind check remains).
 - `start_game` and `start_next_hand` keep their signatures and remain unaware of betting; they only apply the start-of-hand chip rule above.
 
 No user betting actions yet.
@@ -77,7 +77,7 @@ Do not apply actions yet.
 
 Dealing stays independent from betting, and there is no hand or street orchestration.
 
-### Cycle 4 — Integration hardening
+### Cycle 4 — Integration hardening (complete)
 
 Cover representative high-value behavior, including:
 
@@ -97,6 +97,8 @@ Cover representative high-value behavior, including:
 
 Do not create Cartesian-product tests for every combination when the behavior is already proven.
 
+Delivered: `tests/game/betting/test_betting_integration.py`, a small set of scenarios driven through the public dealing and betting operations (one from a real game start), each asserting the betting invariants after every step: stack plus total contribution, street versus total contribution, the current bet, no folded or all-in player pending, actor and pending consistency, and legal actions derived without changing the hand. The multi-street chip-invariant test from `test_rounds.py` was consolidated into these scenarios. No production change was needed. The unsupported short blind all-in from the list above is covered by the Cycle 1 unit tests in `tests/game/betting/test_initialization.py`, not by the integration file, which never constructs short all-ins.
+
 ## Testing principle
 
 `distinct rule -> focused test`
@@ -110,4 +112,4 @@ Use representative boundaries and a small number of integration tests. Avoid:
 
 ## Decisions
 
-All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress). No decisions remain open. Cycles 1–3 are implemented; Cycle 4 is not.
+All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2). No decisions remain open, and all of them are implemented.
