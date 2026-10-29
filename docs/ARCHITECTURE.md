@@ -17,16 +17,18 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | --- | --- | --- | --- |
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
 | `game/` | Current | Players, seats, table, game lifecycle, hand setup, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
-| `game/variants/` | Planned (Cycle 2) | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`, starting with dealing | Accounts, persistence, APIs, clients |
+| `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card dealing | Accounts, persistence, APIs, clients |
 | `game/betting/` | Planned (milestone 2) | Betting-structure–specific rules | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
 | Accounts, persistence, API, clients | Planned (milestones 10+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
 
-Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions only; neither package is created until its first responsibility appears.
+Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` does not exist yet.
 
 ## Core
 
 `core/` is pure card, deck, and hand-evaluation functionality: `Card`, `Rank`, `Suit`, `Deck`, `HandRank`, and the evaluator. It has no knowledge of tables, players, hands in play, accounts, APIs, or clients, and it stays that way.
+
+**Randomness rule.** A new `Deck()` is in creation order until shuffled. `Deck.shuffle()` uses the OS CSPRNG (`random.SystemRandom`, which cannot be seeded), so engine shuffles are never reproducible. `Deck.shuffle()`, `start_game`, and `start_next_hand` accept an underscored `_rng` keyword (a `random.Random`) that is test-only: tests pass a seeded generator to get a reproducible deck order, and engine code must never pass it.
 
 ## Game domain (current)
 
@@ -41,32 +43,32 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 **Rules that operate on that state**
 
 - `hand_setup` — owns hand participation and `WAITING` entry rules: which seated players take part in the next hand, and when a waiting player may enter (big blind or a non-blind position, never button or small blind).
-- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both return the new hand as a `PokerHand`. Seating alone never starts a game.
+- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both return the new hand as a `PokerHand` with a fresh deck, shuffled before hand setup with the OS CSPRNG (or the test-only `_rng`). Seating alone never starts a game. The lifecycle is variant-agnostic: it deals no cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`) to the returned `PokerHand`.
 - `position` / `position_assignment` — positions and blinds relative to the button for a given set of seats.
 
 **Per-hand state**
 
 - `PokerHand` — the aggregate for one hand (see [below](#pokerhand)).
-- `HandPlayerState` — one player's state for one hand: seat, position, blind, and hand flags. It references the persistent `Player` rather than copying it.
+- `HandPlayerState` — one player's state for one hand: seat, position, blind, hand flags, and hole cards. It references the persistent `Player` rather than copying it.
 
 ## PokerHand
 
 `PokerHand` is the aggregate for one hand. It owns:
 
 - the participating `HandPlayerState` objects, in the order `setup_hand` produces them (clockwise from the button)
-- the hand's own `Deck`: a fresh 52-card deck per hand, never shared between hands
+- the hand's own `Deck`: a fresh 52-card deck per hand, never shared between hands. `PokerHand`'s default deck is unshuffled (in creation order); only the lifecycle shuffles it, so engine code creates hands through `start_game` / `start_next_hand`
 - the community board, empty until board dealing exists
 
-Later hand-level state, such as street, action, and pot state, is added as those responsibilities appear. No cards are dealt yet.
+Later hand-level state, such as street, action, and pot state, is added as those responsibilities appear. Hole cards are dealt by variant rules from the hand's deck; board dealing does not exist yet.
 
 `PokerHand` is a plain container. It does not re-validate participation; `hand_setup` remains the single owner of those rules. The hand-starting lifecycle functions (`start_game`, `start_next_hand`) return a `PokerHand` built from `setup_hand`'s participants.
 
 ### Card ownership
 
 - Community board cards belong to `PokerHand`.
-- Private (hole) cards belong to each `HandPlayerState` (planned, Cycle 2).
+- Private (hole) cards belong to each `HandPlayerState`, as a list that is empty until dealt.
 - A player's combined board + hole cards are never stored as separate state. They are derived when needed, for example at evaluation.
-- Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count.
+- Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count: Texas Hold'em (`game/variants/texas_holdem/dealing.py`) deals two, one card at a time starting clockwise of the button and ending with the button, with no burn card.
 
 ## Variants and betting structures
 

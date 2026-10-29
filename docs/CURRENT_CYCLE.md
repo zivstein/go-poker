@@ -15,8 +15,8 @@ The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE
 | Cycle | Title | Status |
 | --- | --- | --- |
 | 1 | PokerHand aggregate | Complete |
-| 2 | Deterministic deck + Texas Hold'em private-card dealing | Current |
-| 3 | Streets + board dealing | Not started |
+| 2 | Deterministic deck + Texas Hold'em private-card dealing | Complete |
+| 3 | Streets + board dealing | Current |
 | 4 | Integration hardening | Not started |
 
 ### Cycle 1 — PokerHand aggregate
@@ -28,7 +28,7 @@ The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE
 
 ### Cycle 2 — Deterministic deck + Texas Hold'em private-card dealing
 
-- Make randomness and deck behavior reliably testable.
+- Make randomness and deck behavior reliably testable. Determinism exists only in tests; engine shuffles are secure and never reproducible (see the randomness rule in [ARCHITECTURE.md](ARCHITECTURE.md#core)).
 - Add Hold'em-specific dealing under `src/go_poker/game/variants/texas_holdem/`.
 - Add private cards to `HandPlayerState` without structurally assuming two cards.
 - Texas Hold'em rules deal two cards per player.

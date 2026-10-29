@@ -11,6 +11,7 @@ The core engine is intentionally independent from presentation and networking la
 **Cards and hand evaluation**
 
 - Card, rank, and suit models, and a standard 52-card deck with shuffle and draw
+- Secure shuffling: `Deck.shuffle()` uses the OS CSPRNG (`random.SystemRandom`), so engine shuffles are not reproducible; its underscored `_rng` keyword is test-only (tests pass a seeded `random.Random` for a known order, and engine code must never pass it)
 - Five-card hand evaluation across all nine hand categories, including the ace-low straight
 - Best-hand evaluation from 5–7 available cards
 - Directly comparable hand ranks: category first, then kickers and tie-breakers
@@ -27,21 +28,28 @@ The core engine is intentionally independent from presentation and networking la
 
 - Explicit game start: `start_game()` starts a game with every seated `WAITING` player (2–9; `SITTING_OUT` players are excluded), the first button comes from an injected chooser, and seating alone never starts a game
 - Button movement between hands: `start_next_hand()` moves the button clockwise from the previous button seat to the next `READY` player, skipping `WAITING` and `SITTING_OUT` players and empty seats; with no `READY` players, the game must be started again
-- Both return the new hand as a `PokerHand` that owns its participants, a fresh 52-card deck, and an empty community board (no cards are dealt yet)
+- Both return the new hand as a `PokerHand` that owns its participants, a freshly and securely shuffled 52-card deck, and an empty community board; starting a hand deals no cards
+- Both accept the same test-only `_rng` keyword, passed to the new hand's deck shuffle so tests can reproduce hands; engine code must never pass it
 - Both leave table and player state unchanged if they fail
 
 **Hand setup**
 
 - Position assignment for 2–9 players relative to the button, skipping empty seats
 - Small- and big-blind seat assignment, including the heads-up rule where the button holds the small blind
-- Per-hand player state (seat, position, blind) kept separate from the persistent table-level player
+- Per-hand player state (seat, position, blind, and private hole cards) kept separate from the persistent table-level player; hole cards are an empty list until dealt, with no fixed card count
 - `PokerHand`, the aggregate for one hand: its participants in order from the button, its own deck, and the community board
 - Hand participant setup: `READY` players take part, `SITTING_OUT` players are skipped, and a hand needs at least two participants regardless of table size
 - Waiting-player entry rules: a `WAITING` player joins as the big blind or in a non-blind position, and keeps waiting if they would be the button or small blind
 
+**Texas Hold'em dealing**
+
+- `deal_hole_cards()` deals two hole cards to every participant of a `PokerHand` from the hand's own deck
+- Cards go out one at a time in rounds, starting with the player clockwise of the button and ending with the button (heads-up, the big blind gets the first card); no card is burned before hole cards
+- Dealing is rejected without changing the hand if hole cards were already dealt or the deck has too few cards
+
 **Tooling**
 
-- Automated test suite with pytest
+- Automated test suite with pytest; tests pass a seeded `random.Random` as `_rng` for deterministic shuffles
 - Linting and formatting with Ruff, static type checking with mypy
 - GitHub Actions CI running all of the above
 
@@ -51,7 +59,7 @@ The core engine is intentionally independent from presentation and networking la
 src/go_poker/
 ├── core/                       # cards and hand evaluation
 │   ├── card.py                 # Card, Rank, Suit
-│   ├── deck.py                 # 52-card deck: shuffle and draw
+│   ├── deck.py                 # 52-card deck: secure shuffle and draw
 │   ├── hand_rank.py            # HandCategory and comparable HandRank
 │   └── evaluator.py            # five-card and best-of-5–7 evaluation
 │
@@ -64,10 +72,13 @@ src/go_poker/
     ├── position_assignment.py  # position and blind per seat for one hand
     ├── hand_state.py           # HandPlayerState, per-hand player state
     ├── hand_setup.py           # setup_hand, selects a hand's participants
-    └── poker_hand.py           # PokerHand: participants, deck, and board of one hand
+    ├── poker_hand.py           # PokerHand: participants, deck, and board of one hand
+    └── variants/               # variant-specific poker rules
+        └── texas_holdem/
+            └── dealing.py      # Texas Hold'em hole-card dealing
 ```
 
-`core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. `game_lifecycle` owns game start and button movement, while `Table` only stores the button seat and stays unaware of player status. Game start and each next hand return a `PokerHand`, the aggregate for one hand, which owns the participants, a fresh deck, and the community board. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `PokerHand` and its `HandPlayerState` participants. Future APIs and clients will consume the engine rather than reimplement poker rules.
+`core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. `game_lifecycle` owns game start and button movement, while `Table` only stores the button seat and stays unaware of player status. Game start and each next hand return a `PokerHand`, the aggregate for one hand, which owns the participants, a fresh securely shuffled deck, and the community board. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `PokerHand` and its `HandPlayerState` participants, including each player's hole cards. The lifecycle is variant-agnostic: variant rules such as Texas Hold'em dealing live in `game/variants/` and are applied by the caller to the returned `PokerHand`. Future APIs and clients will consume the engine rather than reimplement poker rules.
 
 Ownership boundaries and the planned direction for hands, variants, betting structures, and hand history are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -145,6 +156,6 @@ The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active m
 
 **Work in progress.**
 
-The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, and hand setup into a `PokerHand` with its participants, deck, and empty board. It does not yet play out a hand: there is no dealing, betting, pot handling, or showdown, and no CLI, API, or client.
+The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, and empty board, and Texas Hold'em hole-card dealing. It does not yet play out a hand: there is no board dealing, street progression, betting, pot handling, or showdown, and no CLI, API, or client.
 
 The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. The active milestone is PokerHand + Dealing Foundation.

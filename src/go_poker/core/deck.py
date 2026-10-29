@@ -1,6 +1,9 @@
-from random import shuffle
+import random
 
 from .card import Card, Rank, Suit
+
+# Engine shuffles use the OS CSPRNG, which cannot be seeded, so production deck orders are unpredictable.
+_SYSTEM_RANDOM = random.SystemRandom()
 
 
 class DeckEmptyError(IndexError):
@@ -19,8 +22,12 @@ class Deck:
                 new_deck.append(Card(rank, suit))
         return new_deck
 
-    def shuffle(self) -> None:
-        shuffle(self._deck)
+    def shuffle(self, *, _rng: random.Random | None = None) -> None:
+        """Shuffle the remaining cards with the OS CSPRNG.
+
+        ``_rng`` is test-only: tests pass a seeded generator for a reproducible order. Engine code must never pass it.
+        """
+        (_SYSTEM_RANDOM if _rng is None else _rng).shuffle(self._deck)
 
     def draw(self) -> Card:
         if len(self._deck) == 0:

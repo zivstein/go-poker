@@ -28,7 +28,7 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 
 **0. Engine foundation** — cards, deck, and hand evaluation; players, seats, and table; explicit game start and button movement; positions, blinds, and hand setup.
 
-**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; deterministic deck behavior; Texas Hold'em private-card and board dealing; street progression. No betting. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
+**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression. No betting. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
 
 **2. Betting engine + legal actions** — betting-structure behavior under `src/go_poker/game/betting/`, starting with No Limit.
 

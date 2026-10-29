@@ -1,5 +1,6 @@
 import pytest
 
+from go_poker.core.card import Card, Rank, Suit
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.position import Blind, Position
@@ -24,6 +25,7 @@ def test_hand_player_state_keeps_player_and_assignment(position: Position, blind
     assert state.blind == blind
     assert state.folded is False
     assert state.all_in is False
+    assert state.hole_cards == []
     assert player.stack == 1000
     assert player.status == PlayerStatus.READY
 
@@ -58,3 +60,13 @@ def test_hand_player_state_reflects_player_stack_changes() -> None:
     state = HandPlayerState(player, 1, Position.BTN, Blind.NONE)
     player.stack = 800
     assert state.player.stack == 800
+
+
+def test_hole_cards_are_not_shared_between_hand_states() -> None:
+    """Each hand state starts with its own empty hole-card list, even for the same player."""
+    player = Player("Ziv", stack=1000)
+    first_hand = HandPlayerState(player, 1, Position.BTN, Blind.NONE)
+    second_hand = HandPlayerState(player, 1, Position.BB, Blind.BIG)
+    assert first_hand.hole_cards is not second_hand.hole_cards
+    first_hand.hole_cards.append(Card(Rank.ACE, Suit.SPADES))
+    assert second_hand.hole_cards == []
