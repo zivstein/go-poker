@@ -21,7 +21,13 @@ The core engine is intentionally independent from presentation and networking la
 - Configurable 2–9 seat tables
 - Players with a chip stack and a participation state: `WAITING` (the default), `READY`, or `SITTING_OUT`
 - Seats that hold the seated `Player` object, with sit-in and stand-up rules
-- Dealer-button placement and rotation across occupied seats
+- Storage of the dealer-button seat (the table does not move the button itself)
+
+**Game lifecycle**
+
+- Explicit game start: `start_game()` starts a game with every seated `WAITING` player (2–9; `SITTING_OUT` players are excluded), the first button comes from an injected chooser, and seating alone never starts a game
+- Button movement between hands: `start_next_hand()` moves the button clockwise from the previous button seat to the next `READY` player, skipping `WAITING` and `SITTING_OUT` players and empty seats; with no `READY` players, the game must be started again
+- Both set up the hand and leave table and player state unchanged if they fail
 
 **Hand setup**
 
@@ -50,14 +56,15 @@ src/go_poker/
 └── game/                       # table and per-hand state
     ├── player.py               # Player and PlayerStatus
     ├── seat.py                 # Seat holding a Player
-    ├── table.py                # seating and dealer button
+    ├── table.py                # seating and the stored button seat
+    ├── game_lifecycle.py       # game start and button movement between hands
     ├── position.py             # positions by player count, blinds
     ├── position_assignment.py  # position and blind per seat for one hand
     ├── hand_state.py           # HandPlayerState, per-hand player state
     └── hand_setup.py           # setup_hand, selects a hand's participants
 ```
 
-`core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `HandPlayerState`. Future APIs and clients will consume the engine rather than reimplement poker rules.
+`core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. `game_lifecycle` owns game start and button movement, while `Table` only stores the button seat and stays unaware of player status. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `HandPlayerState`. Future APIs and clients will consume the engine rather than reimplement poker rules.
 
 ## Usage Example
 
@@ -129,24 +136,23 @@ uv run pytest --cov=go_poker
 
 Planned work, in intended order. None of it is implemented yet.
 
-1. Game startup and button lifecycle
-2. PokerHand / hand lifecycle
-3. Hole-card and board dealing
-4. Betting engine and legal actions
-5. All-in handling
-6. Main and side pots
-7. Showdown
-8. Complete game loop
-9. Bots
-10. Backend/API
-11. Real-time multiplayer
-12. Web/mobile clients
-13. Analytics / coaching features
+1. PokerHand / hand lifecycle
+2. Hole-card and board dealing
+3. Betting engine and legal actions
+4. All-in handling
+5. Main and side pots
+6. Showdown
+7. Complete game loop
+8. Bots
+9. Backend/API
+10. Real-time multiplayer
+11. Web/mobile clients
+12. Analytics / coaching features
 
 ## Project Status
 
 **Work in progress.**
 
-The engine currently covers cards, hand evaluation, table state, and hand setup. It does not yet start or play a hand: there is no dealing, betting, pot handling, or showdown, and no CLI, API, or client.
+The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, and hand setup. It does not yet play out a hand: there is no dealing, betting, pot handling, or showdown, and no CLI, API, or client.
 
 The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers.

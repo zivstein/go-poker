@@ -93,7 +93,11 @@ POSITIONS_BY_PLAYER_COUNT: dict[int, tuple[Position, ...]] = {
 }
 
 
-def positions_for_player_count(player_count: int) -> tuple[Position, ...]:
+def validate_player_count(player_count: int) -> None:
     if player_count < 2 or player_count > 9:
         raise InvalidPlayerCount("Player count must be between 2 and 9")
+
+
+def positions_for_player_count(player_count: int) -> tuple[Position, ...]:
+    validate_player_count(player_count)
     return POSITIONS_BY_PLAYER_COUNT[player_count]

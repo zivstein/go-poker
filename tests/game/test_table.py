@@ -3,7 +3,6 @@ import pytest
 from go_poker.game.player import Player
 from go_poker.game.seat import Seat, SeatOccupiedError
 from go_poker.game.table import (
-    ButtonUndefinedError,
     EmptySeatError,
     InvalidSeatNumber,
     InvalidTableSize,
@@ -163,58 +162,6 @@ def test_occupied_seats_are_in_seat_order() -> None:
     assert table.occupied_seats[1] == Seat(number=3, player=player)
 
 
-def test_next_occupied_seat_can_be_immediate_next_seat() -> None:
-    """The next seat is returned when it is occupied."""
-    table = Table(9)
-    player = Player("Player 1", stack=1000)
-    other_player = Player("Player 2", stack=1000)
-    table.sit_in(player, 1)
-    table.sit_in(other_player, 2)
-    assert table.get_next_occupied_seat(1).number == 2
-
-
-def test_next_occupied_seat_skips_empty_seats() -> None:
-    """Searching for the next occupied seat skips intervening empty seats."""
-    table = Table(9)
-    player = Player("Player 1", stack=1000)
-    other_player = Player("Player 2", stack=1000)
-    table.sit_in(player, 1)
-    table.sit_in(other_player, 3)
-    assert table.get_next_occupied_seat(1).number == 3
-
-
-def test_next_occupied_seat_works_when_starting_seat_is_empty() -> None:
-    """The search can start from an empty seat and find the next occupied one."""
-    table = Table(9)
-    player = Player("Player", stack=1000)
-    table.sit_in(player, 3)
-    assert table.get_next_occupied_seat(1).number == 3
-
-
-def test_next_occupied_seat_wraps_around_table() -> None:
-    """The search continues from the beginning after reaching the table's end."""
-    table = Table(9)
-    player = Player("Player 1", stack=1000)
-    other_player = Player("Player 2", stack=1000)
-    table.sit_in(player, 8)
-    table.sit_in(other_player, 3)
-    assert table.get_next_occupied_seat(8).number == 3
-
-
-def test_only_occupied_seat_can_return_itself_after_full_rotation() -> None:
-    """A search from the only occupied seat returns that seat after a full rotation."""
-    table = Table(9)
-    player = Player("Player 1", stack=1000)
-    table.sit_in(player, 1)
-    assert table.get_next_occupied_seat(1).number == 1
-
-
-def test_next_occupied_seat_on_empty_table_raises_error(empty_table_max_9: Table) -> None:
-    """Searching a table with no seated players raises EmptySeatError."""
-    with pytest.raises(EmptySeatError):
-        empty_table_max_9.get_next_occupied_seat(1)
-
-
 def test_button_can_be_set_on_occupied_seat() -> None:
     """Setting the button to an occupied seat stores its seat number."""
     table = Table(9)
@@ -228,51 +175,6 @@ def test_button_cannot_be_set_on_empty_seat(empty_table_max_9: Table) -> None:
     """Setting the button to an empty seat raises EmptySeatError."""
     with pytest.raises(EmptySeatError):
         empty_table_max_9.set_button(2)
-
-
-def test_move_button_requires_button_to_be_defined(empty_table_max_9: Table) -> None:
-    """Moving an unset button raises ButtonUndefinedError."""
-    with pytest.raises(ButtonUndefinedError):
-        empty_table_max_9.move_button()
-
-
-def test_button_moves_to_next_occupied_seat() -> None:
-    """Moving the button updates its number to the next occupied seat."""
-    table = Table(9)
-    player = Player("P1", stack=1000)
-    other_player = Player("P2", stack=1000)
-    table.sit_in(player, 1)
-    table.sit_in(other_player, 2)
-    table.set_button(1)
-    assert table.button_seat_number == 1
-    table.move_button()
-    assert table.button_seat_number == 2
-
-
-def test_button_skips_empty_seats() -> None:
-    """The button passes over empty seats to reach the next seated player."""
-    table = Table(9)
-    player = Player("P1", stack=1000)
-    other_player = Player("P2", stack=1000)
-    table.sit_in(player, 1)
-    table.sit_in(other_player, 4)
-    table.set_button(1)
-    assert table.button_seat_number == 1
-    table.move_button()
-    assert table.button_seat_number == 4
-
-
-def test_button_wraps_around_table() -> None:
-    """The button wraps to an occupied seat at the beginning of the table."""
-    table = Table(9)
-    player = Player("P1", stack=1000)
-    other_player = Player("P2", stack=1000)
-    table.sit_in(player, 9)
-    table.sit_in(other_player, 2)
-    table.set_button(9)
-    assert table.button_seat_number == 9
-    table.move_button()
-    assert table.button_seat_number == 2
 
 
 # =============================================================================
