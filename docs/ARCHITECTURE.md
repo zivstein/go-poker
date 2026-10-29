@@ -16,7 +16,7 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | Layer | Status | Responsibility | Must not depend on |
 | --- | --- | --- | --- |
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
-| `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
+| `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, the `PokerHand` aggregate, and card uniqueness | Accounts, persistence, APIs, clients |
 | `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
 | `game/betting/` | Planned (milestone 2) | Betting-structure–specific rules | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
@@ -73,6 +73,7 @@ Later hand-level state, such as action and pot state, is added as those responsi
 - Burned cards belong to `PokerHand`.
 - Private (hole) cards belong to each `HandPlayerState`, as a list that is empty until dealt.
 - A player's combined board + hole cards are never stored as separate state. They are derived when needed, for example at evaluation.
+- Every card appears at most once across the hand's hole cards, board, burned cards, and deck. `ensure_unique_cards` (in `game/poker_hand.py`) enforces this and raises `DuplicateCardError`; it lives in `game/`, not in a variant, because the rule applies to every variant. Variant dealing checks it before drawing, so a hand with a duplicated card, or a dealt card still in its deck, is rejected unchanged.
 - Hole-card storage does not structurally assume exactly two cards. Variant rules decide the count: Texas Hold'em (`game/variants/texas_holdem/dealing.py`) deals two, one card at a time starting clockwise of the button and ending with the button, with no burn card. Hole cards are dealt only on `PREFLOP`.
 - Texas Hold'em board dealing (`deal_next_street`) moves the hand from `PREFLOP` to `FLOP`, `TURN`, and `RIVER`. Entering each street burns one card and then deals that street's board cards in draw order: three on the flop, one on the turn, one on the river. The board is dealt only after every participant holds their hole cards, and there is no street after `RIVER`.
 

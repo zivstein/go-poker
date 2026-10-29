@@ -33,6 +33,15 @@ def test_draw_from_empty_deck():
         deck.draw()
 
 
+def test_card_is_in_deck_until_drawn() -> None:
+    """Membership is true for every undrawn card and false for a card once it has been drawn."""
+    deck = Deck()
+    assert all(Card(rank, suit) in deck for rank in Rank for suit in Suit)
+    drawn = deck.draw()
+    assert drawn not in deck
+    assert all(card in deck for card in Deck.create_new_deck() if card != drawn)
+
+
 def test_deck_contains_expected_cards():
     deck = Deck()
     _test_deck_contains_expected_cards(deck)

@@ -1,6 +1,8 @@
 # Current Cycle
 
-**Milestone 1: PokerHand + Dealing Foundation** (see [ROADMAP.md](ROADMAP.md))
+**Milestone 1: PokerHand + Dealing Foundation** (see [ROADMAP.md](ROADMAP.md)) — **Complete**
+
+All four cycles are complete, so there is no next cycle. The next milestone (Betting engine + legal actions) is broken into cycles when it starts.
 
 ## Goal
 
@@ -17,7 +19,7 @@ The ownership rules this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE
 | 1 | PokerHand aggregate | Complete |
 | 2 | Deterministic deck + Texas Hold'em private-card dealing | Complete |
 | 3 | Streets + board dealing | Complete |
-| 4 | Integration hardening | Current |
+| 4 | Integration hardening | Complete |
 
 ### Cycle 1 — PokerHand aggregate
 

@@ -2,13 +2,13 @@
 
 High-level milestones in intended order. This is the single source of truth for the project roadmap; the [README](../README.md) links here rather than repeating it.
 
-The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
+The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md); it currently records the completed milestone 1, and milestone 2's cycles are planned when it starts. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | # | Milestone | Status |
 | --- | --- | --- |
 | 0 | Engine foundation | Complete |
-| 1 | PokerHand + dealing + streets | **Current** |
-| 2 | Betting engine + legal actions | Planned |
+| 1 | PokerHand + dealing + streets | Complete |
+| 2 | Betting engine + legal actions | **Next** (not started) |
 | 3 | All-in + main/side pots | Planned |
 | 4 | Showdown + settlement | Planned |
 | 5 | Complete continuous game loop | Planned |
@@ -28,7 +28,7 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 
 **0. Engine foundation** — cards, deck, and hand evaluation; players, seats, and table; explicit game start and button movement; positions, blinds, and hand setup.
 
-**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression. No betting. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
+**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression; duplicate-card protection and integration tests for 2–9 players. No betting. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
 
 **2. Betting engine + legal actions** — betting-structure behavior under `src/go_poker/game/betting/`, starting with No Limit.
 

@@ -36,3 +36,7 @@ class Deck:
 
     def __len__(self) -> int:
         return len(self._deck)
+
+    def __contains__(self, card: object) -> bool:
+        """Whether the card is still in the deck, that is, not drawn yet."""
+        return card in self._deck

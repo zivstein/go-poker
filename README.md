@@ -10,7 +10,7 @@ The core engine is intentionally independent from presentation and networking la
 
 **Cards and hand evaluation**
 
-- Card, rank, and suit models, and a standard 52-card deck with shuffle and draw
+- Card, rank, and suit models, and a standard 52-card deck with shuffle, draw, and membership (`card in deck` is true until the card is drawn)
 - Secure shuffling: `Deck.shuffle()` uses the OS CSPRNG (`random.SystemRandom`), so engine shuffles are not reproducible; its underscored `_rng` keyword is test-only (tests pass a seeded `random.Random` for a known order, and engine code must never pass it)
 - Five-card hand evaluation across all nine hand categories, including the ace-low straight
 - Best-hand evaluation from 5–7 available cards
@@ -49,10 +49,12 @@ The core engine is intentionally independent from presentation and networking la
 - Dealing hole cards is rejected without changing the hand if the hand is past preflop, hole cards were already dealt, or the deck has too few cards
 - `deal_next_street()` moves a `PokerHand` to its next street: it burns one card into the hand's burned cards, then deals that street's board cards onto the hand's board in draw order (three on the flop, one on the turn, one on the river)
 - Board dealing is rejected without changing the hand if any participant does not yet hold their hole cards, the hand is already on the river, or the deck has too few cards for the burn and the street's board cards
+- Duplicate-card protection: `ensure_unique_cards()` checks that every card appears at most once across a hand's hole cards, board, burned cards, and deck; both dealing functions reject a hand whose cards are duplicated or still in the deck with `DuplicateCardError`, without changing it
 
 **Tooling**
 
 - Automated test suite with pytest; tests pass a seeded `random.Random` as `_rng` for deterministic shuffles
+- Integration tests for 2–9 players, including heads-up: deal order, deck consumption after every step, invalid street transitions, duplicate-card protection, and reproducible seeded multi-hand runs
 - Linting and formatting with Ruff, static type checking with mypy
 - GitHub Actions CI running all of the above
 
@@ -76,7 +78,7 @@ src/go_poker/
     ├── hand_state.py           # HandPlayerState, per-hand player state
     ├── hand_setup.py           # setup_hand, selects a hand's participants
     ├── street.py               # Street: PREFLOP, FLOP, TURN, RIVER
-    ├── poker_hand.py           # PokerHand: participants, deck, board, street, and burned cards of one hand
+    ├── poker_hand.py           # PokerHand: participants, deck, board, street, and burned cards; card uniqueness
     └── variants/               # variant-specific poker rules
         └── texas_holdem/
             └── dealing.py      # Texas Hold'em hole-card, burn, and board dealing
@@ -160,6 +162,6 @@ The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active m
 
 **Work in progress.**
 
-The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression. It does not yet play out a hand: there is no betting, pot handling, or showdown, and no CLI, API, or client.
+The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, hand setup into a `PokerHand` with its participants, securely shuffled deck, board, street, and burned cards, and Texas Hold'em hole-card dealing, burn cards, and flop, turn, and river dealing with street progression, protected against duplicated cards. It does not yet play out a hand: there is no betting, pot handling, or showdown, and no CLI, API, or client.
 
-The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. The active milestone is PokerHand + Dealing Foundation.
+The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. Milestone 1, PokerHand + Dealing Foundation, is complete; the next milestone is the betting engine and legal actions.
