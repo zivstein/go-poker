@@ -66,6 +66,8 @@ src/go_poker/
 
 `core` holds pure card and hand-evaluation logic. `game` holds table state and the rules that turn it into the participants of one hand. `game_lifecycle` owns game start and button movement, while `Table` only stores the button seat and stays unaware of player status. Persistent player state lives in `Player`; anything that belongs to a single hand lives in `HandPlayerState`. Future APIs and clients will consume the engine rather than reimplement poker rules.
 
+Ownership boundaries and the planned direction for hands, variants, betting structures, and hand history are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Usage Example
 
 Evaluate and compare two players' best hands on the same board:
@@ -134,20 +136,7 @@ uv run pytest --cov=go_poker
 
 ## Roadmap
 
-Planned work, in intended order. None of it is implemented yet.
-
-1. PokerHand / hand lifecycle
-2. Hole-card and board dealing
-3. Betting engine and legal actions
-4. All-in handling
-5. Main and side pots
-6. Showdown
-7. Complete game loop
-8. Bots
-9. Backend/API
-10. Real-time multiplayer
-11. Web/mobile clients
-12. Analytics / coaching features
+The milestone roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md), and the active milestone's cycle plan is in [docs/CURRENT_CYCLE.md](docs/CURRENT_CYCLE.md).
 
 ## Project Status
 
@@ -155,4 +144,4 @@ Planned work, in intended order. None of it is implemented yet.
 
 The engine currently covers cards, hand evaluation, table state, game startup, button movement between hands, and hand setup. It does not yet play out a hand: there is no dealing, betting, pot handling, or showdown, and no CLI, API, or client.
 
-The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers.
+The current focus is completing the core No-Limit Texas Hold'em game engine before adding networking and presentation layers. The active milestone is PokerHand + Dealing Foundation.

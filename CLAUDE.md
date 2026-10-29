@@ -4,6 +4,8 @@
 
 Reuse existing architecture and domain logic, and implement only the approved scope.
 
+Before milestone planning or implementation, consult `docs/ARCHITECTURE.md` and `docs/CURRENT_CYCLE.md` when they exist.
+
 Do not add AI/Claude attribution, Co-Authored-By trailers, Generated-with-Claude text, or Claude session URLs to commits or pull requests.
 
 # AI Team Workflow
@@ -39,7 +41,7 @@ Rules:
 - The Lead owns orchestration and never delegates architecture or product decisions.
 - Give the Engineer and Reviewer the approved requirements and constraints relevant to their task.
 - Give the Reviewer the requirement and approved architecture, not the Engineer's justification, so the review stays independent.
-- Documentation is part of Definition of Done. When a change affects documented behavior, architecture, public API, usage, project status, or roadmap status, the Engineer updates the relevant README/docs in the same task, without separate user approval, and the Reviewer checks that affected docs are still accurate.
+- Documentation is part of Definition of Done. When a change affects documented behavior, architecture, public API, usage, project status, or roadmap status, the Engineer updates the relevant README/docs in the same task, without separate user approval, and the Reviewer checks that affected docs are still accurate. Completing a cycle includes updating `docs/CURRENT_CYCLE.md`: mark that cycle complete, mark the next cycle current if one remains, and keep the document consistent with the repository.
 - `CLAUDE.md`, `AGENTS.md`, and `.claude/agents/` are control files. No role modifies them during feature work; the Lead proposes improvements to the user, and they are made only as a dedicated workflow change.
 - At the end of a milestone, the Lead adds a short `Process improvements` section to its report when it noticed recurring friction, missing instructions, repeated mistakes, or a way to improve the workflow.
 
