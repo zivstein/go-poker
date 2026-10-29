@@ -18,11 +18,11 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
 | `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
 | `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
-| `game/betting/` | Planned (milestone 2, current) | Betting-structure–specific rules; first implementation: No-Limit betting and legal actions (see [Betting](#betting-milestone-2-planned)) | Accounts, persistence, APIs, clients |
+| `game/betting/` | Current (milestone 2 in progress) | Betting-structure–specific rules; first implementation: No-Limit betting. Current: stakes, betting state, chip commitment, and betting initialization with blind posting. Planned: actions, legal actions, and betting-round progression (see [Betting](#betting-milestone-2-in-progress)) | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
 | Accounts, persistence, API, clients | Planned (milestones 13+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
 
-Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` does not exist yet and is created in milestone 2.
+Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` exists (No-Limit betting, built up through milestone 2).
 
 ## Core
 
@@ -47,14 +47,18 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 
 **Rules that operate on that state**
 
-- `hand_setup` — owns hand participation and `WAITING` entry rules: which seated players take part in the next hand, and when a waiting player may enter (big blind or a non-blind position, never button or small blind).
-- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both create a fresh `Deck()`, shuffle it securely before hand setup (so a shuffle failure is rolled back like any other), and pass it to the new `PokerHand`. The lifecycle owns the shuffle policy. Seating alone never starts a game. The lifecycle is variant-agnostic: it deals no cards, so the new hand starts on `PREFLOP` with an empty board and no burned cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`, then `deal_next_street`) to the returned `PokerHand`.
+- `hand_setup` — owns hand participation and `WAITING` entry rules: which seated players take part in the next hand (`READY` or `WAITING`, with chips; see the start-of-hand chip rule below), and when a waiting player may enter (big blind or a non-blind position, never button or small blind).
+- `game_lifecycle` — owns explicit game start and restart (`start_game`, with an injected button chooser) and button traversal between hands (`start_next_hand`). Both create a fresh `Deck()`, shuffle it securely before hand setup (so a shuffle failure is rolled back like any other), and pass it to the new `PokerHand`. The lifecycle owns the shuffle policy. Seating alone never starts a game. Only players with chips count: `start_game`'s starters are the seated `WAITING` players with chips (only they are counted, offered to the button chooser, and made `READY`), while its game-already-started guard still looks at every seated `READY` player; `start_next_hand` moves the button among `READY` players with chips, anchored clockwise on the previous button seat even when that player has no chips left. The lifecycle is variant-agnostic: it deals no cards, so the new hand starts on `PREFLOP` with an empty board and no burned cards; the caller applies variant dealing (for example `texas_holdem.dealing.deal_hole_cards`, then `deal_next_street`) to the returned `PokerHand`.
 - `position` / `position_assignment` — positions and blinds relative to the button for a given set of seats.
+
+**Start-of-hand chip rule.** A player with no chips (`stack == 0`) at the start of a new hand does not take part in it and cannot receive the button; a player with a positive stack smaller than a blind does take part. The rule is defined once in `hand_setup` (`has_chips_for_hand`) and reused by `game_lifecycle`. Running out of chips does not change `PlayerStatus`: a player with no chips may stay seated and `READY` (or `WAITING`) and is simply not dealt into new hands. There is no bust, rebuy, reload, or top-up policy yet.
+
+**Known deferred case: every `READY` player has no chips.** `start_next_hand` cannot continue (`GameNotStartedError`), and `start_game` cannot restart while those `READY` players remain seated (`GameAlreadyStartedError`). Today the caller must stand those players up or change their status. An automatic bust, rebuy, or status-transition policy is intentionally deferred: it is not part of Milestone 2 and will be decided when such a policy is planned.
 
 **Per-hand state**
 
 - `PokerHand` — the aggregate for one hand (see [below](#pokerhand)).
-- `HandPlayerState` — one player's state for one hand: seat, position, blind, hand flags, and hole cards. It references the persistent `Player` rather than copying it.
+- `HandPlayerState` — one player's state for one hand: seat, position, blind, hand flags (`folded`, `all_in`), betting contributions (`street_contribution`, `total_contribution`), and hole cards. It references the persistent `Player` rather than copying it.
 
 ## PokerHand
 
@@ -65,10 +69,11 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 - the community board, empty until variant rules deal it
 - the current `Street` (`PREFLOP`, `FLOP`, `TURN`, `RIVER`), starting on `PREFLOP`
 - the burned cards, empty until variant rules burn cards before dealing the board, kept so every card drawn from the deck stays accounted for
+- an optional reference to the hand's `BettingState` (`betting`), `None` until the betting layer initializes betting
 
 `Street` lives in `game/` (`game/street.py`), not in a variant, because `PokerHand` owns the street and `game/` must not depend on `game/variants/`. Variant rules decide how the hand moves between streets.
 
-Milestone 2 adds the hand's betting state (see [Betting](#betting-milestone-2-planned)). Pot state beyond what player contributions already record arrives with all-ins and side pots (milestone 3). Hole cards, burned cards, and the board are dealt by variant rules from the hand's deck, and the same rules advance the street.
+Betting rules live in the betting layer, not on `PokerHand` (see [Betting](#betting-milestone-2-in-progress)). Pot state beyond what player contributions already record arrives with all-ins and side pots (milestone 3). Hole cards, burned cards, and the board are dealt by variant rules from the hand's deck, and the same rules advance the street.
 
 `PokerHand` is a plain container. It does not re-validate participation; `hand_setup` remains the single owner of those rules. The hand-starting lifecycle functions (`start_game`, `start_next_hand`) return a `PokerHand` built from `setup_hand`'s participants.
 
@@ -92,9 +97,9 @@ Legal engine-generated state keeps every card unique by construction:
 
 There is therefore no runtime duplicate-card scan. A test-only card-accounting invariant proves the guarantee: after a legal complete Texas Hold'em deal, the remaining deck plus every hole card, burned card, and board card are exactly the original 52 distinct cards. Externally deserialized, reconstructed, or network-provided state is not engine-generated. Validating it belongs at that external boundary, once such a boundary exists.
 
-## Betting (milestone 2, planned)
+## Betting (milestone 2, in progress)
 
-This section records the approved Milestone 2 design. None of it is implemented yet; progress is tracked in [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
+This section records the approved Milestone 2 design. Cycle 1 is implemented: `Stakes`, `BettingState`, the player contributions, chip commitment, and betting initialization with blind posting (the [Stakes](#stakes), [BettingState](#bettingstate), and [Betting initialization](#betting-initialization) sections, and the round-start pending and first-actor rules they use). Actions, legal actions, applying actions, round progression, and later betting rounds are planned; progress is tracked in [CURRENT_CYCLE.md](CURRENT_CYCLE.md).
 
 ### Scope
 
@@ -102,7 +107,7 @@ Milestone 2 adds normal No-Limit betting and legal-action calculation to `PokerH
 
 Deferred to later milestones:
 
-- calls the player cannot cover in full (short all-in calls), raises below the normal minimum because the player lacks chips, short-raise reopening rules, blinds that cannot be posted in full, main and side pots, and pot eligibility (milestone 3)
+- calls the player cannot cover in full (short all-in calls), raises below the normal minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less), main and side pots, and pot eligibility (milestone 3)
 - showdown, settlement, and payout (milestone 4)
 - automatic complete-hand and street orchestration (milestone 5)
 - Pot-Limit (milestone 8) and Fixed-Limit (not yet scheduled)
@@ -123,34 +128,39 @@ Poker variant and betting structure stay separate dimensions (see [Variants and 
 
 ### Stakes
 
-A focused hand/betting-level `Stakes` model holds the small blind and the big blind. Both are positive integers and `small_blind <= big_blind`; equal blinds such as 1/1 are valid. It is not a table or game configuration object.
+A focused hand/betting-level `Stakes` model (`game/betting/stakes.py`) holds the small blind and the big blind. Both are positive integers and `small_blind <= big_blind`; equal blinds such as 1/1 are valid. Invalid stakes raise `InvalidStakesError` at construction. It is not a table or game configuration object.
 
 ### BettingState
 
-Betting progress is held in one explicit `BettingState`, not in unrelated variables spread across modules. It tracks:
+Betting progress is held in one explicit `BettingState` (`game/betting/state.py`), not in unrelated variables spread across modules. It tracks:
 
 - the `Street` its current or completed betting round belongs to
+- the hand's `Stakes`, so later rounds can restore the big-blind minimum-bet context
 - the current bet: the street contribution every remaining player must match
 - the last full raise size
 - the current actor, or none when the round has ended
 - the players still pending action in the current betting round
 
+Players are identified by seat number, which is stable and unique within a hand.
+
 `BettingState` never stores legal actions; they are derived (see [Legal actions](#legal-actions)).
 
 ### Betting initialization
 
-The lifecycle is unchanged: `start_game(table, choose_button) -> PokerHand` and `start_next_hand(table) -> PokerHand` know nothing about betting. Betting initialization is a separate betting-layer operation, conceptually `initialize_betting(hand, stakes)`, that the caller applies to the returned hand. It:
+The lifecycle signatures are unchanged: `start_game(table, choose_button) -> PokerHand` and `start_next_hand(table) -> PokerHand` are betting-agnostic and know nothing about betting. They do apply the [start-of-hand chip rule](#game-domain-current), so a hand contains only players who start it with chips. Betting initialization is a separate betting-layer operation, `initialize_betting(hand, stakes)` (`game/betting/initialization.py`), that the caller applies to the returned hand. It:
 
 - creates the hand's preflop `BettingState` (`street = PREFLOP`) and attaches it to the `PokerHand`
 - posts the blinds as real chip commitments: the small blind (identified by `HandPlayerState.blind`, which `hand_setup` assigns; heads-up, the button holds it) commits the small-blind amount and the big blind commits the big-blind amount
 - sets the current bet to the big blind
 - sets the last full raise size to the big blind
-- selects the first actor
-- builds the pending players
+- selects the first actor: the first pending player clockwise after the big blind, following `PokerHand.players`
+- builds the pending players: every eligible player, blinds included, subject to [No opponent can respond](#no-opponent-can-respond)
 
 The intended hand-start sequence is: start the hand → initialize betting (post blinds) → variant hole-card dealing. There is no orchestration abstraction for this sequence yet (milestone 5).
 
-Initialization is rejected, leaving the hand and every stack unchanged, when the hand already has betting initialized or when a player cannot post their required blind in full. A blind posted in full that uses the player's last chips marks them all-in, like any other commitment that empties a stack.
+Initialization is rejected, leaving the hand and every stack unchanged, when the hand already has betting initialized (`BettingAlreadyInitializedError`), when the hand is no longer on `PREFLOP` (`BettingNotPreflopError`), or when a blind player's stack is smaller than their blind (`ShortBlindAllInNotSupportedError`), checked in that order. The last case is not an invalid player: in poker that player posts their whole stack and is all-in for less than the blind, while the nominal big blind stays the current bet. That short blind all-in needs unmatched chips and side pots, so it is deferred to milestone 3 and the error is a temporary Milestone 2 rejection. Both blinds are validated before either is posted. Initialization does not check variant dealing state such as whether hole cards were dealt; enforcing the deal-and-bet sequence belongs to the later orchestration layer. A blind posted in full that uses the player's last chips marks them all-in, like any other commitment that empties a stack. Chips are committed through the single `commit_chips` operation (`game/betting/chips.py`).
+
+Betting relies on hands containing only players who started the hand with chips (see the start-of-hand chip rule); the betting layer adds no stack checks of its own. Eligibility to act comes from the hand flags (`folded`, `all_in`), and `commit_chips` sets `all_in` when a stack reaches zero.
 
 Posting a blind is not an action, so the blinds still owe an action in the preflop round. This is what gives the big blind its option when everyone calls.
 
@@ -244,7 +254,7 @@ There is no `Pot` abstraction in Milestone 2; it would only hold one number. The
 - Rejected betting operations are atomic: a rejected initialization, action, or round start leaves the hand, its betting state, and every stack unchanged.
 - `street_contribution` resets to zero at the start of each new betting round.
 - `total_contribution` accumulates for the whole hand.
-- Chips a player commits are removed from `Player.stack`. Committing chips is one operation that subtracts from the stack and adds to both contributions.
+- Chips a player commits are removed from `Player.stack`. Committing chips is one operation (`commit_chips`) that subtracts from the stack and adds to both contributions. It enforces its own local invariants before changing anything: the amount must be positive (`InvalidChipAmountError`) and no larger than the player's stack (`InsufficientChipsError`). Operations that commit chips still validate their whole request first, so a rejection never leaves a partial commitment.
 - Before settlement, a player's remaining stack plus total contribution equals their chip total at the start of the hand. Only future payout and settlement change this.
 - Folded and all-in players are never pending actors.
 - A bet or raise makes every other eligible player owe another response.

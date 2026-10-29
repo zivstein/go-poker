@@ -1,42 +1,43 @@
 # Current Cycle
 
-**Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (planned for implementation)
+**Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
 
-The milestone plan is approved and Cycle 1 is next; no cycle has started. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
+The milestone plan is approved. Cycle 1 is complete and Cycle 2 is next. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is complete.
 
 ## Goal
 
 At the end of this milestone, `PokerHand` supports normal No-Limit betting: betting is initialized with real blinds, the engine calculates the legal actions for the current actor, applies actions, tracks each betting round to completion, and starts the betting round for each later street.
 
-Out of scope for this milestone: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, blinds that cannot be posted in full, main and side pots, pot eligibility, showdown and settlement, automatic complete-hand orchestration, Pot-Limit, and Fixed-Limit. All-ins are supported only when they are otherwise normal full actions.
+Out of scope for this milestone: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less), main and side pots, pot eligibility, showdown and settlement, automatic complete-hand orchestration, Pot-Limit, and Fixed-Limit. All-ins are supported only when they are otherwise normal full actions.
 
-The approved design, ownership rules, invariants, and boundaries this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-planned).
+The approved design, ownership rules, invariants, and boundaries this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress).
 
 ## Cycles
 
 | Cycle | Title | Status |
 | --- | --- | --- |
-| 1 | Betting state, stakes and blind posting | Next (not started) |
-| 2 | Action model + legal actions | Planned |
+| 1 | Betting state, stakes and blind posting | Complete |
+| 2 | Action model + legal actions | Next (not started) |
 | 3 | Apply actions + betting-round progression | Planned |
 | 4 | Integration hardening | Planned |
 
-### Cycle 1 — Betting state, stakes and blind posting
+### Cycle 1 — Betting state, stakes and blind posting (complete)
 
 - Create `src/go_poker/game/betting/`.
 - `Stakes` model: positive integer small and big blinds, `small_blind <= big_blind` (equal blinds are valid).
-- `BettingState`: street, current bet, last full raise size, current actor, pending players.
+- `BettingState`: street, stakes, current bet, last full raise size, current actor, pending players (players identified by seat number).
 - `street_contribution` and `total_contribution` on `HandPlayerState`, and the single chip-commitment operation (stack down, both contributions up).
 - `PokerHand` holds an optional reference to its `BettingState`; there is none until betting is initialized.
-- Betting initialization (conceptually `initialize_betting(hand, stakes)`):
+- Betting initialization (`initialize_betting(hand, stakes)`):
   - creates the preflop `BettingState` (`street = PREFLOP`)
   - posts SB / BB in full as real chips, deducted from the stacks
   - sets the initial current bet and last full raise size to the big blind
-  - selects the first actor (first eligible player clockwise after the BB, so the button heads-up)
+  - selects the first actor: the first pending player clockwise after the BB (the button heads-up), or none when nobody is pending
   - builds the pending players from the eligible players, blinds included
   - marks a player all-in if posting their blind in full uses their last chips
-- Initialization is rejected atomically when the hand is already initialized or a blind cannot be posted in full.
-- `start_game` and `start_next_hand` stay unchanged.
+- Initialization is rejected atomically when the hand is already initialized, is no longer on `PREFLOP`, or a blind player's stack is below their blind (`ShortBlindAllInNotSupportedError`: the short blind all-in is deferred to Milestone 3).
+- Start-of-hand chip rule: a player with no chips is not dealt into a new hand and cannot receive the button (`start_game`, `start_next_hand`, `setup_hand`); a positive stack below a blind still plays. `PlayerStatus` is unchanged and there is no bust or rebuy policy. Betting relies on this and adds no stack checks.
+- `start_game` and `start_next_hand` keep their signatures and remain unaware of betting; they only apply the start-of-hand chip rule above.
 
 No user betting actions yet.
 
@@ -88,7 +89,7 @@ Cover representative high-value behavior, including:
 - an all-in through a normal full action
 - round completion and starting a later street's round
 - every opponent all-in: the remaining player calls (or folds) to close the round, and a later street's round completes automatically with no actor
-- rejected repeated initialization, a rejected second round start on the same street, and a blind that cannot be posted in full
+- rejected repeated initialization, a rejected second round start on the same street, and the unsupported short blind all-in
 - invalid and out-of-turn actions
 - atomic failure behavior
 - stack / contribution invariants
@@ -108,4 +109,4 @@ Use representative boundaries and a small number of integration tests. Avoid:
 
 ## Decisions
 
-All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-planned). No decisions remain open before Cycle 1. Milestone 2 is not yet implemented.
+All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress). No decisions remain open. Cycle 1 is implemented; Cycles 2–4 are not.

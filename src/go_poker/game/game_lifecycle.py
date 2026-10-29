@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from go_poker.core.deck import Deck
 
-from .hand_setup import setup_hand
+from .hand_setup import has_chips_for_hand, setup_hand
 from .player import Player, PlayerStatus
 from .poker_hand import PokerHand
 from .position import validate_player_count
@@ -17,7 +17,7 @@ class GameAlreadyStartedError(RuntimeError):
 
 
 class GameNotStartedError(RuntimeError):
-    """Raised when moving to the next hand without ready players; the game must be started again."""
+    """Raised when moving to the next hand without ready players who have chips."""
 
 
 def _seated_players_with_status(table: Table, status: PlayerStatus) -> dict[int, Player]:
@@ -26,6 +26,12 @@ def _seated_players_with_status(table: Table, status: PlayerStatus) -> dict[int,
         for seat in table.occupied_seats
         if seat.player is not None and seat.player.status is status
     }
+
+
+def _players_with_chips_for_hand(table: Table, status: PlayerStatus) -> dict[int, Player]:
+    # A player without chips may stay seated with any status, but cannot take part in or hold the button of a new hand.
+    players = _seated_players_with_status(table, status)
+    return {seat_number: player for seat_number, player in players.items() if has_chips_for_hand(player)}
 
 
 def _next_ready_seat(ready_seats: tuple[int, ...], anchor: int) -> int:
@@ -42,11 +48,11 @@ def _new_hand(table: Table) -> PokerHand:
 
 
 def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
-    """Start a game with every waiting player, place the chosen button and return the first hand."""
+    """Start a game with every waiting player who has chips, place the chosen button and return the first hand."""
     if _seated_players_with_status(table, PlayerStatus.READY):
         raise GameAlreadyStartedError("The game has already started")
 
-    starters = _seated_players_with_status(table, PlayerStatus.WAITING)
+    starters = _players_with_chips_for_hand(table, PlayerStatus.WAITING)
     starter_seats = tuple(starters)
     validate_player_count(len(starter_seats))
 
@@ -68,10 +74,10 @@ def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
 
 
 def start_next_hand(table: Table) -> PokerHand:
-    """Move the button to the next ready player and return the next hand."""
-    ready_seats = tuple(_seated_players_with_status(table, PlayerStatus.READY))
+    """Move the button to the next ready player who has chips and return the next hand."""
+    ready_seats = tuple(_players_with_chips_for_hand(table, PlayerStatus.READY))
     if not ready_seats:
-        raise GameNotStartedError("No ready players are seated; start the game again")
+        raise GameNotStartedError("No ready players with chips are seated")
 
     previous_button_seat_number = table.button_seat_number
     if previous_button_seat_number is None:

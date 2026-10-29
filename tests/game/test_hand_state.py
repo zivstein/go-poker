@@ -25,6 +25,7 @@ def test_hand_player_state_keeps_player_and_assignment(position: Position, blind
     assert state.blind == blind
     assert state.folded is False
     assert state.all_in is False
+    assert (state.street_contribution, state.total_contribution) == (0, 0)
     assert state.hole_cards == []
     assert player.stack == 1000
     assert player.status == PlayerStatus.READY

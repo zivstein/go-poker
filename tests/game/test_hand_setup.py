@@ -52,6 +52,21 @@ def test_two_players_can_play_on_nine_seat_table() -> None:
     ]
 
 
+def test_player_without_chips_is_excluded_but_short_stack_plays() -> None:
+    """A player with no chips gets no hand state and keeps their status; one chip, below any blind, is enough."""
+    table = Table(9)
+    players = seat_players(table, {1: READY, 2: READY, 3: WAITING, 4: READY})
+    players[2].stack = 0
+    players[3].stack = 0
+    players[4].stack = 1
+    table.set_button(1)
+    assert summarize(setup_hand(table)) == [
+        (1, Position.BTN, Blind.SMALL),
+        (4, Position.BB, Blind.BIG),
+    ]
+    assert {seat: player.status for seat, player in players.items()} == {1: READY, 2: READY, 3: WAITING, 4: READY}
+
+
 def test_sitting_out_player_is_excluded() -> None:
     """A sitting-out player keeps their seat and status but gets no hand state."""
     table = Table(9)

@@ -8,11 +8,16 @@ CANDIDATE_STATUSES = (PlayerStatus.READY, PlayerStatus.WAITING)
 POSITIONS_CLOSED_TO_WAITING_PLAYERS = (Position.BTN, Position.SB)
 
 
+def has_chips_for_hand(player: Player) -> bool:
+    """Return whether the player has chips to start a new hand; a stack smaller than a blind still counts."""
+    return player.stack > 0
+
+
 def _candidate_players(table: Table) -> dict[int, Player]:
     return {
         seat.number: seat.player
         for seat in table.occupied_seats
-        if seat.player is not None and seat.player.status in CANDIDATE_STATUSES
+        if seat.player is not None and seat.player.status in CANDIDATE_STATUSES and has_chips_for_hand(seat.player)
     }
 
 

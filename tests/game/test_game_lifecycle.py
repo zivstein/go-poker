@@ -184,6 +184,21 @@ def test_sitting_out_players_are_not_starters() -> None:
     assert statuses_of(players) == {1: READY, 2: SITTING_OUT, 4: READY, 6: SITTING_OUT, 7: READY}
 
 
+def test_waiting_players_without_chips_are_not_starters() -> None:
+    """Waiting players with no chips are not offered to the chooser, not dealt in, and keep waiting."""
+    table = Table(9)
+    players = seat_players(table, {1: WAITING, 2: WAITING, 4: WAITING, 7: WAITING})
+    players[2].stack = 0
+    players[7].stack = 0
+    chooser = RecordingChooser(1)
+    assert summarize(start_game(table, chooser)) == [
+        (1, Position.BTN, Blind.SMALL),
+        (4, Position.BB, Blind.BIG),
+    ]
+    assert chooser.calls == [(1, 4)]
+    assert statuses_of(players) == {1: READY, 2: WAITING, 4: READY, 7: WAITING}
+
+
 def test_chooser_receives_starter_seats_in_seat_order() -> None:
     """The chooser is called once with the starter seats in seat order, not seating order."""
     table = Table(9)
@@ -221,6 +236,20 @@ def test_start_game_with_ready_player_raises_error() -> None:
     assert table.button_seat_number == 1
 
 
+def test_start_game_with_ready_player_without_chips_raises_error() -> None:
+    """The already-started guard counts every seated ready player, including one who has no chips left."""
+    table = Table(9)
+    players = seat_players(table, {1: READY, 2: WAITING, 3: WAITING})
+    players[1].stack = 0
+    table.set_button(1)
+    chooser = RecordingChooser(2)
+    with pytest.raises(GameAlreadyStartedError):
+        start_game(table, chooser)
+    assert chooser.calls == []
+    assert statuses_of(players) == {1: READY, 2: WAITING, 3: WAITING}
+    assert table.button_seat_number == 1
+
+
 @pytest.mark.parametrize(
     "statuses",
     [
@@ -238,6 +267,19 @@ def test_start_game_with_fewer_than_two_starters_raises_error(statuses: dict[int
         start_game(table, chooser)
     assert chooser.calls == []
     assert statuses_of(players) == statuses
+    assert table.button_seat_number is None
+
+
+def test_waiting_player_without_chips_does_not_count_as_a_starter() -> None:
+    """One waiting player with chips and one without are too few to start, and nothing changes."""
+    table = Table(9)
+    players = seat_players(table, {1: WAITING, 2: WAITING})
+    players[2].stack = 0
+    chooser = RecordingChooser(1)
+    with pytest.raises(InvalidPlayerCount):
+        start_game(table, chooser)
+    assert chooser.calls == []
+    assert statuses_of(players) == {1: WAITING, 2: WAITING}
     assert table.button_seat_number is None
 
 
@@ -408,6 +450,23 @@ def test_button_moves_on_from_player_who_is_no_longer_ready(
     players[5].status = new_status
     assert summarize(start_next_hand(table)) == expected
     assert table.button_seat_number == 7
+
+
+def test_button_and_hand_skip_ready_players_without_chips() -> None:
+    """Ready players with no chips stay ready but are skipped for the button and the hand; the previous button seat
+    still anchors the move after its player runs out of chips."""
+    table = Table(9)
+    players = seat_players(table, dict.fromkeys((1, 3, 5, 7, 8), READY))
+    table.set_button(5)
+    players[5].stack = 0
+    players[7].stack = 0
+    assert summarize(start_next_hand(table)) == [
+        (8, Position.BTN, Blind.NONE),
+        (1, Position.SB, Blind.SMALL),
+        (3, Position.BB, Blind.BIG),
+    ]
+    assert table.button_seat_number == 8
+    assert statuses_of(players) == dict.fromkeys((1, 3, 5, 7, 8), READY)
 
 
 def test_single_ready_player_keeps_button_and_plays_heads_up_with_waiting_player() -> None:

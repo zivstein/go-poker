@@ -8,7 +8,7 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 | --- | --- | --- |
 | 0 | Engine foundation | Complete |
 | 1 | PokerHand + dealing + streets | **COMPLETE** |
-| 2 | Betting engine + legal actions | **CURRENT** (planned for implementation) |
+| 2 | Betting engine + legal actions | **CURRENT** (in progress) |
 | 3 | All-ins + main/side pots | Planned |
 | 4 | Showdown + settlement | Planned |
 | 5 | Complete continuous PokerHand/game loop | Planned |
@@ -33,9 +33,9 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 
 **1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression; integration tests including heads-up and multiway. Card uniqueness holds by construction and is proven by a test-only 52-card accounting invariant. No betting.
 
-**2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md) and [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-planned).
+**2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md) and [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2-in-progress).
 
-**3. All-ins + main/side pots** — picks up what milestone 2 defers: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, blinds that cannot be posted in full, main and side pots, and pot eligibility.
+**3. All-ins + main/side pots** — picks up what milestone 2 defers: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less; Milestone 2 rejects this case), main and side pots, and pot eligibility.
 
 **6. Structured Hand History / Event Log** — raw hand events become the source of truth that later stats, persistence, and AI features build on.
 
