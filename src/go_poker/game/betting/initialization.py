@@ -16,14 +16,6 @@ class BettingNotPreflopError(RuntimeError):
     """Raised when initializing betting for a hand that is no longer on the preflop street."""
 
 
-class ShortBlindAllInNotSupportedError(RuntimeError):
-    """Raised when a blind player's stack is smaller than their blind.
-
-    The player is valid: in poker they would post their whole stack and be all-in for less than the blind. That short
-    blind all-in is intentionally unsupported in Milestone 2 and deferred to Milestone 3, together with pots.
-    """
-
-
 def _blind_player(hand: PokerHand, blind: Blind) -> HandPlayerState:
     return next(hand_player for hand_player in hand.players if hand_player.blind is blind)
 
@@ -31,11 +23,15 @@ def _blind_player(hand: PokerHand, blind: Blind) -> HandPlayerState:
 def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     """Post the blinds and attach the hand's preflop betting state.
 
-    The small blind and big blind post in full as real chips; posting the last chips marks that player all-in. The
-    current bet and last full raise size start at the big blind. Posting a blind is not an action, so nobody has acted
-    yet (`acted_at_bet` is empty), every eligible player, blinds included, is pending, and the first pending player
-    clockwise after the big blind acts first. The hand must be preflop without betting yet; it is validated before
-    anything changes, so a rejection leaves it unchanged.
+    The small blind and big blind post real chips: each posts their blind, or their whole stack when it is smaller (a
+    short blind), and posting the last chips marks that player all-in. The current bet and last full raise size start
+    at the full big blind, whatever the blinds actually posted. Posting a blind is not an action, so nobody has acted
+    yet (`acted_at_bet` is empty), every eligible player, blinds included, is pending (subject to the round's early
+    endings, see `settle_pending`), and the first pending player clockwise after the big blind acts first.
+
+    A hand that already has betting or is no longer preflop is rejected before anything changes, leaving it unchanged.
+    Blind stacks are not checked: hands contain only players who start with chips (the start-of-hand chip rule), so
+    every blind posts a positive amount.
     """
     if hand.betting is not None:
         raise BettingAlreadyInitializedError("Betting has already been initialized for this hand")
@@ -45,15 +41,9 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
 
     small_blind_player = _blind_player(hand, Blind.SMALL)
     big_blind_player = _blind_player(hand, Blind.BIG)
+    # Not validated: hands contain only players who start with chips, so every blind posts a positive amount.
     for hand_player, amount in ((small_blind_player, stakes.small_blind), (big_blind_player, stakes.big_blind)):
-        if hand_player.player.stack < amount:
-            raise ShortBlindAllInNotSupportedError(
-                f"Seat {hand_player.seat_number} has {hand_player.player.stack} chips for a {hand_player.blind} of "
-                f"{amount}; short blind all-ins are not supported until Milestone 3"
-            )
-
-    commit_chips(small_blind_player, stakes.small_blind)
-    commit_chips(big_blind_player, stakes.big_blind)
+        commit_chips(hand_player, min(amount, hand_player.player.stack))
 
     pending = pending_at_round_start(hand.players, stakes.big_blind)
     hand.betting = BettingState(

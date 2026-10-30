@@ -84,6 +84,42 @@ def test_illegal_action_is_rejected_without_changes(
     assert hand_snapshot(hand) == before
 
 
+@pytest.mark.parametrize(
+    "actions_first, seat_number, action, error",
+    [
+        pytest.param([], 5, raise_to(15), NotPlayersTurnError, id="short-all-in-out-of-turn"),
+        pytest.param([(3, CALL)], 5, raise_to(14), IllegalActionError, id="below-minimum-and-not-the-all-in-target"),
+        pytest.param([(3, CALL)], 5, raise_to(16), IllegalActionError, id="above-the-all-in-target"),
+        pytest.param(
+            [(3, CALL), (5, raise_to(15)), (8, CALL), (1, CALL)],
+            3,
+            raise_to(25),
+            IllegalActionError,
+            id="raise-without-raise-rights-after-a-short-all-in",
+        ),
+    ],
+)
+def test_illegal_short_all_in_action_is_rejected_without_changes(
+    actions_first: list[tuple[int, Action]],
+    seat_number: int,
+    action: Action,
+    error: type[Exception],
+    started_hand: HandFactory,
+    hand_snapshot: HandSnapshotter,
+    play: Play,
+) -> None:
+    """The button has 15 chips, so its only raise is the short all-in to 15. Its all-in is rejected before its turn,
+    any other target is rejected, and UTG, who limped at 10 and faces only 5 more after it, may not raise."""
+    hand = started_hand({**FOUR_HANDED, 5: 15}, button_seat_number=5)
+    play(hand, *actions_first)
+    before = hand_snapshot(hand)
+
+    with pytest.raises(error):
+        apply_action(hand, seat_number, action)
+
+    assert hand_snapshot(hand) == before
+
+
 def test_action_needs_initialized_betting(make_hand: HandFactory) -> None:
     """A hand whose betting was never initialized cannot take actions."""
     with pytest.raises(BettingNotInitializedError):
@@ -204,6 +240,64 @@ def test_full_action_with_whole_stack_puts_player_all_in(
     assert min_reraise is not None
     apply_action(hand, 5, raise_to(min_reraise))
     assert betting(hand).pending_actors == {8, 1}
+
+
+# =============================================================================
+# SHORT ALL-INS
+# =============================================================================
+
+
+def test_short_call_commits_the_whole_stack_and_leaves_the_current_bet(
+    started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, play: Play
+) -> None:
+    """UTG raises to 30 and the button folds. The small blind, with 5 in and 15 behind, owes 25 and calls all-in for
+    its last 15: it stays below the current bet, which keeps its value, and owes no further action."""
+    hand = started_hand({**FOUR_HANDED, 8: 20}, button_seat_number=5)
+    play(hand, (3, raise_to(30)), (5, FOLD), (8, CALL))
+
+    small_blind = by_seat(hand)[8]
+    assert (small_blind.player.stack, small_blind.street_contribution, small_blind.total_contribution) == (0, 20, 20)
+    assert small_blind.all_in is True
+    assert (betting(hand).current_bet, betting(hand).last_full_raise_size) == (30, 20)
+    assert betting(hand).pending_actors == {1}
+    assert betting(hand).current_actor == 1
+
+
+def test_short_opening_bet_keeps_the_last_full_raise_size(
+    started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, play: Play
+) -> None:
+    """On the flop the small blind checks and the big blind bets all-in for its last 6, below the full bet of 10. The
+    current bet becomes 6 but the last full raise size stays 10, so the next minimum raise is to 16, and both other
+    players owe a response."""
+    hand = started_hand({1: 1000, 2: 1000, 3: 16}, button_seat_number=1)
+    deal_hole_cards(hand)
+    play(hand, (1, CALL), (2, CALL), (3, CHECK))
+    deal_next_street(hand)
+    start_betting_round(hand)
+    play(hand, (2, CHECK), (3, bet(6)))
+
+    big_blind = by_seat(hand)[3]
+    assert (big_blind.player.stack, big_blind.street_contribution, big_blind.all_in) == (0, 6, True)
+    assert (betting(hand).current_bet, betting(hand).last_full_raise_size) == (6, 10)
+    assert betting(hand).pending_actors == {1, 2}
+    assert betting(hand).current_actor == 1
+    assert legal_actions(hand).min_full_target == 16
+
+
+def test_short_raise_keeps_the_last_full_raise_size(
+    started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup
+) -> None:
+    """UTG raises all-in to its 15 chips, below the minimum raise to 20. The current bet becomes 15 but the last full
+    raise size stays 10, so the next minimum raise is to 25, and every other player owes a response."""
+    hand = started_hand({**FOUR_HANDED, 3: 15}, button_seat_number=5)
+    apply_action(hand, 3, raise_to(15))
+
+    utg = by_seat(hand)[3]
+    assert (utg.player.stack, utg.street_contribution, utg.all_in) == (0, 15, True)
+    assert (betting(hand).current_bet, betting(hand).last_full_raise_size) == (15, 10)
+    assert betting(hand).pending_actors == {5, 8, 1}
+    assert betting(hand).current_actor == 5
+    assert legal_actions(hand).min_full_target == 25
 
 
 # =============================================================================

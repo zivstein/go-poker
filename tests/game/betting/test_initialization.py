@@ -5,7 +5,6 @@ import pytest
 from go_poker.game.betting.initialization import (
     BettingAlreadyInitializedError,
     BettingNotPreflopError,
-    ShortBlindAllInNotSupportedError,
     initialize_betting,
 )
 from go_poker.game.betting.stakes import Stakes
@@ -130,31 +129,6 @@ def test_hand_past_preflop_is_rejected_without_changes(
     assert hand.betting is None
 
 
-@pytest.mark.parametrize(
-    "stacks",
-    [
-        pytest.param({5: 1000, 8: 4, 1: 1000, 3: 1000}, id="small-blind-short"),
-        pytest.param({5: 1000, 8: 1000, 1: 9, 3: 1000}, id="big-blind-short"),
-    ],
-)
-def test_short_blind_all_in_is_not_supported_yet_and_changes_nothing(
-    stacks: dict[int, int],
-    make_hand: HandFactory,
-    player_snapshot: PlayerSnapshotter,
-    stakes: Stakes,
-) -> None:
-    """A blind player with chips but fewer than their blind would post a short all-in, which Milestone 2 does not
-    support yet (deferred to Milestone 3); initialization is rejected before any chips move."""
-    hand = make_hand(stacks, button_seat_number=5)
-    before = player_snapshot(hand)
-
-    with pytest.raises(ShortBlindAllInNotSupportedError):
-        initialize_betting(hand, stakes)
-
-    assert player_snapshot(hand) == before
-    assert hand.betting is None
-
-
 # =============================================================================
 # BLINDS THAT USE A PLAYER'S LAST CHIPS
 # =============================================================================
@@ -170,6 +144,58 @@ def test_blind_posted_with_last_chips_marks_player_all_in_and_not_pending(
     assert (big_blind.player.stack, big_blind.total_contribution, big_blind.all_in) == (0, 10, True)
     assert betting(hand).current_actor == 3
     assert betting(hand).pending_actors == {3, 5, 8}
+
+
+@pytest.mark.parametrize(
+    "short_seat_number, pending",
+    [
+        pytest.param(8, {5, 1, 3}, id="small-blind"),
+        pytest.param(1, {5, 8, 3}, id="big-blind"),
+    ],
+)
+def test_short_blind_posts_the_whole_stack_and_keeps_the_full_big_blind_bet(
+    short_seat_number: int,
+    pending: set[int],
+    make_hand: HandFactory,
+    by_seat: SeatLookup,
+    betting: BettingLookup,
+    stakes: Stakes,
+) -> None:
+    """A blind player with 3 chips, fewer than their blind, posts all 3 and is all-in, so they owe no action. The
+    current bet and the last full raise size still start at the full big blind of 10."""
+    hand = make_hand({5: 1000, 8: 1000, 1: 1000, 3: 1000, short_seat_number: 3}, button_seat_number=5)
+    initialize_betting(hand, stakes)
+
+    short_blind = by_seat(hand)[short_seat_number]
+    assert (short_blind.player.stack, short_blind.street_contribution, short_blind.total_contribution) == (0, 3, 3)
+    assert short_blind.all_in is True
+    assert betting(hand) == BettingState(
+        street=Street.PREFLOP,
+        stakes=stakes,
+        current_bet=10,
+        last_full_raise_size=10,
+        current_actor=3,
+        pending_actors=pending,
+        acted_at_bet={},
+    )
+
+
+def test_heads_up_big_blind_all_in_below_the_small_blind_leaves_the_round_complete(
+    make_hand: HandFactory, player_snapshot: PlayerSnapshotter, betting: BettingLookup, stakes: Stakes
+) -> None:
+    """Heads-up, the big blind is all-in for 3, less than the small blind's 5. The small blind already has more in
+    front than the big blind can contest, so it owes nothing: nobody is pending and the round is complete as soon as
+    betting is initialized. Its extra 2 stay in front (unmatched chips are not returned yet)."""
+    hand = make_hand({3: 3, 7: 1000}, button_seat_number=7)
+    initialize_betting(hand, stakes)
+
+    assert player_snapshot(hand) == {
+        7: (995, 5, 5, False, False),  # button and small blind
+        3: (0, 3, 3, False, True),  # big blind
+    }
+    assert betting(hand).current_bet == 10
+    assert betting(hand).current_actor is None
+    assert betting(hand).pending_actors == set()
 
 
 def test_heads_up_small_blind_all_in_leaves_the_round_complete(

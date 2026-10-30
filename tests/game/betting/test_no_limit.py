@@ -5,7 +5,8 @@ from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
 from go_poker.game.street import Street
 
-# The raise-rights states below need short all-in bets and raises, which are not legal yet, so they are built directly.
+# The reopening rule is checked at its boundaries on betting states built directly; the legal-actions and integration
+# tests reach such states through real short all-in action sequences.
 
 
 def flop_betting(*, current_bet: int, last_full_raise_size: int, acted_at_bet: dict[int, int]) -> BettingState:

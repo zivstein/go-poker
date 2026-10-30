@@ -4,16 +4,13 @@ from collections.abc import Callable
 import pytest
 
 from go_poker.game.betting.actions import Action, ActionType
-from go_poker.game.betting.chips import commit_chips
 from go_poker.game.betting.legal_actions import LegalActions, legal_actions
 from go_poker.game.betting.rounds import start_betting_round
 from go_poker.game.betting.state import BettingNotInitializedError, BettingState
-from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
 
 type HandFactory = Callable[..., PokerHand]
-type SeatLookup = Callable[[PokerHand], dict[int, HandPlayerState]]
 type BettingLookup = Callable[[PokerHand], BettingState]
 type Play = Callable[..., None]
 
@@ -121,6 +118,22 @@ def test_unopened_round_allows_check_or_bet(called_around: PokerHand, play: Play
     assert legal_actions(hand) == legal(can_fold=True, can_check=True, can_bet=True, min_full_target=10, max_target=990)
 
 
+def test_stack_below_the_big_blind_may_only_open_with_a_short_all_in_bet(started_hand: HandFactory, play: Play) -> None:
+    """Called around preflop, the big blind is left with 6 chips, less than the full bet of 10. On the flop, after the
+    small blind checks, it may check or bet all-in to 6 and to no other target, while `min_full_target` still reports
+    the big blind."""
+    hand = started_hand({1: 1000, 2: 1000, 3: 16}, button_seat_number=1)
+    deal_hole_cards(hand)
+    play(hand, (1, CALL), (2, CALL), (3, CHECK))
+    deal_next_street(hand)
+    start_betting_round(hand)
+    play(hand, (2, CHECK))
+
+    assert legal_actions(hand) == legal(
+        can_fold=True, can_check=True, can_bet=True, min_full_target=10, max_target=6, short_all_in_target=6
+    )
+
+
 # =============================================================================
 # FACING A RAISE
 # =============================================================================
@@ -158,22 +171,39 @@ def test_raise_minimum_follows_last_full_raise_and_call_counts_street_contributi
             id="whole-stack-reaches-minimum-raise",
         ),
         pytest.param(
-            49, legal(can_fold=True, can_call=True, amount_owed=25, call_amount=25), id="stack-below-minimum-raise"
+            49,
+            legal(
+                can_fold=True,
+                can_call=True,
+                amount_owed=25,
+                call_amount=25,
+                can_raise=True,
+                min_full_target=50,
+                max_target=49,
+                short_all_in_target=49,
+            ),
+            id="short-all-in-raise-below-minimum-raise",
         ),
         pytest.param(
             30,
             legal(can_fold=True, can_call=True, amount_owed=25, call_amount=25, call_is_all_in=True),
             id="call-with-whole-stack",
         ),
-        pytest.param(20, legal(can_fold=True, amount_owed=25), id="call-above-stack"),
+        pytest.param(
+            20,
+            legal(can_fold=True, can_call=True, amount_owed=25, call_amount=15, call_is_all_in=True),
+            id="short-all-in-call",
+        ),
     ],
 )
 def test_stack_limits_raise_and_call(
     small_blind_chips: int, expected: LegalActions, facing_raise_to_30: Callable[[int], PokerHand]
 ) -> None:
-    """A raise needs the whole stack to reach the minimum full target and a call needs the stack to cover the amount
-    owed; a call of exactly the whole stack is all-in. Short all-in raises and calls are not legal yet, so a call
-    above the stack commits nothing (`call_amount` 0) while the amount owed is still reported."""
+    """A stack that reaches the minimum full target allows any raise up to it; a stack above the current bet but
+    below that minimum allows only the short all-in raise to the whole stack, while `min_full_target` still reports
+    the full minimum. A call is legal whenever chips are owed: it commits the amount owed, or the whole stack when
+    that is less (a short call), and a call that uses the whole stack is all-in. With no chips beyond the current
+    bet, there is no raise."""
     assert legal_actions(facing_raise_to_30(small_blind_chips)) == expected
 
 
@@ -197,33 +227,6 @@ def test_player_who_acted_regains_raise_rights_after_a_full_raise(started_hand: 
         min_full_target=50,
         max_target=1000,
     )
-
-
-def test_no_bet_or_raise_without_raise_rights(
-    started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, play: Play
-) -> None:
-    """On the flop seat 2 bets 50, seat 3 goes all-in to 70 (a short raise of 20, below the full raise of 50) and
-    seat 1 calls. Seat 2 acted at 50 and faces only 20 more, so it may call or fold but not raise, although seat 1
-    could still respond and seat 2's stack reaches the minimum raise."""
-    hand = started_hand({1: 1000, 2: 1000, 3: 80}, button_seat_number=1)
-    deal_hole_cards(hand)
-    play(hand, (1, CALL), (2, CALL), (3, CHECK))
-    deal_next_street(hand)
-    start_betting_round(hand)
-    play(hand, (2, Action(ActionType.BET, 50)))
-
-    # Short all-in raises are not legal yet, so seat 3's raise to 70 is set up directly with the changes it makes:
-    # its whole stack is committed, the current bet becomes 70 (the last full raise size stays 50), seat 3 has acted
-    # at 70, and every other eligible player owes a response, seat 1 first.
-    commit_chips(by_seat(hand)[3], 70)
-    state = betting(hand)
-    state.current_bet = 70
-    state.acted_at_bet[3] = 70
-    state.pending_actors = {1, 2}
-    state.current_actor = 1
-    play(hand, (1, CALL))
-
-    assert legal_actions(hand) == legal(can_fold=True, can_call=True, amount_owed=20, call_amount=20)
 
 
 # =============================================================================
@@ -250,6 +253,20 @@ def test_no_bet_or_raise_when_every_other_live_player_is_all_in(
     hand = started_hand(stacks, button_seat_number=button_seat_number)
     play(hand, *actions)
     assert legal_actions(hand) == legal(can_fold=True, can_call=True, amount_owed=5, call_amount=5)
+
+
+def test_amount_owed_is_measured_against_the_largest_all_in_opponent(
+    started_hand: HandFactory, betting: BettingLookup, play: Play
+) -> None:
+    """Four-handed, the big blind is all-in for 3 of the 10 blind, UTG calls all-in for 7 and the button folds. The
+    small blind, with 5 in, is the only player left who can act: it still owes the 2 that UTG, the larger of the two
+    all-in players, can contest (not the nominal 10, nor nothing against the big blind's 3), so it stays pending and
+    may only call or fold."""
+    hand = started_hand({5: 1000, 8: 1000, 1: 3, 3: 7}, button_seat_number=5)
+    play(hand, (3, CALL), (5, FOLD))
+
+    assert betting(hand).pending_actors == {8}
+    assert legal_actions(hand) == legal(can_fold=True, can_call=True, amount_owed=2, call_amount=2)
 
 
 # =============================================================================

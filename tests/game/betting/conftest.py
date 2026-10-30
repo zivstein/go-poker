@@ -9,6 +9,8 @@ from go_poker.core.deck import Deck
 from go_poker.game.betting.actions import Action
 from go_poker.game.betting.apply import apply_action
 from go_poker.game.betting.initialization import initialize_betting
+from go_poker.game.betting.legal_actions import legal_actions
+from go_poker.game.betting.rounds import start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
 from go_poker.game.hand_state import HandPlayerState
@@ -16,6 +18,7 @@ from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.position_assignment import assign_hand_seats
 from go_poker.game.street import Street
+from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
 
 STAKES = Stakes(small_blind=5, big_blind=10)
 
@@ -79,6 +82,58 @@ def _hand_snapshot(hand: PokerHand) -> HandSnapshot:
     return hand.street, _player_snapshot(hand), copy.deepcopy(hand.betting)
 
 
+class CheckedHand:
+    """Drives one hand through real betting and dealing operations, asserting the betting invariants after each step."""
+
+    def __init__(self, hand: PokerHand) -> None:
+        self.hand = hand
+        # Recorded before betting starts: every player's chips at the start of the hand.
+        self.starting_chips = {hand_player.seat_number: hand_player.player.stack for hand_player in hand.players}
+
+    @property
+    def betting(self) -> BettingState:
+        assert self.hand.betting is not None
+        return self.hand.betting
+
+    @property
+    def seats(self) -> dict[int, HandPlayerState]:
+        return {hand_player.seat_number: hand_player for hand_player in self.hand.players}
+
+    def start(self, stakes: Stakes) -> None:
+        """The intended hand start: initialize betting (post the blinds), then deal the hole cards."""
+        initialize_betting(self.hand, stakes)
+        deal_hole_cards(self.hand)
+        self.check()
+
+    def act(self, *actions: tuple[int, Action]) -> None:
+        for seat_number, action in actions:
+            apply_action(self.hand, seat_number, action)
+            self.check()
+
+    def next_street(self) -> None:
+        """Deal the next street, then start its betting round."""
+        deal_next_street(self.hand)
+        start_betting_round(self.hand)
+        self.check()
+
+    def check(self) -> None:
+        players = self.hand.players
+        betting = self.betting
+        assert {hp.seat_number: hp.player.stack + hp.total_contribution for hp in players} == self.starting_chips
+        assert all(hp.all_in == (hp.player.stack == 0) for hp in players)
+        assert all(hp.street_contribution <= hp.total_contribution for hp in players)
+        assert max(hp.street_contribution for hp in players) <= betting.current_bet
+        assert betting.acted_at_bet.keys() <= {hp.seat_number for hp in players}
+        assert all(acted_at <= betting.current_bet for acted_at in betting.acted_at_bet.values())
+        assert not {hp.seat_number for hp in players if hp.folded or hp.all_in} & betting.pending_actors
+        assert betting.current_actor is None or betting.current_actor in betting.pending_actors
+        assert (betting.current_actor is None) == (not betting.pending_actors)
+
+        before = _hand_snapshot(self.hand)
+        legal_actions(self.hand)
+        assert _hand_snapshot(self.hand) == before  # legal actions are derived, never stored
+
+
 @pytest.fixture
 def stakes() -> Stakes:
     return STAKES
@@ -117,3 +172,8 @@ def play() -> Callable[..., None]:
 @pytest.fixture
 def hand_snapshot() -> Callable[[PokerHand], HandSnapshot]:
     return _hand_snapshot
+
+
+@pytest.fixture
+def checked() -> Callable[[PokerHand], CheckedHand]:
+    return CheckedHand

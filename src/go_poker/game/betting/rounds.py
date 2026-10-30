@@ -21,12 +21,31 @@ def is_round_complete(betting: BettingState) -> bool:
     return not betting.pending_actors
 
 
+def can_opponent_respond(players: tuple[HandPlayerState, ...], hand_player: HandPlayerState) -> bool:
+    """Whether another player could still respond to the player: one who has neither folded nor gone all-in."""
+    return any(is_eligible(other) for other in players if other is not hand_player)
+
+
+def call_target(players: tuple[HandPlayerState, ...], hand_player: HandPlayerState, current_bet: int) -> int:
+    """The street contribution the player must reach to call: what the other live players can actually contest.
+
+    While an opponent can still respond (see `can_opponent_respond`), it is the nominal current bet. Otherwise it is
+    the largest street contribution among the other live players (0 when there are none), never above the current
+    bet, so the player is never asked to commit chips that nobody can match. The current bet itself keeps its nominal
+    value.
+    """
+    if can_opponent_respond(players, hand_player):
+        return current_bet
+    live_opponents = [other for other in players if other is not hand_player and not other.folded]
+    return min(current_bet, max((opponent.street_contribution for opponent in live_opponents), default=0))
+
+
 def settle_pending(players: tuple[HandPlayerState, ...], pending: set[int], current_bet: int) -> set[int]:
     """Return who still owes an action once the round's early endings are applied.
 
     When only one player has not folded, the round is over and nobody is pending. When at most one player can still
-    act, no opponent can respond, so only an eligible player who still owes chips to the current bet stays pending;
-    otherwise the round is complete without a meaningless check.
+    act, no opponent can respond, so only an eligible player who is still below their call target (see `call_target`)
+    stays pending; otherwise the round is complete without a meaningless check.
     """
     live = [hand_player for hand_player in players if not hand_player.folded]
     if len(live) <= 1:
@@ -37,7 +56,8 @@ def settle_pending(players: tuple[HandPlayerState, ...], pending: set[int], curr
         return {
             hand_player.seat_number
             for hand_player in eligible
-            if hand_player.seat_number in pending and hand_player.street_contribution < current_bet
+            if hand_player.seat_number in pending
+            and hand_player.street_contribution < call_target(players, hand_player, current_bet)
         }
     return set(pending)
 
@@ -47,6 +67,21 @@ def pending_at_round_start(players: tuple[HandPlayerState, ...], current_bet: in
     round's early endings (see `settle_pending`)."""
     eligible = {hand_player.seat_number for hand_player in players if is_eligible(hand_player)}
     return settle_pending(players, eligible, current_bet)
+
+
+def is_betting_closed(hand: PokerHand) -> bool:
+    """Whether no further betting is possible in the hand. Derived on request, never stored.
+
+    True when the current betting round is complete and at most one player can still act (has neither folded nor gone
+    all-in): every live player is all-in, one live player with chips owes nothing and faces only all-in opponents, or
+    everyone else has folded. No later round can then ask anyone to act. The betting layer does not know the variant's
+    street sequence, so with two or more players able to act it is False even on the river.
+    """
+    betting = hand.betting
+    if betting is None:
+        raise BettingNotInitializedError("Betting has not been initialized for this hand")
+    able_to_act = [hand_player for hand_player in hand.players if is_eligible(hand_player)]
+    return is_round_complete(betting) and len(able_to_act) <= 1
 
 
 def first_pending_after(players: tuple[HandPlayerState, ...], anchor_seat_number: int, pending: set[int]) -> int | None:

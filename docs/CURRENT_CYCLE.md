@@ -2,7 +2,7 @@
 
 **Milestone 3: All-ins + Main/Side Pots** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
 
-Cycle 1 is complete and Cycle 2 is next. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
+Cycles 1 and 2 are complete and Cycle 3 is next. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
 ## Goal
 
@@ -25,8 +25,8 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 | Cycle | Title | Status |
 | --- | --- | --- |
 | 1 | Short-all-in state and raise rights | Complete |
-| 2 | Short calls, bets, raises and blinds | Next (not started) |
-| 3 | Accounting, collection and pots | Planned |
+| 2 | Short calls, bets, raises and blinds | Complete |
+| 3 | Accounting, collection and pots | Next (not started) |
 | 4 | Extreme integration hardening | Planned |
 
 ### Cycle 1 — Short-all-in state and raise rights (complete)
@@ -44,7 +44,7 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 
 Delivered: `BettingState.acted_at_bet` (recorded by `apply_action` for every action, empty after `initialize_betting`, cleared by `start_betting_round`) with the documented `current_bet` and `last_full_raise_size` meanings; `has_raise_rights` in `no_limit.py`, required by `legal_actions` for `BET` and `RAISE`; and the refined `LegalActions` fields (`amount_owed`, `call_amount` as the chips a legal call commits, `call_is_all_in`, `min_full_target`, `max_target`, and `short_all_in_target`, always `None`). Short calls, bets, raises, and blinds stay rejected as in Milestone 2. Tests cover the new fields, the recording and clearing of `acted_at_bet`, the reopening rule at its boundaries (`test_no_limit.py`), a limper who regains raise rights after a full raise, and the gate on a hand-built state with a short all-in raise; the integration invariant is now `max(street_contribution) <= current_bet`.
 
-### Cycle 2 — Short calls, bets, raises and blinds
+### Cycle 2 — Short calls, bets, raises and blinds (complete)
 
 - Short `CALL`: legal whenever chips are owed; it commits `min(amount_owed, stack)`, and a call that empties the stack is all-in. `current_bet` is unchanged.
 - Call target: when no opponent can respond, `amount_owed` is measured against the largest street contribution of the other live players, so nobody commits chips that collection would return straight away. `current_bet` keeps its nominal value. The same rule settles the pending players. Heads-up 50/100 with the small blind's 50 in front: against a big blind all-in for 30, the small blind is not pending; against one all-in for 70, the small blind owes 20.
@@ -54,8 +54,10 @@ Delivered: `BettingState.acted_at_bet` (recorded by `apply_action` for every act
 - Cumulative short all-ins reopen raising through `acted_at_bet`; a single short all-in below a full raise does not.
 - Short small and big blinds: remove `ShortBlindAllInNotSupportedError` and post `min(blind, stack)`. `current_bet` and `last_full_raise_size` start at the full big blind.
 - All-in state transitions: every commitment that empties a stack marks the player all-in, through the existing `commit_chips` rule.
-- No-further-betting detection: `is_betting_closed(hand)` (planned name) is true when the round is complete and at most one live player can still act.
+- No-further-betting detection: `is_betting_closed(hand)` is true when the round is complete and at most one live player can still act.
 - Known interim gap until Cycle 3: unmatched chips stay committed, and `start_betting_round` still resets street contributions as in Milestone 2.
+
+Delivered: `call_target` in `rounds.py`, the single call-target rule used by `legal_actions` (`amount_owed`) and `settle_pending` (who stays pending when no opponent can respond); `legal_actions` with short all-in calls (`call_amount = min(amount_owed, stack)`), aggression whenever the actor has raise rights, chips beyond the current bet, and an opponent who can respond, and `short_all_in_target` as the only legal target when the all-in is below `min_full_target`; `apply_action` accepting exactly that target, setting `last_full_raise_size` only for a full bet or raise, and committing `call_amount` for a call; short small and big blinds posting `min(blind, stack)` with `ShortBlindAllInNotSupportedError` removed; and `is_betting_closed(hand)` in `rounds.py`. As planned, a completed round keeps its chips in front and returns no unmatched chips until Cycle 3. Tests replace the Milestone 2 short-blind rejection with short-blind posting tests, and add focused tests for the short-call, short-bet, and short-raise legal shapes and their application, the call target against the larger of two all-in opponents, atomic rejection of illegal short all-in actions (including a raise without raise rights after a short all-in), and `is_betting_closed`. The integration checker moved into the betting `conftest.py` and now also asserts that a player is all-in exactly when their stack is empty; `test_all_in_integration.py` adds eight short all-in scenarios, with the Milestone 2 scenarios unchanged. They are the single place for the interactions they prove: a short raise or a short opening bet that does not reopen raising for earlier actors, including a checker (which replaces the hand-built raise-rights gate test), cumulative short all-ins that do, the heads-up short big blind called for what it can contest, and the multiway short big blind that leaves the full big blind owed.
 
 ### Cycle 3 — Accounting, collection and pots
 

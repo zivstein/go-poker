@@ -19,7 +19,7 @@ AMOUNT_ACTION_TYPES = (ActionType.BET, ActionType.RAISE)
 
 @dataclass(frozen=True)
 class Action:
-    """A betting action. There is no separate all-in action; a full call, bet or raise may use the whole stack.
+    """A betting action. There is no separate all-in action; a call, bet or raise may use the whole stack.
 
     For BET and RAISE, `amount` is the target: the player's street contribution after the action ("bet to" /
     "raise to"), never the number of chips added. FOLD, CHECK and CALL carry no amount. Whether an amount is legal for

@@ -7,6 +7,7 @@ from go_poker.game.betting.apply import apply_action
 from go_poker.game.betting.rounds import (
     BettingRoundAlreadyStartedError,
     BettingRoundNotCompleteError,
+    is_betting_closed,
     start_betting_round,
 )
 from go_poker.game.betting.stakes import Stakes
@@ -25,6 +26,10 @@ type Play = Callable[..., None]
 FOLD = Action(ActionType.FOLD)
 CHECK = Action(ActionType.CHECK)
 CALL = Action(ActionType.CALL)
+
+
+def raise_to(target: int) -> Action:
+    return Action(ActionType.RAISE, target)
 
 
 def called_around_to_the_flop(started_hand: HandFactory, stacks: dict[int, int], button_seat_number: int) -> PokerHand:
@@ -135,3 +140,60 @@ def test_round_start_needs_initialized_betting(make_hand: HandFactory) -> None:
     """A hand whose betting was never initialized has no round to start."""
     with pytest.raises(BettingNotInitializedError):
         start_betting_round(make_hand({3: 1000, 7: 1000}, button_seat_number=7))
+
+
+# =============================================================================
+# NO FURTHER BETTING
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    "stacks, actions, expected",
+    [
+        pytest.param({1: 1000, 2: 500, 3: 500}, [(1, FOLD), (2, raise_to(500)), (3, CALL)], True, id="all-live-all-in"),
+        pytest.param({1: 1000, 2: 5, 3: 1000}, [(1, FOLD)], True, id="one-able-player-owes-nothing"),
+        pytest.param({1: 1000, 2: 1000, 3: 1000}, [(1, FOLD), (2, FOLD)], True, id="everyone-else-folded"),
+        pytest.param({1: 1000, 2: 1000, 3: 1000}, [(1, CALL)], False, id="two-able-players-mid-round"),
+        pytest.param(
+            {1: 1000, 2: 1000, 3: 1000},
+            [(1, CALL), (2, CALL), (3, CHECK)],
+            False,
+            id="two-able-players-round-complete",
+        ),
+    ],
+)
+def test_betting_is_closed_once_the_round_is_complete_and_at_most_one_player_can_act(
+    stacks: dict[int, int],
+    actions: list[tuple[int, Action]],
+    expected: bool,
+    started_hand: HandFactory,
+    hand_snapshot: HandSnapshotter,
+    play: Play,
+) -> None:
+    """Three-handed preflop (button 1, SB 2, BB 3). Betting is closed when the round is complete and at most one
+    player has neither folded nor gone all-in; with two or more able to act, it is not, even with the round complete.
+    It is derived on request, never stored."""
+    hand = started_hand(stacks, button_seat_number=1)
+    play(hand, *actions)
+    before = hand_snapshot(hand)
+
+    assert is_betting_closed(hand) is expected
+    assert hand_snapshot(hand) == before
+
+
+def test_betting_is_not_closed_while_the_able_player_owes_an_all_in_opponent(
+    started_hand: HandFactory, play: Play
+) -> None:
+    """Heads-up, the big blind is all-in by posting and the small blind still owes chips: betting closes only once it
+    has called."""
+    hand = started_hand({3: 10, 7: 1000}, button_seat_number=7)
+    assert is_betting_closed(hand) is False
+
+    play(hand, (7, CALL))
+    assert is_betting_closed(hand) is True
+
+
+def test_betting_closed_needs_initialized_betting(make_hand: HandFactory) -> None:
+    """A hand whose betting was never initialized has no betting to close."""
+    with pytest.raises(BettingNotInitializedError):
+        is_betting_closed(make_hand({3: 1000, 7: 1000}, button_seat_number=7))
