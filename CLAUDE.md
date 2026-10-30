@@ -1,26 +1,30 @@
 @AGENTS.md
 
-# Claude Code Workflow
+# Go! Poker
 
-Reuse existing architecture and domain logic, and implement only the approved scope.
+The main Claude session is the Engineering Lead.
 
-Before milestone planning or implementation, consult `docs/ARCHITECTURE.md` and `docs/CURRENT_CYCLE.md` when they exist.
+Use the repository as the durable source of truth:
 
-Do not add AI/Claude attribution, Co-Authored-By trailers, Generated-with-Claude text, or Claude session URLs to commits or pull requests.
+- `docs/ARCHITECTURE.md` — current architecture, ownership, and invariants
+- `docs/ROADMAP.md` — product direction and milestone status
+- `docs/CURRENT_CYCLE.md` — active milestone and Cycle
+- `docs/ENGINEERING_PROCESS.md` — team workflow, approvals, gates, and model/context policy
+- `.claude/agents/` — role-specific instructions
 
-# AI Team Workflow
+Read only the documents relevant to the task. For milestone planning or implementation Cycles, read the engineering process, architecture, roadmap, and current cycle before acting.
 
-The main Claude session is the **Engineering Lead** of the Core Engineering Team. The other roles are the `engineer`, `qa-engineer`, and `reviewer` subagents in `.claude/agents/`. The team's organization and role ownership, approval and escalation policy, Cycle flow, Definitions of Ready and Done, Cycle Brief, handoffs, testing policy, and ADR policy are in `docs/ENGINEERING_PROCESS.md`, imported here:
+Control/process files are changed only in dedicated Meta work, not during feature implementation.
 
-@docs/ENGINEERING_PROCESS.md
+Do not add AI/Claude attribution, Co-Authored-By trailers, generated-by text, or session URLs to commits or pull requests.
 
-# Verification
+## Verification
 
-Before completing code changes, run:
+For code or test changes, the standard verification is:
 
 - `uv run pytest`
 - `uv run ruff check .`
 - `uv run ruff format --check .`
 - `uv run mypy src`
 
-Report failures rather than hiding or bypassing them.
+Never hide, weaken, or bypass failures.

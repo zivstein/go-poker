@@ -1,21 +1,23 @@
 # Go! Poker Roadmap
 
-High-level milestones in intended order. This is the single source of truth for the project roadmap; the [README](../README.md) links here rather than repeating it.
+This is the product roadmap: the authoritative source for milestone status and for approved product decisions that are intentionally future and unbuilt.
 
-The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It currently records the completed milestone 3; milestone 4's cycles are planned when it starts. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
+Current architecture belongs in `ARCHITECTURE.md`.
+Active implementation detail belongs in `CURRENT_CYCLE.md`.
+AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 
 | # | Milestone | Status |
 | --- | --- | --- |
 | 0 | Engine foundation | Complete |
-| 1 | PokerHand + dealing + streets | **COMPLETE** |
-| 2 | Betting engine + legal actions | **COMPLETE** |
-| 3 | All-ins + main/side pots | **COMPLETE** |
-| 4 | Showdown + settlement | **Next** (not started) |
+| 1 | PokerHand + dealing + streets | Complete |
+| 2 | Betting engine + legal actions | Complete |
+| 3 | All-ins + main/side pots | Complete |
+| 4 | Showdown + settlement | **Next** |
 | 5 | Complete continuous PokerHand/game loop | Planned |
 | 6 | Structured Hand History / Event Log | Planned |
 | 7 | Bots + simulation / large-scale testing | Planned |
-| 8 | Omaha + Pot-Limit support / PLO | Planned |
-| 9 | Pineapple support | Planned |
+| 8 | Omaha + Pot-Limit / PLO | Planned |
+| 9 | Pineapple | Planned |
 | 10 | Mixed/private-table per-hand variant selection | Planned |
 | 11 | Chinese Poker game family | Planned |
 | 12 | Unified history + stats/analytics | Planned |
@@ -25,47 +27,44 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 | 16 | Web client | Planned |
 | 17 | Mobile/desktop clients | Planned |
 | 18 | AI analysis/coaching/player assistant | Planned |
-| 19 | Further variants, tournaments and game modes | Planned |
+| 19 | Further variants, tournaments, and game modes | Planned |
 
-## Milestone notes
+## Product Direction
 
-**0. Engine foundation** — cards, deck, and hand evaluation; players, seats, and table; explicit game start and button movement; positions, blinds, and hand setup.
+### Complete the Texas Hold'em Engine
 
-**1. PokerHand + dealing + streets** — a `PokerHand` aggregate that owns participants, deck, and board; secure engine shuffling with deterministic deck behavior in tests only; Texas Hold'em private-card and board dealing; street progression; integration tests including heads-up and multiway. Card uniqueness holds by construction and is proven by a test-only 52-card accounting invariant. No betting.
+Milestones 0–5 produce a complete No-Limit Texas Hold'em hand engine.
 
-**2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
+Approved for Milestone 5: being all-in does not by itself reveal hole cards. Once betting is closed with at least two live players, hand orchestration reveals the relevant hands, completes the board runout, then proceeds to showdown.
 
-**3. All-ins + main/side pots** — picks up what milestone 2 defers and makes No-Limit betting and chip accounting correct for every realistic all-in case, up to deep 9-max side pots. It covers:
+### Build Reconstructable Data
 
-- short all-in calls, opening bets, raises, and blinds (a player whose stack is below their blind posts it all and is all-in for less; Milestone 2 rejected this case)
-- No-Limit reopening rules, including cumulative short all-ins
-- the return of unmatched chips, and the end-of-round collection of chips in front into the middle pot
-- derived main and side pots with their eligible seats
-- detecting that no further betting is possible
+Milestone 6 introduces structured raw hand history/events before persistence, analytics, or AI depend on them.
 
-Pots stay derived from player contributions, never stored. Showdown, payouts, card reveal, board runout, and rake are not part of it. Cycles are in [CURRENT_CYCLE.md](CURRENT_CYCLE.md), and the design is in [ARCHITECTURE.md](ARCHITECTURE.md#all-ins-and-pots-milestone-3).
+Raw history/events remain reconstructable source data. Later statistics and analytics are derived from history rather than becoming the only source of truth.
 
-**4. Showdown + settlement** — evaluates each pot from milestone 3 independently among its eligible seats, and adds winners, payouts, split pots, and odd-chip rules.
+### Exercise the Engine at Scale
 
-**5. Complete continuous PokerHand/game loop** — orchestrates the full deal-and-bet sequence. Once betting is closed with at least one all-in and two or more live players, it tables the live hands, deals the remaining board, and proceeds to showdown (see [ARCHITECTURE.md](ARCHITECTURE.md#future-reveal-and-board-runout-documented-not-implemented)).
+Milestone 7 introduces bots and simulation for large-scale validation and experimentation.
 
-**6. Structured Hand History / Event Log** — raw hand events become the source of truth that later stats, persistence, and AI features build on.
+### Expand Poker Variants
 
-**8. Omaha + Pot-Limit support / PLO** — the second variant and second betting structure, composed as PLO. Pot-Limit defines its own pot-sizing base, which may count chips in front; milestone 3's `middle_pot` (collected chips only) keeps its meaning. Shared `PokerHand`-family abstractions are extracted here, once two implementations show what is common.
+Omaha + Pot-Limit provides the second concrete variant/betting-structure combination and creates the first strong opportunity to extract proven shared abstractions.
 
-**9. Pineapple support** — a third `PokerHand`-family variant, paired with an appropriate betting structure.
+Pineapple and mixed/private-table selection follow.
 
-**10. Mixed/private-table per-hand variant selection** — a private-table or session layer chooses the variant per table or per hand. Concepts it should eventually support:
+Milestone 10 may select the poker variant at table/session level or per hand. The exact product design remains future work.
 
-- a fixed Texas Hold'em table
-- PLO-only or Pineapple-only tables
-- periodic Omaha hands
-- manually requested variant changes
-- voting for the next special hand
-- variant rotations
+Chinese Poker remains a separate game family.
 
-**11. Chinese Poker game family** — Chinese Poker is a separate game family, not a `PokerHand` variant. It uses a distinct model such as `ChinesePokerHand`, with its own state, lifecycle, scoring, and rules, and may reuse `core/` primitives. See [ARCHITECTURE.md](ARCHITECTURE.md#chinese-poker-separate-game-family).
+### Build the Platform
 
-**12. Unified history + stats/analytics** — stats are derived from hand history rather than stored as the only source of truth.
+Accounts/persistence, backend APIs, and real-time multiplayer are added after the engine and history contracts are stable.
 
-**13. Accounts + persistence/database** — accounts live outside the engine, and bots and guests still play without one.
+### Add Clients
+
+Web and later mobile/desktop clients consume platform and engine contracts rather than recreating poker rules.
+
+### Add Analytics and AI
+
+Structured history, simulation, statistics, and real gameplay data provide the foundation for later analysis, coaching, and player-assistant capabilities.

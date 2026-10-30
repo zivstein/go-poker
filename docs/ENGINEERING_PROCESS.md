@@ -1,237 +1,289 @@
 # Engineering Process
 
-How the AI engineering team builds Go! Poker: the organization, who owns what, how a Cycle runs, and what still goes back to the user. This is the single shared source of truth for the workflow. `CLAUDE.md` is the entry point and imports this file; rules that apply to one role only are in that role's agent file under `.claude/agents/`.
+This is the normative operating model for the current Go! Poker AI engineering team.
 
-## Organization
+Role-specific behavior belongs in `.claude/agents/`.
 
-There is one team, the **Core Engineering Team**. It owns the poker engine: `src/go_poker/`, its tests, and the project docs.
+Detailed rationale and AI-engineering reference material belong under `docs/company/` and are not required for normal feature work.
 
-| Role | Who | Owns |
-| --- | --- | --- |
-| User | the project owner | the decisions in [Approval and escalation](#approval-and-escalation), and final approval of every commit or release |
-| Engineering Lead | the main Claude session | design, planning, orchestration, finding triage, final verification, status docs, and the Cycle Report |
-| Engineer | `engineer` subagent ([engineer.md](../.claude/agents/engineer.md)) | production code, the tests tied to it, and implementation-facing docs |
-| QA Engineer | `qa-engineer` subagent ([qa-engineer.md](../.claude/agents/qa-engineer.md)) | independent behavioral and adversarial validation; test code only |
-| Reviewer | `reviewer` subagent ([reviewer.md](../.claude/agents/reviewer.md)) | the final independent engineering and design review; read-only |
+## Documentation Sources
 
-### Engineering Lead
+| Source | Holds |
+| --- | --- |
+| `ARCHITECTURE.md` | current implemented technical truth and durable boundaries |
+| `ROADMAP.md` | authoritative milestone status and approved future/unbuilt product decisions |
+| `CURRENT_CYCLE.md` | active milestone/Cycle working state only |
+| `README.md` | human-facing overview; not authoritative for milestone status or history |
+| implementation-facing docs | README, API, and module documentation describing implemented behavior |
+| ADRs | why an important durable decision was made |
 
-The Lead:
+Each fact has one home. Other documents link to it rather than restating it.
 
-- reads the approved architecture, roadmap, and current cycle before planning;
-- designs changes and brings every decision that needs approval to the user;
-- checks the [Definition of Ready](#definition-of-ready), presents the [Cycle Brief](#cycle-brief), and continues without waiting for a reply;
-- assigns implementation and fixes to the Engineer, validation to QA, and the final review to the Reviewer, with the inputs listed in [Handoffs](#handoffs);
-- triages every QA and Reviewer finding (see [Findings and gates](#findings-and-gates)) and makes sure fixes are re-validated and re-reviewed;
-- runs the final verification, closes out the status docs, marks the Cycle Complete, and writes the Cycle Report.
+## Current Team
 
-The Lead delegates implementation and test work instead of doing it, and never delegates architecture or product decisions.
+The current organization is one Core Engineering Team.
 
-### QA Engineer and Reviewer are different gates
+| Role | Owns |
+| --- | --- |
+| User | product/domain/architecture decisions, milestone scope, Cycle Brief approval, dependencies, ownership changes, process changes, commit/release approval |
+| Engineering Lead | planning, orchestration, escalation, finding triage, final verification, status, Cycle completion |
+| Engineer | production implementation, focused implementation tests, affected implementation-facing docs |
+| QA Engineer | independent behavioral/adversarial validation and test code |
+| Reviewer | final independent architecture/code/test review; read-only |
 
-QA runs first and asks: *does the delivered behavior hold under realistic and adversarial use?* It executes the code, designs edge cases and sequences, attacks plausible implementation mistakes, and writes the tests that prove what it found.
+Only the Engineering Lead may mark a Cycle complete.
 
-The Reviewer runs last and asks: *is this the right change, built the right way, and will it stay correct?* It judges architecture, ownership, domain correctness, API clarity, maintainability, scope, documentation, and whether the final test suite, including QA's additions, would catch plausible bugs. It writes nothing.
+No role commits or pushes without explicit user approval.
 
-### Who may change what
+## Approval and Escalation
 
-| Area | Engineer | QA Engineer | Reviewer | Lead |
-| --- | --- | --- | --- | --- |
-| Production code (`src/`) | yes | no | no | no |
-| Tests and test helpers (`tests/`) | yes | yes | no | no |
-| Implementation-facing docs (README features, usage, module tree, and test descriptions; implementation details in `docs/ARCHITECTURE.md`) | yes | no; reports inaccuracies in its QA Report | no | final closeout updates |
-| Approved decisions (`docs/ARCHITECTURE.md` decisions, ADRs) | no | no | no | yes, after user approval |
-| Status (`docs/CURRENT_CYCLE.md`, `docs/ROADMAP.md`, the README's Project Status) | no | no | no | yes |
-| Control files (see [Control files and Meta Cycles](#control-files-and-meta-cycles)) | no | no | no | only in a Meta Cycle |
+User approval is required for a new decision about:
 
-No role adds or upgrades dependencies, or commits, pushes, or rewrites Git history, without explicit user approval (see `AGENTS.md`).
+- product or domain behavior;
+- architecture;
+- public API;
+- ownership boundaries;
+- dependencies;
+- milestone scope;
+- control/process files;
+- commit or release.
 
-## Approval and escalation
+Ordinary implementation choices stay autonomous when they remain inside approved boundaries.
 
-- **Requires user approval**: architecture, product and domain behavior, domain rules, public API, ownership boundaries, dependencies, milestone scope, control-file changes, and the final commit or release.
-- **Does not require user approval**: implementation choices that stay inside the approved architecture, such as private helpers, local refactors, internal naming, test structure, pytest parametrization, error-message wording, and equivalent low-level choices.
-- Once a milestone's architecture and requirements are approved, the team runs each Cycle from the Brief to the Cycle Report without asking the user between steps. A short request clearly contained in an approved milestone gets the same flow.
-- Any role that finds the work needs a new decision in an approval category stops and reports it to the Lead. The Lead stops the Cycle and brings the decision to the user, with options and a recommendation, instead of inventing it. The Cycle resumes once the user decides.
+Examples include:
 
-## Milestone flow
+- private helpers;
+- local refactors;
+- internal naming;
+- test organization;
+- parametrization;
+- equivalent low-level implementation choices.
 
-1. A requirement arrives.
-2. The Lead explores the code and designs the change.
-3. The user approves the architecture, requirements, and milestone scope. The Lead records the approved design in `docs/ARCHITECTURE.md` (and an ADR when the [ADR policy](#architecture-decision-records) calls for one), the milestone in `docs/ROADMAP.md`, and its cycles in `docs/CURRENT_CYCLE.md`.
-4. Each cycle runs the [Cycle flow](#cycle-flow).
+If implementation reveals a genuinely new approval-level decision, stop and escalate instead of guessing.
 
-Steps 1–3 are skipped for work inside an already-approved milestone.
+## Milestone Flow
 
-## Cycle flow
+Before implementation of a new milestone:
 
-1. The Lead reads the architecture, the current cycle, and any relevant ADRs, and checks the Definition of Ready.
-2. The Lead presents the Cycle Brief.
-3. The Lead continues straight away; the Brief is informational.
-4. The Engineer implements and returns an Engineering Delivery.
-5. The Lead checks the delivery: the actual diff against the Brief, and the Verification commands run by the Lead. An incomplete, failing, or out-of-scope delivery goes back to the Engineer.
-6. QA performs independent behavioral validation and returns a QA Report.
-7. If QA reports production or documentation findings, the Engineer fixes the valid ones, the Lead checks the delivery again, and QA re-validates the production fixes and reruns the affected validation, until the QA gate passes.
-8. The Reviewer performs the independent final review and returns a Review Verdict.
-9. If the Reviewer requires changes, the Engineer fixes the valid findings, the Lead checks the delivery again, QA reruns its affected checks when a fix changed behavior, and the Reviewer re-reviews, until it approves.
-10. The Lead runs the final verification on the final tree.
-11. The Lead updates the status docs, makes any final closeout updates, and confirms that every affected doc is accurate.
-12. The Lead marks the Cycle Complete in `docs/CURRENT_CYCLE.md`, and the next cycle current if one remains, only when the Definition of Done holds.
-13. The Lead returns the Cycle Report.
-14. The user approves the commit or release.
+1. Lead studies the relevant code and architecture.
+2. Lead proposes milestone design, scope, important decisions, and Cycle split.
+3. User approves approval-level decisions.
+4. Lead records approved decisions in their sources of truth: future product decisions and milestone status in `ROADMAP.md`, the Cycle split and open decisions in `CURRENT_CYCLE.md`, and an ADR when the ADR policy calls for one. `ARCHITECTURE.md` changes when the behavior is implemented.
+5. Implementation Cycles begin.
 
-**Small-change path.** The full flow is for changes to behavior. The Lead may skip QA only when it is confident the change does not alter runtime or domain behavior, for example docs, comments, a private rename, or a clearly behavior-preserving refactor already covered by existing tests. A one-line goal and scope then replaces the full Brief. The Reviewer still reviews, and if it believes the change was wrongly classified as behavior-preserving, it requires QA; the Lead then runs QA before the Reviewer re-reviews. The Lead still verifies, the rest of the Definition of Done still applies, and the Cycle Report says QA was skipped and why.
+Do not implement while milestone-level decisions remain unresolved.
+
+## Cycle Flow
+
+Behavioral work follows:
+
+1. Lead presents the Cycle Brief.
+2. User approves the Brief; approval starts the Cycle.
+3. Engineer implements.
+4. Lead checks the delivery.
+5. QA validates; fixes are followed by affected QA re-validation.
+6. Reviewer reviews; fixes are followed by affected QA and Reviewer re-review.
+7. Lead runs final verification.
+8. Lead closes out docs and status.
+9. Lead returns the Cycle Report.
+10. User approves the commit.
+
+After Brief approval, Engineer → QA → Reviewer handoffs run autonomously.
+
+The Lead returns to the user before the commit only for an approval-level escalation.
+
+### Small-Change Path
+
+For work that clearly cannot change runtime or domain behavior:
+
+- use a short goal/scope instead of a full Cycle Brief;
+- QA may be skipped;
+- Reviewer and final verification still apply.
+
+Examples include docs, comments, private renames, and clearly behavior-preserving refactors.
+
+If the Reviewer believes behavior may be affected, QA becomes required.
 
 ## Definition of Ready
 
-A Cycle is ready when the Lead can state, from approved decisions and without guessing:
+A behavioral Cycle is ready when the Lead can state without guessing:
 
-- the goal, what is in scope, and what is out of scope;
-- the relevant domain behavior and its important invariants;
-- the architecture and ownership boundaries;
-- the test strategy;
-- the known deferred behavior.
+- goal;
+- in scope;
+- out of scope;
+- relevant domain behavior and invariants;
+- architecture and ownership;
+- test strategy;
+- known deferred behavior.
 
-These are the Cycle Brief's items 1–5, 7, and 8, so a ready Cycle is one whose Brief can be written without open questions. If one of them exposes an unresolved decision in an approval category, escalate before implementation. A change on the small-change path (see [Cycle flow](#cycle-flow)) needs only a one-line goal and scope.
-
-## Definition of Done
-
-A normal implementation Cycle is Done only when:
-
-- the approved scope is implemented;
-- focused tests exist for each distinct rule, with integration coverage where behavior spans operations;
-- QA has passed;
-- the Reviewer has approved;
-- the Lead's final verification passes;
-- the affected docs are accurate;
-- no Critical or Major finding is unresolved;
-- the Lead has updated the Cycle status;
-- the Cycle Report includes Plan vs implementation.
-
-The user still approves the commit.
+An unresolved approval-level decision blocks implementation.
 
 ## Cycle Brief
 
-At the start of every implementation Cycle, before delegating to the Engineer, the Lead presents a concise, structured `Cycle Brief` to the user. It is informational only: the Lead does not wait for approval and continues straight into the Cycle flow. If preparing it reveals an unresolved decision that requires user approval, the Lead stops under [Approval and escalation](#approval-and-escalation) instead of starting implementation.
+Keep it concise and specific to the Cycle.
 
-1. **Goal**: the concrete capability or behavior the Cycle adds.
-2. **In scope**: the approved requirements implemented in this Cycle.
-3. **Out of scope**: nearby behavior deferred to later cycles or milestones.
-4. **Architecture / ownership**: which existing modules own the relevant responsibilities, where the new behavior is expected to live, and the boundaries that must stay intact.
-5. **Expected domain behavior**: the important rules and invariants the implementation must satisfy.
-6. **Expected code changes**: the modules and files likely to be added or changed. This is a forecast, not a commitment to exact filenames; low-level implementation choices stay autonomous.
-7. **Test strategy**: the distinct behaviors to test and the representative integration cases, following the [testing policy](#testing-policy).
-8. **Risks / deferred decisions**: known edge cases, technical risks, and deliberately deferred behavior relevant to the Cycle.
-9. **Execution plan**: a short ordered plan (for example: models/state, domain helpers, behavior, tests, integration, verification, QA, Reviewer).
+Include only information that is not already clear from durable repository context:
+
+1. Goal
+2. In scope
+3. Out of scope
+4. Architecture / ownership
+5. Important behavior and invariants
+6. Test strategy
+7. Risks / deferred decisions
+8. Execution plan
+
+Do not restate the whole architecture or engineering process.
+
+## Definition of Done
+
+A behavioral Cycle is complete when:
+
+- approved scope is implemented;
+- distinct rules have effective validation;
+- relevant integration behavior is covered;
+- QA passes;
+- Reviewer approves;
+- standard verification passes;
+- affected docs are accurate;
+- no Critical or Major finding remains;
+- status is updated;
+- meaningful Plan vs implementation differences are reported.
+
+The user still approves the commit.
+
+## Findings and Gates
+
+Severity:
+
+- **Critical** — incorrect outcome/accounting, corruption, unsafe mutation, or broken fundamental boundary.
+- **Major** — any of:
+  - realistic approved behavior is missing or wrong;
+  - an approved rule has no effective test;
+  - a duplicated source of truth;
+  - a meaningful ownership or boundary violation;
+  - incorrect documentation of implemented behavior or public API.
+- **Minor** — maintainability, clarity, or test-strength issue without incorrect approved behavior or documentation.
+- **Nit** — optional style or wording.
+
+Critical and Major findings block the gate.
+
+The Lead decides whether each finding is:
+
+- fixed;
+- rejected with a reason;
+- deferred;
+- escalated.
 
 ## Handoffs
 
-`Cycle Brief` → `Engineering Delivery` → `QA Report` → `Review Verdict` → `Cycle Report`
+Handoffs are conversation outputs, not repository documents.
 
-| Handoff | From → to | Format |
-| --- | --- | --- |
-| Cycle Brief | Lead → user (informational) and Engineer | [above](#cycle-brief) |
-| Engineering Delivery | Engineer → Lead | [engineer.md](../.claude/agents/engineer.md) |
-| QA Report | QA Engineer → Lead | [qa-engineer.md](../.claude/agents/qa-engineer.md) |
-| Review Verdict | Reviewer → Lead | [reviewer.md](../.claude/agents/reviewer.md) |
-| Cycle Report | Lead → user | [below](#cycle-report) |
+### Engineering Delivery
 
-What the Lead gives each role:
+Engineer reports:
 
-- **Engineer**: the Cycle Brief and the approved requirements, constraints, and architecture sections it touches; for a fix, the findings to fix.
-- **QA Engineer**: the Cycle Brief, the Engineering Delivery, and the approved requirements; for re-validation, the findings and what the fix changed.
-- **Reviewer**: the approved requirements and architecture, the Cycle Brief, and the QA findings with their resolution (or a note that QA was skipped as behavior-preserving), but not the Engineer's justification, so the review stays independent; for a re-review, its earlier findings and what changed.
+- implementation;
+- files changed;
+- tests;
+- verification;
+- meaningful deviations;
+- risks/deferred items;
+- blocker when applicable.
 
-Handoffs are conversation outputs, not repository files. The repository keeps only what lasts: the Cycle status and its delivered summary in `docs/CURRENT_CYCLE.md`, decisions in `docs/ARCHITECTURE.md`, and ADRs.
+### QA Report
 
-### Findings and gates
+QA reports:
 
-QA and the Reviewer use the same severities:
+- scenarios and boundaries;
+- tests added or strengthened;
+- findings;
+- documentation inaccuracies;
+- stress/mutation work when useful;
+- verification;
+- verdict.
 
-- **Critical**: an incorrect poker outcome or chip accounting, corrupted or partially mutated state, or a broken engine boundary.
-- **Major**: an approved requirement missing or wrong in a realistic case, a duplicated source of truth, a distinct rule with no test, or wrong documentation of behavior or public API.
-- **Minor**: a maintainability, clarity, or test-strength issue with no incorrect behavior.
-- **Nit**: optional style or wording.
+### Reviewer Input
 
-A gate blocks while a Critical or Major finding is open. The Lead evaluates every finding: valid ones go to the Engineer, invalid ones are rejected with a reason recorded in the Cycle Report, and each Minor finding or Nit is either fixed now or deferred with a recorded reason. A finding whose resolution needs a decision in an approval category is escalated, not decided.
+The Reviewer's first pass receives:
 
-Each role reports only its own status: the Engineer `DELIVERED` or `BLOCKED`, QA `PASSED` or `FINDINGS`, and the Reviewer `APPROVED` or `CHANGES REQUIRED`. Only the Lead turns these into Cycle completion, and only the Lead edits Cycle or milestone status in the docs.
+- the approved requirement and Cycle Brief;
+- the actual repository diff and state;
+- QA evidence and finding resolutions, or why QA was skipped;
+- relevant architecture.
+
+It does not receive the Engineer's implementation reasoning or self-justification.
+
+### Review Verdict
+
+Reviewer reports:
+
+- findings by severity;
+- architecture assessment;
+- test assessment;
+- documentation;
+- verification;
+- verdict.
 
 ### Cycle Report
 
-The Lead's final report to the user, concise:
+Lead reports:
 
-1. **Outcome**: Cycle Complete, or not complete and why (an escalation or a block).
-2. **Delivered**: what the Cycle added.
-3. **Gates**: the Engineering Delivery, QA, and Review outcomes, including fix rounds.
-4. **Findings**: each QA and Reviewer finding and its resolution (fixed, rejected with a reason, or deferred with a reason).
-5. **Verification**: the Lead's final run of each Verification command.
-6. **Docs**: the docs updated.
-7. **Plan vs implementation**: whether the implementation followed the Cycle Brief, any meaningful deviations, and why they were necessary. Private-helper and test-organization changes are not deviations.
-8. **Deferred**: follow-ups and deferred items.
-9. **Process improvements**: recurring friction, missing instructions, repeated mistakes, or a better way to work, when noticed; always considered at the end of a milestone.
-10. **Git status**: the uncommitted changes awaiting the user's approval.
+- delivered behavior;
+- gate outcomes, including whether QA was skipped and why;
+- finding resolutions;
+- final verification;
+- docs/status;
+- Plan vs implementation;
+- deferred work;
+- proposed engineering-process improvements discovered during the Cycle;
+- Git state.
 
-## Model and effort routing
+Keep reports proportional to the work.
 
-Use the cheapest model that does a role reliably, and keep stronger reasoning for decisions where mistakes are expensive. Name models by family alias (`opus`, `sonnet`, `haiku`), not by pinned version, so defaults follow each family's current model.
+## Ownership
 
-| Role or work | Model | Set by |
-| --- | --- | --- |
-| Lead: milestone architecture and difficult planning | Opus | the session model |
-| Lead: Cycle Brief | Opus | the session model, in plan mode under `opusplan` |
-| Lead: normal Cycle execution and orchestration | Sonnet | the session model |
-| Engineer | Sonnet | `model: sonnet` in its agent file |
-| QA Engineer | Sonnet | `model: sonnet` in its agent file |
-| Reviewer | Opus | `model: opus` in its agent file |
-| Mechanical one-off work | Sonnet, or Haiku for trivial edits | the session model, or a one-off model override; no dedicated agent |
+| Area | Engineer | QA | Reviewer | Lead |
+| --- | --- | --- | --- | --- |
+| `src/` | edit | no | read | no |
+| `tests/` | edit | edit | read | no |
+| implementation-facing docs | edit affected content | report issues | read | verify at closeout |
+| `ARCHITECTURE.md` | edit implemented-behavior detail only | report issues | read | edit; records approved decisions |
+| `ROADMAP.md`, `CURRENT_CYCLE.md` | no | no | read | edit |
+| ADRs | no | no | read | draft; user accepts |
+| control/process files | no | no | no | Meta work only |
 
-- `opusplan` uses Opus in plan mode and Sonnet otherwise, which matches the Lead's split. If it is unavailable, switch between `opus` and `sonnet` by hand; the principle is what matters, not the alias.
-- The Lead may override a subagent's model for a single task that needs stronger reasoning, but never moves a gate to a cheaper model to save usage.
-- Do not set `CLAUDE_CODE_SUBAGENT_MODEL` or any other setting that forces one model on every subagent: it overrides the per-role defaults.
+## Testing
 
-The Lead sets its own effort per session (`/effort`, `--effort`): Medium, High, or `xhigh`, depending on the task. The Engineer, QA Engineer, and Reviewer default to High through `effort: high` in their agent files, independently of the Lead, so raising the Lead's effort does not raise the whole team. Escalating a subagent above High is a deliberate choice for one task the Lead judges hard, never automatic.
+Principle:
 
-| Work | Effort |
-| --- | --- |
-| Routine or mechanical work | Medium |
-| Normal implementation, QA, and review | High |
-| Difficult architecture, broad ambiguous reasoning, hard debugging | Extra High (`xhigh`) |
-| Genuinely difficult, correctness-critical work, as an explicit escalation | Max |
+**distinct rule → focused test**
 
-Normal Cycles never require Extra High or Max. Escalate for the hard step, then return to the default.
+Prefer:
 
-Recommended settings:
+- exact boundaries;
+- representative integration sequences through public operations;
+- invariants for large state spaces;
+- deterministic seeded stress testing when useful.
 
-| Work | Session |
-| --- | --- |
-| Milestone planning | fresh session, `/model opus`, `/effort xhigh` |
-| Implementation Cycle | fresh session, `/model opusplan`, `/effort high`: draft the Cycle Brief in plan mode on Opus, then leave plan mode to run the Cycle on Sonnet; Engineer and QA run on Sonnet and the Reviewer on Opus, all at High, by their defaults |
-| Mechanical task | `/model sonnet` (or `haiku`), `/effort medium` |
-| Hard-debugging escalation | `/model opus`, `/effort xhigh`; `/effort max` only as an explicit escalation; return to the Cycle settings afterward |
+Avoid:
 
-## Context budget
+- constant-only tests;
+- duplicate coverage with no distinct failure mode;
+- Cartesian-product matrices for their own sake;
+- impossible internal states constructed only to test defensive code.
 
-The repository is the durable project memory; a conversation is not.
+Test helpers stay local to their test directory. Small duplication does not justify restructuring by itself.
 
-- Start a fresh session, or `/clear`, after a Cycle is complete and committed, and after milestone planning before implementation.
-- Use `/compact` only to continue the same unfinished task when the conversation still holds useful transient context.
-- Do not carry several completed Cycles in one conversation for continuity.
-- A new session recovers state from `CLAUDE.md`, this document, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/CURRENT_CYCLE.md`, Git status and history, and the relevant code and tests.
+Hypothesis is not currently a dependency.
 
-Habits:
+Reconsider it only when a concrete milestone benefits enough from property generation and shrinking to justify the dependency.
 
-- Reference repository paths and doc sections in handoffs instead of pasting large files.
-- Read the focused files a task needs; do not load unrelated files or re-read the whole repository.
-- Keep `CLAUDE.md` a concise operational entry point.
-- Use a subagent for isolation, independent validation, or parallel work, not for a trivial single-step task.
+### Deliberate Breakage
 
-Usage optimization never weakens quality. Behavioral changes still go Engineer → QA → Reviewer, and the Verification commands still run in full. Savings come from model routing, effort routing, shorter contexts, and fewer unnecessary agent and tool calls.
+Never intentionally break production code in the active working tree, even briefly.
 
-## Isolation for deliberate breakage
-
-Mutation and deliberate-breakage experiments (breaking code on purpose to check that a test fails) run only in an isolated copy, never by editing and restoring files in the active working tree, even briefly. This applies to every role.
-
-Copy the working tree, including uncommitted changes, without `.git` and `.venv`, so the copy builds its own environment and imports its own `src/`:
+Mutation experiments run in an isolated copy that includes the current working-tree changes, and the copy is discarded afterward:
 
 ```bash
 scratch="$(mktemp -d)"
@@ -239,70 +291,117 @@ rsync -a --exclude .git --exclude .venv --exclude __pycache__ --exclude .pytest_
 cd "$scratch/go-poker" && uv run pytest -q
 ```
 
-Break the copy, run the relevant tests there, report what was broken and whether a test caught it, then delete the copy.
+Do not use a Git worktree: it checks out committed code, not the uncommitted work under test. Mutation experiments never change the real repository's Git state.
 
-## Testing policy
+## Model and Effort Routing
 
-`distinct rule -> focused test`
+Routing is a default, not a quality ceiling.
 
-Use representative boundaries and a small number of integration tests that drive realistic sequences through the public operations. Avoid:
+| Work | Default |
+| --- | --- |
+| milestone architecture / difficult design | Opus, `xhigh`, Plan Mode |
+| normal Cycle Lead | `opusplan`, `high` |
+| Engineer | Sonnet, `high` |
+| QA Engineer | Sonnet, `high` |
+| Reviewer | Opus, `high` |
+| mechanical work | Sonnet or Haiku, `medium` |
+| difficult debugging / ambiguous cross-cutting work | Opus, `xhigh` |
+| exceptional correctness-critical reasoning | `max`, as an explicit escalation |
 
-- tests that only assert constants
-- duplicated coverage across layers
-- large combinatorial matrices without distinct behavior
-- defensive tests for impossible state created only by manually corrupting internals
+Use model-family aliases rather than pinned versions unless a concrete reason requires otherwise.
 
-Tests are deterministic: randomness comes only through the test seams in `docs/ARCHITECTURE.md`, and randomized or stress tests use fixed seeds. A milestone plan in `docs/CURRENT_CYCLE.md` links here and adds only milestone-specific test guidance.
+Do not remove quality gates to save usage.
 
-Standing tooling decisions:
+Per-agent `model` frontmatter is intentional. Do not enable `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` while relying on this routing. When routing correctness matters, verify the models agents actually run with `/tasks`.
 
-- **Hypothesis is not used.** Milestone 3 found the deterministic seeded stress test with invariant checks sufficient: the limit is the oracle, not the generator. Revisit only when a milestone offers a concrete benefit; adding it is a dependency decision.
-- **Integration-test helpers stay local** to their test directory (the betting `conftest.py` and module-level helpers), accepting some duplication, and the pytest and `pythonpath` configuration stays unchanged. A shared test-helper package is a possible future tooling change, only if the duplication becomes materially painful.
+### Model Escalation
+
+A cheaper model is useful only while it completes the role reliably.
+
+Escalate when:
+
+- the task remains ambiguous after a good Brief;
+- the change becomes strongly cross-cutting;
+- Sonnet repeatedly misunderstands the requirement;
+- repeated repair loops erase the expected usage saving;
+- difficult debugging requires deeper reasoning.
+
+Evaluate routing by total cost of completion, not token count alone.
+
+## Context and Session Policy
+
+The repository is durable memory.
+
+Conversations are temporary working context.
+
+- Start a fresh session after completed milestone planning.
+- Start a fresh session after a completed and committed Cycle.
+- Use `/compact` only while continuing the same unfinished task.
+- Read focused files and relevant sections instead of the entire repository.
+- Reference durable repository context instead of copying it into prompts.
+- Do not duplicate durable rules across prompts, docs, agents, and skills.
+
+Task prompts should normally contain only:
+
+- goal;
+- task-specific scope;
+- unusual constraints;
+- success criteria.
+
+Detailed company/reference docs under `docs/company/` are loaded only for Meta work, organization design, onboarding, or AI-engineering analysis.
+
+## Cycle Closeout
+
+Only the user invokes `/finish-cycle`; the Lead never invokes it. Invoking it is the user's approval to commit and push the completed, approved work.
+
+The skill owns the mechanical closeout.
+
+After it returns `SESSION COMPLETE`:
+
+- perform no further project work in that session;
+- the user closes the session;
+- the next Cycle starts fresh.
 
 ## Architecture Decision Records
 
-`docs/ARCHITECTURE.md` is the source of truth for the current architecture. An ADR records why a lasting decision was made, when future work needs its context and rejected alternatives.
+Use an ADR only when the reasoning behind a durable decision is likely to matter later.
 
-Write an ADR when a decision establishes or materially changes a lasting:
+Examples:
 
-- public API contract
-- persistent state model
-- subsystem or team ownership boundary
-- external dependency
-- cross-team integration contract
-- major domain interpretation with broad consequences
+- public contracts;
+- persistent state models;
+- subsystem ownership boundaries;
+- external dependencies;
+- cross-team integration contracts;
+- broad domain interpretations.
 
-Private helpers, test structure, local naming, and ordinary refactors do not get ADRs. Past decisions are not backfilled: they stay recorded in `docs/ARCHITECTURE.md` and the cycle records.
+`ARCHITECTURE.md` records what is true now.
 
-- The Lead drafts the ADR while designing; it becomes Accepted when the user approves the decision.
-- ADRs live in `docs/adr/NNNN-short-title.md`, numbered from `0001`; the directory is created with the first ADR.
-- `docs/ARCHITECTURE.md` states the resulting architecture and links to the ADR instead of restating its reasoning.
-- An accepted ADR is not rewritten. A later ADR supersedes it, and both say so.
+An ADR records why an important decision was made.
 
-Template:
+Do not create ADRs for local implementation choices.
 
-```markdown
-# NNNN: Title
+Mechanics:
 
-Status: Accepted (YYYY-MM-DD) | Superseded by NNNN
+- ADRs live under `docs/adr/` as numbered, descriptive files (`NNNN-short-title.md`). Create the directory with the first real ADR, not before.
+- The Lead drafts an ADR for a qualifying decision; user approval accepts it.
+- An accepted ADR is a historical record and is not rewritten to change the decision. A later ADR supersedes it.
 
-## Context
+The ADR template is in `docs/company/COMPANY_MANUAL.md`.
 
-## Decision
+## Control Files and Meta Work
 
-## Alternatives considered
+Control/process files include:
 
-## Consequences
-```
+- `CLAUDE.md`;
+- `AGENTS.md`;
+- `docs/ENGINEERING_PROCESS.md`;
+- `.claude/agents/`;
+- `.claude/skills/`;
+- future hooks/config that change AI-team behavior.
 
-## Control files and Meta Cycles
+They are not modified during feature work.
 
-Control files define how the team works: `CLAUDE.md`, `AGENTS.md`, `.claude/agents/`, and this document. No role modifies them during feature work. The Lead proposes improvements in the Process improvements section of its report, and control files change only in a **Meta Cycle**: a dedicated workflow change the user asks for. A Meta Cycle changes no production code, and no tests except to verify the workflow itself. It is verified with the project Verification and a consistency check of the control files, and committed only with user approval.
+Process improvements are applied as dedicated Meta work with user approval.
 
-## Future organization
-
-This direction is recorded, not built. A new team is created only when there is a real, independently ownable subsystem and enough parallel work to justify a boundary between teams; until then, the Core Engineering Team does the work. Creating a team is an ownership decision for the user and a Meta Cycle, and its integration contract normally gets an ADR.
-
-- Once the core engine is complete and stable, likely around Milestone 5 (complete continuous hand/game loop), revisit the structure. The expected split is a **Core Engine Team** and a **Platform / Backend Team**.
-- Once stable client/server contracts exist (the backend API and real-time milestones): a **Web/Desktop Team** and a **Mobile Team**.
-- Specialized teams only when justified: **Simulation/Bots**, **Data/Analytics**, and **AI/Coaching**.
+Meta work does not change production code, tests, dependencies, or product behavior unless that change is separately approved as product work.
