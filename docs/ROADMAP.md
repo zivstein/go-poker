@@ -12,7 +12,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 1 | PokerHand + dealing + streets | Complete |
 | 2 | Betting engine + legal actions | Complete |
 | 3 | All-ins + main/side pots | Complete |
-| 4 | Showdown + settlement | **Next** |
+| 4 | Showdown + settlement | **Current** (planned; Cycle 1 next) |
 | 5 | Complete continuous PokerHand/game loop | Planned |
 | 6 | Structured Hand History / Event Log | Planned |
 | 7 | Bots + simulation / large-scale testing | Planned |
@@ -34,6 +34,14 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 ### Complete the Texas Hold'em Engine
 
 Milestones 0–5 produce a complete No-Limit Texas Hold'em hand engine.
+
+Approved for Milestone 4: settling a hand that has reached its end. Each pot is resolved independently among its eligible seats, ties split the pot, odd chips follow an approved rule, and winners are paid while the hand's contributions stay as accounting history. The showdown and settlement contract (odd-chip rule, all live hands competing, the stored settlement record, payout ownership, result shape, module placement, and the `settle_hand(hand)` entry point) is in [ADR 0001](adr/0001-showdown-settlement-contract.md). Also approved:
+
+- only the best five cards count, and suits never break ties;
+- there is no rake;
+- settlement does not change participation status or handle busting or rebuys.
+
+Board runout, revealing hands, and full-hand orchestration stay in Milestone 5.
 
 Approved for Milestone 5: being all-in does not by itself reveal hole cards. Once betting is closed with at least two live players, hand orchestration reveals the relevant hands, completes the board runout, then proceeds to showdown.
 
