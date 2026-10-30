@@ -52,7 +52,7 @@ The engine is intentionally independent from persistence, networking, and presen
 ### Quality
 
 - Unit and integration tests
-- Deterministic randomized betting stress tests
+- Deterministic randomized hand stress tests, from betting through settlement
 - Ruff linting and formatting
 - mypy type checking
 - GitHub Actions CI

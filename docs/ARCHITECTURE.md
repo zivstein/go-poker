@@ -408,6 +408,8 @@ A commitment that empties the stack sets `all_in`.
 
 A return that makes the stack positive clears `all_in`.
 
+Settlement payout, owned by `game/settlement.py` (see [Payout](#payout)), is the other stack movement.
+
 ## End-of-Round Collection
 
 When a betting round completes:

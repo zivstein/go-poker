@@ -12,8 +12,8 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 1 | PokerHand + dealing + streets | Complete |
 | 2 | Betting engine + legal actions | Complete |
 | 3 | All-ins + main/side pots | Complete |
-| 4 | Showdown + settlement | **Current** (Cycles 1–2 complete; Cycle 3 next) |
-| 5 | Complete continuous PokerHand/game loop | Planned |
+| 4 | Showdown + settlement | Complete |
+| 5 | Complete continuous PokerHand/game loop | **Next** |
 | 6 | Structured Hand History / Event Log | Planned |
 | 7 | Bots + simulation / large-scale testing | Planned |
 | 8 | Omaha + Pot-Limit / PLO | Planned |

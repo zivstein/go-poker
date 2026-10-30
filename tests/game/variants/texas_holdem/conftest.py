@@ -19,7 +19,6 @@ from go_poker.game.position_assignment import assign_hand_seats
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import HOLE_CARD_COUNT, deal_hole_cards, deal_next_street
 
-SEATS = (1, 2, 3)
 BUTTON = 1
 STARTING_CHIPS = 1000
 
@@ -54,14 +53,15 @@ class StackedRandom(Random):
 def _stacked_hand(
     holes: dict[int, str], board: str, button: int = BUTTON, stacks: dict[int, int] | None = None
 ) -> PokerHand:
-    """A three-handed hand (button seat 1 unless given) whose hole cards and board are the given ones once dealt.
+    """A hand of the seats in `holes` (button seat 1 unless given) whose hole cards and board are the given ones once
+    dealt. Every seat in the hand needs hole cards, so `holes` also says who plays.
 
     Every seat starts with STARTING_CHIPS unless `stacks` gives its chips. The hole cards are dealt one per player per
     round starting left of the button; each street burns one card first, which here are cards nobody else uses.
     """
     hole_cards = {seat: _cards(text) for seat, text in holes.items()}
     board_cards = _cards(board)
-    assignments = assign_hand_seats(SEATS, button)
+    assignments = assign_hand_seats(tuple(sorted(holes)), button)
     clockwise = list(assignments)  # button first
     deal_order = (*clockwise[1:], clockwise[0])
     used = [card for seat_cards in hole_cards.values() for card in seat_cards] + board_cards
