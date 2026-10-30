@@ -1,103 +1,96 @@
 # Current Cycle
 
-**Milestone 2: Betting Engine + Legal Actions** (see [ROADMAP.md](ROADMAP.md)) — **COMPLETE**
+**Milestone 3: All-ins + Main/Side Pots** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (planned for implementation)
 
-All four cycles are complete, so there is no current cycle. **Milestone 3 — All-ins + main/side pots** is next and has not started. It is broken into cycles when it starts. The previous milestone, Milestone 1 (PokerHand + Dealing Foundation), is also complete.
+The milestone plan is documented and Cycle 1 is next; no cycle has started. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
 ## Goal
 
-At the end of this milestone, `PokerHand` supports normal No-Limit betting: betting is initialized with real blinds, the engine calculates the legal actions for the current actor, applies actions, tracks each betting round to completion, and starts the betting round for each later street.
+At the end of this milestone, No-Limit betting and chip accounting are correct for every realistic all-in case, including deep 9-max side pots:
 
-Out of scope for this milestone: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less), main and side pots, pot eligibility, showdown and settlement, automatic complete-hand orchestration, Pot-Limit, and Fixed-Limit. All-ins are supported only when they are otherwise normal full actions.
+- short all-in calls, opening bets, raises, and blinds
+- No-Limit reopening rules, including cumulative short all-ins
+- the return of unmatched chips and the end-of-round collection of chips in front into the middle
+- the derived middle pot and main and side pots with their eligible seats
+- a derived signal that no further betting is possible
 
-The approved design, ownership rules, invariants, and boundaries this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
+The state stays explicit enough for future UI, hand history, rake, analytics, and AI to consume directly.
+
+Out of scope for this milestone: card evaluation at showdown, choosing pot winners, pot payout, split pots, odd-chip rules, automatic card reveal, automatic board runout, complete-hand orchestration, rake, the tournament rebuy and bust lifecycle, Pot-Limit, and Fixed-Limit.
+
+The approved design, ownership rules, invariants, and boundaries this milestone follows are in [ARCHITECTURE.md](ARCHITECTURE.md#all-ins-and-pots-milestone-3-planned).
 
 ## Cycles
 
 | Cycle | Title | Status |
 | --- | --- | --- |
-| 1 | Betting state, stakes and blind posting | Complete |
-| 2 | Action model + legal actions | Complete |
-| 3 | Apply actions + betting-round progression | Complete |
-| 4 | Integration hardening | Complete |
+| 1 | Short-all-in state and raise rights | Next (not started) |
+| 2 | Short calls, bets, raises and blinds | Planned |
+| 3 | Accounting, collection and pots | Planned |
+| 4 | Extreme integration hardening | Planned |
 
-### Cycle 1 — Betting state, stakes and blind posting (complete)
+### Cycle 1 — Short-all-in state and raise rights
 
-- Create `src/go_poker/game/betting/`.
-- `Stakes` model: positive integer small and big blinds, `small_blind <= big_blind` (equal blinds are valid).
-- `BettingState`: street, stakes, current bet, last full raise size, current actor, pending players (players identified by seat number).
-- `street_contribution` and `total_contribution` on `HandPlayerState`, and the single chip-commitment operation (stack down, both contributions up).
-- `PokerHand` holds an optional reference to its `BettingState`; there is none until betting is initialized.
-- Betting initialization (`initialize_betting(hand, stakes)`):
-  - creates the preflop `BettingState` (`street = PREFLOP`)
-  - posts SB / BB in full as real chips, deducted from the stacks
-  - sets the initial current bet and last full raise size to the big blind
-  - selects the first actor: the first pending player clockwise after the BB (the button heads-up), or none when nobody is pending
-  - builds the pending players from the eligible players, blinds included
-  - marks a player all-in if posting their blind in full uses their last chips
-- Initialization is rejected atomically when the hand is already initialized, is no longer on `PREFLOP`, or a blind player's stack is below their blind (`ShortBlindAllInNotSupportedError`: the short blind all-in is deferred to Milestone 3).
-- Start-of-hand chip rule: a player with no chips is not dealt into a new hand and cannot receive the button (`start_game`, `start_next_hand`, `setup_hand`); a positive stack below a blind still plays. `PlayerStatus` is unchanged and there is no bust or rebuy policy. Betting relies on this and adds no zero-stack or eligibility stack checks (the short-blind check remains).
-- `start_game` and `start_next_hand` keep their signatures and remain unaware of betting; they only apply the start-of-hand chip rule above.
+- `BettingState`: document `current_bet` as the nominal betting target that a fully funded player must match; it is never below a street contribution but may be above the highest one.
+- Add the per-round action context `acted_at_bet: dict[int, int]` (seat → `current_bet` right after that seat's latest action). Every applied action records it, and it is empty when betting is initialized and whenever a betting round starts. Posting a blind is not an action.
+- Refine `LegalActions`:
+  - add `amount_owed` and `call_is_all_in`
+  - `call_amount` becomes the chips a `CALL` commits (`min(amount_owed, stack)`, 0 when `CALL` is not legal)
+  - rename `min_target` to `min_full_target` (the normal minimum full bet or raise target) and keep `max_target` (the all-in target)
+  - add `short_all_in_target`, which stays `None` in this cycle because short all-ins are not legal yet
+- Derive raise rights separately from `pending_actors`. A player has them when they have not acted this round, or when `current_bet - acted_at_bet[seat] >= last_full_raise_size` (the No-Limit reopening rule, next to the sizing helpers). `BET` and `RAISE` need raise rights.
+- Replace the test invariant `current_bet == max(street_contribution)` with `max(street_contribution) <= current_bet`.
+- Preserve the existing full-action behavior. Short all-ins are still not legal in this cycle, so every bet or raise is full and raise rights never yet deny a pending player. Existing tests change only for the new fields and the new `BettingState` state.
 
-No user betting actions yet.
+### Cycle 2 — Short calls, bets, raises and blinds
 
-### Cycle 2 — Action model + legal actions (complete)
+- Short `CALL`: legal whenever chips are owed; it commits `min(amount_owed, stack)`, and a call that empties the stack is all-in. `current_bet` is unchanged.
+- Call target: when no opponent can respond, `amount_owed` is measured against the largest street contribution of the other live players, so nobody commits chips that collection would return straight away. `current_bet` keeps its nominal value. The same rule settles the pending players. Heads-up 50/100 with the small blind's 50 in front: against a big blind all-in for 30, the small blind is not pending; against one all-in for 70, the small blind owes 20.
+- Short opening `BET`: when the actor's maximum target is below the big blind, `short_all_in_target` is set and is the only legal target. `min_full_target` still reports the big blind, and `last_full_raise_size` is unchanged.
+- Short `RAISE`: when the actor's maximum target is above the current bet but below the minimum raise, `short_all_in_target` is set and is the only legal target, while `min_full_target` still reports the full minimum raise. `current_bet` becomes the target, `last_full_raise_size` is unchanged, and every other eligible player owes a response.
+- A bet or raise that reaches the full minimum target is full and sets `last_full_raise_size`; a short all-in never does.
+- Cumulative short all-ins reopen raising through `acted_at_bet`; a single short all-in below a full raise does not.
+- Short small and big blinds: remove `ShortBlindAllInNotSupportedError` and post `min(blind, stack)`. `current_bet` and `last_full_raise_size` start at the full big blind.
+- All-in state transitions: every commitment that empties a stack marks the player all-in, through the existing `commit_chips` rule.
+- No-further-betting detection: `is_betting_closed(hand)` (planned name) is true when the round is complete and at most one live player can still act.
+- Known interim gap until Cycle 3: unmatched chips stay committed, and `start_betting_round` still resets street contributions as in Milestone 2.
 
-- `FOLD`, `CHECK`, `CALL`, `BET`, `RAISE`; no `ALL_IN` action.
-- Action representation (`Action`, `ActionType`), with target ("bet to" / "raise to") street-contribution amounts for `BET` and `RAISE`; malformed actions raise `InvalidActionError`.
-- Call amount.
-- No-Limit sizing: `BET` when the current bet is zero with a big-blind minimum, `RAISE` otherwise with a `current_bet + last_full_raise_size` minimum, and a `street_contribution + stack` maximum.
-- Legal-action calculation: `FOLD` for any current actor (even when `CHECK` is available), `CHECK` with nothing to call, `CALL` when the player can cover the full amount, `BET` / `RAISE` when the player's maximum target reaches the minimum and at least one other player (not folded, not all-in) can respond. Short all-in calls and raises are not legal in this milestone.
-- `legal_actions(hand)` returns `LegalActions` for the current actor; nothing is legal when no one is to act, and a hand without betting raises `BettingNotInitializedError`.
-- Focused tests include: no `BET` / `RAISE` when every other non-folded player is all-in, with only `CALL` (if fully covered) or `FOLD` offered when the player still owes chips.
+### Cycle 3 — Accounting, collection and pots
 
-Do not apply actions yet.
+- `return_chips` in `chips.py` is the explicit chip-return path. The amount must be positive and no larger than the player's chips in front. It raises the stack, lowers both contributions, and clears `all_in`.
+- End-of-round collection, run by `apply_action` (and `initialize_betting` when the preflop round starts complete) when a round completes:
+  - return the unmatched chips of a sole top contributor (above the next-highest total contribution, folded players included)
+  - collect the chips in front into the middle by resetting every `street_contribution` to zero
+  - keep the normalized `total_contribution`
+- `start_betting_round` no longer resets street contributions.
+- `middle_pot(hand)`: the sum of `total_contribution - street_contribution`.
+- `Pot(amount, eligible_seats)` and `pots(hand)`: main and side pots derived from collected contributions.
+  - Layer boundaries come from every participant's contribution, folded players included.
+  - Each layer's amount includes the chips of all its contributors, folded dead money included.
+  - Eligibility is limited to non-folded seats that reach the layer.
+  - Adjacent layers may have identical eligibility.
+  - Depth is arbitrary.
+- Update the Milestone 2 tests whose expectations change: chips in front after a completed round, and the raiser's committed chips after everyone folds.
 
-### Cycle 3 — Apply actions + betting-round progression (complete)
+### Cycle 4 — Extreme integration hardening
 
-- Apply an action (`apply_action(hand, seat_number, action)`; out-of-turn actions raise `NotPlayersTurnError` and illegal ones `IllegalActionError`, validated through `legal_actions`).
-- Validate the current actor.
-- Validate the requested action.
-- Move chips.
-- Fold / check / call / bet / raise behavior, including full actions that use the player's whole stack and mark them all-in.
-- Update the current bet and last full raise size.
-- Update pending actors: a bet or raise makes every other eligible player pending; folded and all-in players are never pending.
-- Select the next actor.
-- Determine round completion.
-- End the round immediately when only one non-folded player remains (no actor, no pending players, no chips awarded).
-- When no opponent can respond (every other non-folded player is all-in): the round completes after the remaining player resolves any outstanding bet with `CALL` or `FOLD`, and completes automatically, with no actor and nobody pending, if they owe nothing. This also applies when a round starts.
-- Start the `FLOP` / `TURN` / `RIVER` betting round after the dealing layer advances the street (`start_betting_round(hand)`; rejections raise `BettingRoundNotCompleteError` or `BettingRoundAlreadyStartedError`):
-  - requires the previous round to be complete
-  - requires `hand.street` to differ from `betting_state.street`, then records the new street, so a street's round cannot start twice; rejection is atomic
-  - does not validate the variant's street sequence, which dealing owns
-  - resets street contributions and preserves total contributions
-  - sets the current bet to zero and the last full raise size to the big blind
-  - builds the pending players from eligible players
-  - chooses the first eligible player clockwise after the button (the big blind heads-up)
+Representative high-value scenarios, driven through the public dealing and betting operations, each asserting the betting and accounting invariants after every step:
 
-Dealing stays independent from betting, and there is no hand or street orchestration.
+1. 9-max with many distinct all-in levels and the deepest meaningful pot layering (main pot plus 7 side pots)
+2. an early all-in while deeper players keep betting across later streets
+3. a player who folds after contributing to several pot layers, including a folded contribution that adds a layer boundary without changing eligibility
+4. different eligible-seat sets for the main and side pots
+5. one short all-in that does not reopen raising
+6. several cumulative short all-ins that do reopen raising
+7. short small and big blinds
+8. a short `CALL`
+9. a short opening `BET`
+10. a short `RAISE`
+11. unmatched chips returned
+12. chips in front vs the middle pot, before and after collection
+13. chip conservation across stacks, street contributions, total contributions, returned chips, and pots
 
-### Cycle 4 — Integration hardening (complete)
-
-Cover representative high-value behavior, including:
-
-- heads-up preflop order
-- heads-up postflop order
-- representative multiway betting
-- a bet after checks reopening action
-- multiple raises
-- folds, including everyone else folding
-- an all-in through a normal full action
-- round completion and starting a later street's round
-- every opponent all-in: the remaining player calls (or folds) to close the round, and a later street's round completes automatically with no actor
-- rejected repeated initialization, a rejected second round start on the same street, and the unsupported short blind all-in
-- invalid and out-of-turn actions
-- atomic failure behavior
-- stack / contribution invariants
-
-Do not create Cartesian-product tests for every combination when the behavior is already proven.
-
-Delivered: `tests/game/betting/test_betting_integration.py`, a small set of scenarios driven through the public dealing and betting operations (one from a real game start), each asserting the betting invariants after every step: stack plus total contribution, street versus total contribution, the current bet, no folded or all-in player pending, actor and pending consistency, and legal actions derived without changing the hand. The multi-street chip-invariant test from `test_rounds.py` was consolidated into these scenarios. No production change was needed. The unsupported short blind all-in from the list above is covered by the Cycle 1 unit tests in `tests/game/betting/test_initialization.py`, not by the integration file, which never constructs short all-ins.
+Do not build Cartesian-product matrices. At the end of this cycle, evaluate whether property-based testing would materially improve confidence in chip conservation, pot layering, eligibility, unmatched returns, and reopening sequences. Hypothesis is a new dependency, so it is added only with user approval.
 
 ## Testing principle
 
@@ -110,6 +103,26 @@ Use representative boundaries and a small number of integration tests. Avoid:
 - large combinatorial matrices without distinct behavior
 - defensive tests for impossible state created only by manually corrupting internals
 
+Property-based testing (Hypothesis) is not used in planning or Cycles 1–3.
+
 ## Decisions
 
-All Milestone 2 architecture, product, and domain decisions (1–10) are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2). No decisions remain open, and all of them are implemented.
+All Milestone 3 architecture, product, and domain decisions are resolved and recorded in [ARCHITECTURE.md](ARCHITECTURE.md#all-ins-and-pots-milestone-3-planned):
+
+1. Three chip locations: the stack (`Player.stack`), chips in front (`street_contribution`), and the derived middle pot (collected chips only). There is no mutable pot-size state. The middle pot is the display value and the future rake boundary. It is not the future Pot-Limit sizing base, which belongs to the Pot-Limit structure.
+2. `current_bet` is the nominal betting target; `current_bet == max(street_contribution)` is no longer an invariant.
+3. `LegalActions` keeps its flat shape:
+   - it adds `amount_owed`, `call_is_all_in`, and `short_all_in_target`
+   - `call_amount` is the chips a call commits
+   - `min_target` becomes `min_full_target`, which always means the normal minimum full bet or raise
+   - `max_target` is the all-in target
+
+   There is no `ALL_IN` action, and `BET` / `RAISE` keep target amounts.
+4. When no opponent can respond, the amount owed is measured against what the all-in players can contest (heads-up 50/100, small blind 50 in, big blind all-in for 70: `CALL 20`), while `current_bet` stays nominal.
+5. Raise rights are derived from `acted_at_bet` and `last_full_raise_size`, separately from pending actors. A check counts as acting, and short all-ins never change `last_full_raise_size`.
+6. Short blinds post the whole stack; the nominal current bet and full-raise context stay at the big blind.
+7. The end-of-round collection runs automatically when a round completes, returns unmatched chips through `return_chips` (which clears `all_in`), and resets chips in front.
+8. Pots are derived from collected contributions as `Pot(amount, eligible_seats)` layers, with boundaries from every participant's contribution (folded included). Eligibility need not shrink strictly from one layer to the next. No pot classes or managers are stored.
+9. `is_betting_closed(hand)` derives that no further betting is possible. Card reveal and board runout stay in future orchestration.
+
+No decisions remain open before Cycle 1. Whether to add Hypothesis is decided with the user at Cycle 4.

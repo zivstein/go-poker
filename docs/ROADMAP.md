@@ -2,14 +2,14 @@
 
 High-level milestones in intended order. This is the single source of truth for the project roadmap; the [README](../README.md) links here rather than repeating it.
 
-The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It currently records the completed milestone 2; milestone 3's cycles are planned when it starts. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
+The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.md), which currently holds milestone 3's cycle plan. Architecture decisions referenced below are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | # | Milestone | Status |
 | --- | --- | --- |
 | 0 | Engine foundation | Complete |
 | 1 | PokerHand + dealing + streets | **COMPLETE** |
 | 2 | Betting engine + legal actions | **COMPLETE** |
-| 3 | All-ins + main/side pots | **Next** (not started) |
+| 3 | All-ins + main/side pots | **Current** (planned; Cycle 1 next) |
 | 4 | Showdown + settlement | Planned |
 | 5 | Complete continuous PokerHand/game loop | Planned |
 | 6 | Structured Hand History / Event Log | Planned |
@@ -35,11 +35,23 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 
 **2. Betting engine + legal actions** — normal No-Limit betting and legal-action calculation on `PokerHand`, with betting-structure behavior under `src/go_poker/game/betting/`: stakes, betting initialization with real blinds, explicit betting state, the `FOLD` / `CHECK` / `CALL` / `BET` / `RAISE` actions with target ("raise to") amounts, derived legal actions, betting rounds that reopen after a bet or raise, and later-street betting rounds. All-ins are supported only when they are otherwise normal full actions. See [CURRENT_CYCLE.md](CURRENT_CYCLE.md) and [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
-**3. All-ins + main/side pots** — picks up what milestone 2 defers: short all-in calls, raises below the minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less; Milestone 2 rejects this case), main and side pots, and pot eligibility.
+**3. All-ins + main/side pots** — picks up what milestone 2 defers and makes No-Limit betting and chip accounting correct for every realistic all-in case, up to deep 9-max side pots. It covers:
+
+- short all-in calls, opening bets, raises, and blinds (a player whose stack is below their blind posts it all and is all-in for less; Milestone 2 rejects this case)
+- No-Limit reopening rules, including cumulative short all-ins
+- the return of unmatched chips, and the end-of-round collection of chips in front into the middle pot
+- derived main and side pots with their eligible seats
+- detecting that no further betting is possible
+
+Pots stay derived from player contributions, never stored. Showdown, payouts, card reveal, board runout, and rake are not part of it. Cycles are in [CURRENT_CYCLE.md](CURRENT_CYCLE.md), and the design is in [ARCHITECTURE.md](ARCHITECTURE.md#all-ins-and-pots-milestone-3-planned).
+
+**4. Showdown + settlement** — evaluates each pot from milestone 3 independently among its eligible seats, and adds winners, payouts, split pots, and odd-chip rules.
+
+**5. Complete continuous PokerHand/game loop** — orchestrates the full deal-and-bet sequence. Once betting is closed with at least one all-in and two or more live players, it tables the live hands, deals the remaining board, and proceeds to showdown (see [ARCHITECTURE.md](ARCHITECTURE.md#future-reveal-and-board-runout-documented-not-implemented)).
 
 **6. Structured Hand History / Event Log** — raw hand events become the source of truth that later stats, persistence, and AI features build on.
 
-**8. Omaha + Pot-Limit support / PLO** — the second variant and second betting structure, composed as PLO. Shared `PokerHand`-family abstractions are extracted here, once two implementations show what is common.
+**8. Omaha + Pot-Limit support / PLO** — the second variant and second betting structure, composed as PLO. Pot-Limit defines its own pot-sizing base, which may count chips in front; milestone 3's `middle_pot` (collected chips only) keeps its meaning. Shared `PokerHand`-family abstractions are extracted here, once two implementations show what is common.
 
 **9. Pineapple support** — a third `PokerHand`-family variant, paired with an appropriate betting structure.
 
