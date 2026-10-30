@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 4 — Showdown + settlement** is in progress. Cycle 1 is complete; Cycle 2 is next.
+**Milestone 4 — Showdown + settlement** is in progress. Cycles 1 and 2 are complete; Cycle 3 is next.
 
 Milestone status and approved product decisions live in `ROADMAP.md`. The showdown and settlement contract lives in [ADR 0001](adr/0001-showdown-settlement-contract.md). Implemented behavior is recorded in `ARCHITECTURE.md` as each Cycle lands.
 
@@ -22,8 +22,8 @@ Tests reach the end of a hand through the real dealing and betting operations, d
 | Cycle | Title | Status |
 | --- | --- | --- |
 | 1 | Showdown strength and pot awards | Complete |
-| 2 | Settlement operation and payout | Next (not started) |
-| 3 | Integration hardening and milestone close | Planned |
+| 2 | Settlement operation and payout | Complete |
+| 3 | Integration hardening and milestone close | Next (not started) |
 
 ### Cycle 1 — Showdown strength and pot awards
 
@@ -40,24 +40,24 @@ Pure derivations only: no stack changes and no `PokerHand` change.
 - Hold'em `settle_hand(hand)`: uncontested settlement, or showdown once the river is dealt and either the river betting round is complete or betting closed earlier.
 - Tests: uncontested wins on each street; showdown after a completed river round; showdown after an earlier all-in with the remaining streets dealt; a paid all-in player loses `all_in` and an unpaid one keeps it; each rejection leaves the hand unchanged; double settlement; contributions and `folded` preserved; the post-settlement accounting invariants.
 
-Carried from Cycle 1: `_award_pots(pots, ranks, seats_from_button)` (internal; takes `hand.players` order and owns the odd-chip rotation) and `showdown_ranks(hand)` (returns a dict in hand order; already rejects an incomplete board and a live player without exactly two hole cards). Convert its result to `Settlement.showdown_ranks` pairs.
+Delivered as approved: `settle_hand` is the public entry; the generic operation is the internal `_settle(hand, ranks)` (shared by variant entry points, not client-facing), and `HandAlreadySettledError` is checked first. Implemented behavior is in `ARCHITECTURE.md`.
 
 ### Cycle 3 — Integration hardening and milestone close
 
 - End-to-end scenarios through the public dealing, betting, and settlement operations, with a test-local stacked deck (no new production seam): 9-max with many side pots and different winners per layer; a split main pot with a side pot to a third player; odd chips in several pots; folded dead-money layers; an uncontested pot after an unmatched bet is returned.
 - Extend the seeded betting stress test to deal the remaining streets, settle, and assert table-wide chip conservation. Fold in the Cycle 1 randomized award test in `tests/game/test_settlement_pots.py`, so a single seeded hand driver remains.
-- Close out: `ARCHITECTURE.md` (settlement section and invariants), README capabilities, `ROADMAP.md` status.
+- Close out: verify and finalize the settlement docs Cycle 2 added to `ARCHITECTURE.md` and the README, and update `ROADMAP.md` status.
 
-## Invariants to establish
+Carried from Cycle 2: the stacked-deck helpers are fixtures in `tests/game/variants/texas_holdem/conftest.py` (test modules cannot import each other). In the docs pass, cross-reference settlement payout from the `ARCHITECTURE.md` "Chip Movement" section, which lists only the betting movements.
+
+## Settlement invariants
+
+Established in `ARCHITECTURE.md` by Cycle 2; Cycle 3 asserts them across seeded random hands.
 
 - After settlement: `stack == starting_chips - total_contribution + payout`.
 - `sum(payouts) == middle_pot == sum(pot.amount)`, and each pot's awards add up to its amount.
 - Only eligible, non-folded seats are paid. Awards within a pot differ by at most 1, and the larger ones go to the earliest tied winners clockwise from the button.
-- A participant is `all_in` exactly when their stack is zero, before and after payout. This strengthens the current "before payout" scoping in `ARCHITECTURE.md`.
-
-## Risks
-
-- An import cycle between `PokerHand`, the settlement types, and `Pot`. It is resolved in implementation (for example a type-only import) without changing behavior. `settlement.py` already reaches `poker_hand.py` through `pots.py`, so adding `PokerHand.settlement` closes the cycle.
+- A participant is `all_in` exactly when their stack is zero, before and after payout.
 
 ## Open Decisions
 

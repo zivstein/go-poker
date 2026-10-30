@@ -32,13 +32,15 @@ def test_new_hand_holds_the_given_players_and_deck() -> None:
     assert hand.deck is deck
 
 
-def test_new_hand_starts_preflop_with_empty_board_nothing_burned_and_no_betting() -> None:
-    """A new hand starts on the preflop street with no community cards, no burned cards and no betting state."""
+def test_new_hand_starts_preflop_with_empty_board_nothing_burned_no_betting_and_unsettled() -> None:
+    """A new hand starts on the preflop street with no community cards, no burned cards, no betting state and no
+    settlement."""
     hand = PokerHand(players=make_players(), deck=Deck())
     assert hand.street is Street.PREFLOP
     assert hand.board == []
     assert hand.burned_cards == []
     assert hand.betting is None
+    assert hand.settlement is None
 
 
 def test_hands_do_not_share_board_or_burned_cards() -> None:

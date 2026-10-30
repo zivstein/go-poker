@@ -42,6 +42,13 @@ The engine is intentionally independent from persistence, networking, and presen
 - Collected middle pot
 - Derived main and side pots with eligibility
 
+### Showdown and Settlement
+
+- Hold'em hand strength from two hole cards and the board
+- Uncontested wins and showdowns
+- Per-pot winners, ties, and odd-chip allocation
+- Chip payout and an immutable stored settlement
+
 ### Quality
 
 - Unit and integration tests
@@ -59,8 +66,9 @@ The engine is intentionally independent from persistence, networking, and presen
         ├── hand setup + lifecycle
         ├── PokerHand state
         ├── betting/           No-Limit betting + pots
+        ├── settlement         pot awards + payout
         └── variants/
-            └── texas_holdem/  Hold'em-specific dealing
+            └── texas_holdem/  Hold'em-specific dealing + showdown
 
 The engine owns poker rules.
 
@@ -108,7 +116,7 @@ Coverage:
 
 ## Project Status
 
-The Current Capabilities above describe what the engine supports today. A complete automatic hand loop, showdown and settlement, structured history, persistence, API, networking, and clients are not implemented yet.
+The Current Capabilities above describe what the engine supports today. Automatic board runout and a complete automatic hand loop, structured history, persistence, API, networking, and clients are not implemented yet.
 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — authoritative milestone status
 - [`docs/CURRENT_CYCLE.md`](docs/CURRENT_CYCLE.md) — active work

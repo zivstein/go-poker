@@ -22,7 +22,7 @@ Paths are under `src/go_poker/`.
 | Area | Responsibility |
 | --- | --- |
 | `core/` | cards, deck, hand ranks, hand evaluation |
-| `game/` | players, seats, table, lifecycle, hand setup, per-hand state |
+| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, settlement |
 | `game/variants/` | poker-variant-specific rules |
 | `game/betting/` | betting-structure rules, currently No-Limit |
 
@@ -169,7 +169,8 @@ It owns:
 - community board;
 - current `Street`;
 - burned cards;
-- optional `BettingState`.
+- optional `BettingState`;
+- optional immutable `Settlement`, present only once the hand is settled.
 
 It is a state container rather than the owner of participation, variant dealing, or betting rules.
 
@@ -448,6 +449,46 @@ Eligibility is nested by depth: each later pot's eligible seats are a subset, no
 
 Pot depth is generic and does not encode a fixed number of side pots.
 
+## Showdown and Settlement
+
+Settlement turns the contested pots into stack payouts and records the result. The contract is in [ADR 0001](adr/0001-showdown-settlement-contract.md).
+
+| Module | Responsibility |
+| --- | --- |
+| `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding (winners, ties, odd chips), the internal `_settle` operation and payout, `HandAlreadySettledError` |
+| `game/variants/texas_holdem/showdown.py` | Hold'em hand strength (`showdown_ranks`), readiness rules, the public `settle_hand`, `ShowdownNotReadyError` |
+
+`settle_hand(hand)` is the only public settle entry. `_settle(hand, ranks)` is shared engine implementation for variant entry points and is not a client-facing API.
+
+`PotAward` holds a `Pot` and the exact chips each winning seat receives, ordered clockwise from the button. Odd chips make amounts unequal.
+
+`Settlement` holds the pot awards and each live player's showdown `HandRank`, empty when uncontested. Per-seat payouts and winners are derived, never stored.
+
+Every non-folded player competes for each pot they are eligible for.
+
+Each pot is split independently: each tied winner gets `amount // winners`, and the remainder goes one chip at a time to tied winners clockwise from the first seat left of the button.
+
+### Settling a Hold'em Hand
+
+`settle_hand(hand)` validates in this order, and a rejection leaves the hand unchanged:
+
+1. the hand is already settled: `HandAlreadySettledError`; this comes first because a payout can clear `all_in` and make betting look open again;
+2. the hand has no betting state: `BettingNotInitializedError`;
+3. exactly one player has not folded: the hand is settled uncontested on any street, with nothing evaluated;
+4. the board is incomplete: `IncompleteBoardError`;
+5. further betting is possible: `ShowdownNotReadyError`;
+6. otherwise every live hand is evaluated and the hand is settled.
+
+A contested hand is ready when the current betting round is complete and either that round belongs to the river or `is_betting_closed(hand)`. A river dealt without its round started, while two players can act, is not ready. Remaining streets after an all-in need to be dealt, but their betting rounds need not be started.
+
+### Payout
+
+`_settle` derives the pots, awards, and settlement before changing anything. It then adds each seat's payout to its stack, clears `all_in` for every paid seat, and stores the settlement on the hand.
+
+`total_contribution`, `street_contribution`, `folded`, the board, the betting state, and the derived pots keep describing what was contested; `hand.settlement` records that it was paid.
+
+Blocking dealing and betting after settlement is not implemented.
+
 ## Durable Invariants
 
 Before settlement:
@@ -455,6 +496,12 @@ Before settlement:
 `player.stack + player.total_contribution`
 
 equals that player's chips at hand start.
+
+After settlement:
+
+`player.stack == starting_chips - total_contribution + payout`
+
+`sum(payouts) == middle_pot == sum(pot.amount)`, each pot's shares add up to its amount, and only eligible, non-folded seats are paid.
 
 Across the hand:
 
@@ -466,7 +513,8 @@ and:
 
 Other invariants:
 
-- before payout, a participant is `all_in` exactly when their stack is zero;
+- a participant is `all_in` exactly when their stack is zero, before and after payout;
+- settlement is stored once; contributions, `folded`, hole cards, board, burned cards, the deck, the betting state, and derived pots are unchanged by it;
 - betting moves chips between stacks and contributions only through `commit_chips` and `return_chips`;
 - no street contribution exceeds `current_bet`;
 - completed rounds have no chips in front;

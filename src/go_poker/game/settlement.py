@@ -2,7 +2,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from go_poker.core.hand_rank import HandRank
-from go_poker.game.betting.pots import Pot
+from go_poker.game.betting.pots import Pot, pots
+from go_poker.game.poker_hand import PokerHand
+
+
+class HandAlreadySettledError(RuntimeError):
+    """Raised when settling a hand that has already been settled."""
 
 
 @dataclass(frozen=True)
@@ -77,3 +82,35 @@ def _award_pots(
     """
     seat_order = (*seats_from_button[1:], *seats_from_button[:1])
     return tuple(_award_pot(pot, ranks, seat_order) for pot in pots)
+
+
+def _require_unsettled(hand: PokerHand) -> None:
+    """Reject a hand that already carries its settlement. Shared by every settle entry point."""
+    if hand.settlement is not None:
+        raise HandAlreadySettledError("This hand has already been settled")
+
+
+def _settle(hand: PokerHand, ranks: Mapping[int, HandRank]) -> None:
+    """Settle the hand: award its pots, pay each winning seat and store the settlement. Internal; settle_hand is the
+    public entry.
+
+    This is shared engine implementation for variant entry points, not a client-facing API: callers must not supply
+    arbitrary ranks. `ranks` holds every live seat's showdown rank, or is empty for an uncontested hand (see
+    `_award_pots`). An already settled hand is rejected. The pots, the awards and the settlement are all derived before
+    anything changes, so a rejection leaves the hand unchanged. Each winning seat's total payout is then added to its
+    stack and its `all_in` is cleared, since the stack is positive again. Contributions, `folded` and the betting
+    state are left as the hand's accounting history.
+
+    It relies on engine invariants and does not validate them: the betting round is complete (nothing in front) and
+    every live seat of a contested hand has a rank.
+    """
+    _require_unsettled(hand)
+    pot_awards = _award_pots(pots(hand), ranks, [hand_player.seat_number for hand_player in hand.players])
+    settlement = Settlement(pot_awards, tuple(ranks.items()))
+
+    payouts = settlement.payouts
+    for hand_player in hand.players:
+        if hand_player.seat_number in payouts:
+            hand_player.player.stack += payouts[hand_player.seat_number]
+            hand_player.all_in = False
+    hand.settlement = settlement
