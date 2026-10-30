@@ -18,11 +18,11 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
 | `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
 | `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
-| `game/betting/` | Current | Betting-structure–specific rules; first implementation: No-Limit betting (milestone 2): stakes, betting state, chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, legal actions, applying actions, betting-round progression, and later-street round starts (see [Betting](#betting-milestone-2)). Milestone 3 extends it: its Cycles 1–3 are implemented (the nominal current bet, `acted_at_bet`, derived raise rights, the refined `LegalActions`, short all-in calls, bets, raises, and blinds, the call target, cumulative reopening, `is_betting_closed`, the return of unmatched chips, the end-of-round collection, the derived middle pot, and derived main and side pots), while its Cycle 4 (integration hardening) remains (see [All-ins and pots](#all-ins-and-pots-milestone-3-planned)) | Accounts, persistence, APIs, clients |
+| `game/betting/` | Current | Betting-structure–specific rules; first implementation: No-Limit betting (milestone 2): stakes, betting state, chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, legal actions, applying actions, betting-round progression, and later-street round starts (see [Betting](#betting-milestone-2)); extended by milestone 3 with the nominal current bet, `acted_at_bet` and derived raise rights with cumulative reopening, the refined `LegalActions`, short all-in calls, bets, raises, and blinds, the call target, `is_betting_closed`, the return of unmatched chips, the end-of-round collection, the derived middle pot, and derived main and side pots (see [All-ins and pots](#all-ins-and-pots-milestone-3)) | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
 | Accounts, persistence, API, clients | Planned (milestones 13+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
 
-Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` exists (No-Limit betting, built up through milestone 2 and being extended by milestone 3).
+Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` exists (No-Limit betting, built up through milestone 2 and extended by milestone 3).
 
 ## Core
 
@@ -73,7 +73,7 @@ Persistent runtime state is kept separate from state that belongs to one hand.
 
 `Street` lives in `game/` (`game/street.py`), not in a variant, because `PokerHand` owns the street and `game/` must not depend on `game/variants/`. Variant rules decide how the hand moves between streets.
 
-Betting rules live in the betting layer, not on `PokerHand` (see [Betting](#betting-milestone-2)). Milestone 3 adds no pot state to `PokerHand`: the middle pot and the main and side pots are derived from the players' contributions (see [All-ins and pots](#all-ins-and-pots-milestone-3-planned)). Hole cards, burned cards, and the board are dealt by variant rules from the hand's deck, and the same rules advance the street.
+Betting rules live in the betting layer, not on `PokerHand` (see [Betting](#betting-milestone-2)). Milestone 3 adds no pot state to `PokerHand`: the middle pot and the main and side pots are derived from the players' contributions (see [All-ins and pots](#all-ins-and-pots-milestone-3)). Hole cards, burned cards, and the board are dealt by variant rules from the hand's deck, and the same rules advance the street.
 
 `PokerHand` is a plain container. It does not re-validate participation; `hand_setup` remains the single owner of those rules. The hand-starting lifecycle functions (`start_game`, `start_next_hand`) return a `PokerHand` built from `setup_hand`'s participants.
 
@@ -101,15 +101,15 @@ There is therefore no runtime duplicate-card scan. A test-only card-accounting i
 
 This section records the Milestone 2 design, which is fully implemented under `game/betting/`: `Stakes`, `BettingState`, the player contributions and chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, legal-action calculation, applying actions (`apply_action`), round progression and completion with its early endings, and starting later betting rounds (`start_betting_round`). The behavior it defers (short all-ins, pots, showdown, orchestration, and other betting structures) is listed under [Scope](#scope).
 
-Milestone 3 changes parts of this design; its design is recorded in [All-ins and pots](#all-ins-and-pots-milestone-3-planned). Its first three cycles are implemented and already reflected here: the current bet as a nominal betting target, the per-round `acted_at_bet` action context with derived raise rights, the refined `LegalActions` representation, short all-in calls, bets, raises, and blinds, the call target when no opponent can respond, the return of unmatched chips, and the end-of-round collection that replaces the street-contribution reset. The derived middle pot and main and side pots are described in [Where chips are](#where-chips-are) and [Pots](#pots). This section describes the engine's current behavior.
+Milestone 3 changed parts of this design; its design is recorded in [All-ins and pots](#all-ins-and-pots-milestone-3), and its changes are reflected here: the current bet as a nominal betting target, the per-round `acted_at_bet` action context with derived raise rights, the refined `LegalActions` representation, short all-in calls, bets, raises, and blinds, the call target when no opponent can respond, the return of unmatched chips, and the end-of-round collection that replaces the street-contribution reset. The derived middle pot and main and side pots are described in [Where chips are](#where-chips-are) and [Pots](#pots). This section describes the engine's current behavior.
 
 ### Scope
 
-Milestone 2 adds normal No-Limit betting and legal-action calculation to `PokerHand`. It supported a player going all-in only through an ordinary full action; Milestone 3's Cycle 2 adds short all-ins (see [All-in boundary](#all-in-boundary)).
+Milestone 2 adds normal No-Limit betting and legal-action calculation to `PokerHand`. It supported a player going all-in only through an ordinary full action; Milestone 3 adds short all-ins (see [All-in boundary](#all-in-boundary)).
 
 Deferred to later milestones:
 
-- calls the player cannot cover in full (short all-in calls), raises below the normal minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less), main and side pots, and pot eligibility (milestone 3; its Cycle 2 implements the short all-ins and reopening rules, and its Cycle 3 the return of unmatched chips, the end-of-round collection, and the derived main and side pots with their eligibility)
+- calls the player cannot cover in full (short all-in calls), raises below the normal minimum because the player lacks chips, short-raise reopening rules, short blind all-ins (a player whose stack is below their blind posts it all and is all-in for less), main and side pots, and pot eligibility (milestone 3, now implemented; see [All-ins and pots](#all-ins-and-pots-milestone-3))
 - showdown, settlement, and payout (milestone 4)
 - automatic complete-hand and street orchestration (milestone 5)
 - Pot-Limit (milestone 8) and Fixed-Limit (not yet scheduled)
@@ -190,7 +190,7 @@ Preflop starts with `current_bet = big_blind` and `last_full_raise_size = big_bl
 
 ### All-in boundary
 
-A `CALL`, `BET`, or `RAISE` may use the player's entire remaining stack. A full action does so when it otherwise satisfies the ordinary full-action rules: a call of the full amount owed, or a bet or raise to at least the minimum full target. Milestone 2 supported only these full-action all-ins. Since Milestone 3's Cycle 2, a short all-in is legal too: a call of less than the amount owed with the whole stack, or a bet or raise to the all-in target when it is below the minimum full target (see [Legal actions with short all-ins](#legal-actions-with-short-all-ins)). When any action or blind leaves `Player.stack == 0`, the player's `all_in` flag becomes true and they owe no further actions in the hand.
+A `CALL`, `BET`, or `RAISE` may use the player's entire remaining stack. A full action does so when it otherwise satisfies the ordinary full-action rules: a call of the full amount owed, or a bet or raise to at least the minimum full target. Milestone 2 supported only these full-action all-ins. Since Milestone 3, a short all-in is legal too: a call of less than the amount owed with the whole stack, or a bet or raise to the all-in target when it is below the minimum full target (see [Legal actions with short all-ins](#legal-actions-with-short-all-ins)). When any action or blind leaves `Player.stack == 0`, the player's `all_in` flag becomes true and they owe no further actions in the hand.
 
 ### Legal actions
 
@@ -272,7 +272,7 @@ The betting layer does not encode `PREFLOP` → `FLOP` → `TURN` → `RIVER` as
 
 ### Pot
 
-Milestone 2 had no `Pot` abstraction; it would only have held one number. Pots stay derived from the players' contributions and are never stored. Milestone 3's Cycle 3 adds the derived middle pot and the main and side pots with their eligible seats (`game/betting/pots.py`; see [Where chips are](#where-chips-are) and [Pots](#pots)).
+Milestone 2 had no `Pot` abstraction; it would only have held one number. Pots stay derived from the players' contributions and are never stored. Milestone 3 adds the derived middle pot and the main and side pots with their eligible seats (`game/betting/pots.py`; see [Where chips are](#where-chips-are) and [Pots](#pots)).
 
 ### Betting-state invariants
 
@@ -287,9 +287,9 @@ Milestone 2 had no `Pot` abstraction; it would only have held one number. Pots s
 - `BettingState` belongs to exactly one street, and a street's betting round is started at most once.
 - Legal actions are always derived, never stored.
 
-## All-ins and pots (milestone 3, planned)
+## All-ins and pots (milestone 3)
 
-This section records the approved Milestone 3 design; the cycle plan is in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). Cycles 1–3 are implemented: the current bet as a nominal betting target ([The current bet](#the-current-bet)), `acted_at_bet` and derived raise rights with cumulative reopening ([Raise rights and reopening](#raise-rights-and-reopening)), the refined `LegalActions` representation with short all-in calls, opening bets, and raises ([Legal actions with short all-ins](#legal-actions-with-short-all-ins)), the call target when no opponent can respond ([Amount owed and the call target](#amount-owed-and-the-call-target)), short blinds ([Short blinds](#short-blinds)), `is_betting_closed` ([No further betting](#no-further-betting)), the return of unmatched chips through `return_chips` and the end-of-round collection ([End-of-round collection](#end-of-round-collection)), the derived middle pot ([Where chips are](#where-chips-are)), and the derived main and side pots ([Pots](#pots)). Cycle 4, extreme integration hardening, remains.
+This section records the Milestone 3 design, which is fully implemented under `game/betting/`; the cycle record is in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It covers the current bet as a nominal betting target ([The current bet](#the-current-bet)), `acted_at_bet` and derived raise rights with cumulative reopening ([Raise rights and reopening](#raise-rights-and-reopening)), the refined `LegalActions` representation with short all-in calls, opening bets, and raises ([Legal actions with short all-ins](#legal-actions-with-short-all-ins)), the call target when no opponent can respond ([Amount owed and the call target](#amount-owed-and-the-call-target)), short blinds ([Short blinds](#short-blinds)), `is_betting_closed` ([No further betting](#no-further-betting)), the return of unmatched chips through `return_chips` and the end-of-round collection ([End-of-round collection](#end-of-round-collection)), the derived middle pot ([Where chips are](#where-chips-are)), and the derived main and side pots ([Pots](#pots)).
 
 This design extends the [Milestone 2 betting design](#betting-milestone-2) so that No-Limit betting and chip accounting are correct for every realistic all-in case, including deep 9-max side pots, and so that future UI, hand history, rake, analytics, and AI can read the state directly without reconstructing poker rules.
 
@@ -307,11 +307,11 @@ Out of scope: evaluating cards at showdown, choosing pot winners, pot payout, sp
 
 ### Milestone 3 ownership
 
-- All of it stays in `game/betting/`. `PokerHand`, `Table`, `Player`, and the lifecycle gain no betting or pot state.
+- All of it lives in `game/betting/`. `PokerHand`, `Table`, `Player`, and the lifecycle gained no betting or pot state.
 - `HandPlayerState.total_contribution` stays the single source of truth for pots. No pot is stored or updated after each action. There is no `MainPot`, `SidePot`, or `PotManager` class and no fixed side-pot slots.
-- Chips move between the stack and the chips in front only through two small operations in `game/betting/chips.py`: `commit_chips` (stack to chips in front) and a new `return_chips` (chips in front back to the stack). `commit_chips` never runs backwards. Keeping chip movement in these two functions keeps it centralized and auditable. The end-of-round collection moves the remaining chips in front into the middle by resetting the street contributions.
-- The No-Limit reopening rule joins the sizing helpers in `game/betting/no_limit.py`. The end-of-round collection and the pot derivation each have a focused module: `game/betting/collection.py` (`collect_round`, the collection that `apply_action` and `initialize_betting` run when they complete a round) and `game/betting/pots.py` (`middle_pot`, `Pot`, and `pots`).
-- No base classes, protocols, or speculative abstractions are added for other betting structures.
+- Chips move between the stack and the chips in front only through two small operations in `game/betting/chips.py`: `commit_chips` (stack to chips in front) and `return_chips` (chips in front back to the stack). `commit_chips` never runs backwards. Keeping chip movement in these two functions keeps it centralized and auditable. The end-of-round collection moves the remaining chips in front into the middle by resetting the street contributions.
+- The No-Limit reopening rule, `has_raise_rights`, sits with the sizing helpers in `game/betting/no_limit.py`. The end-of-round collection and the pot derivation each have a focused module: `game/betting/collection.py` (`collect_round`, the collection that `apply_action` and `initialize_betting` run when they complete a round) and `game/betting/pots.py` (`middle_pot`, `Pot`, and `pots`).
+- There are no base classes, protocols, or speculative abstractions for other betting structures.
 
 ### Where chips are
 
@@ -357,7 +357,7 @@ The same call target decides who stays pending: when no opponent can respond, an
 
 ### Legal actions with short all-ins
 
-`LegalActions` keeps its flat, frozen shape and gains the fields a client needs for all-ins. There is still no `ALL_IN` action.
+`LegalActions` keeps its flat, frozen shape, with the fields a client needs for all-ins. There is still no `ALL_IN` action.
 
 | Field | Meaning |
 | --- | --- |
@@ -397,7 +397,7 @@ When `apply_action` applies a bet or raise to a target, the bet or raise is **fu
 
 `pending_actors` answers only "who still owes an action?". Whether a player may raise is a separate, derived question.
 
-`BettingState` gains one piece of per-round state: `acted_at_bet: dict[int, int]`, which maps the seat of each player who has acted in the current round to the `current_bet` right after their latest action. Every applied action records it. It is cleared whenever a betting round starts. Posting a blind is not an action, so the blinds start the preflop round without an entry. There is no second mutable raise-eligible set.
+`BettingState` has one piece of per-round state for this: `acted_at_bet: dict[int, int]`, which maps the seat of each player who has acted in the current round to the `current_bet` right after their latest action. Every applied action records it. It is cleared whenever a betting round starts. Posting a blind is not an action, so the blinds start the preflop round without an entry. There is no second mutable raise-eligible set.
 
 A player has **raise rights** when either:
 
@@ -491,7 +491,7 @@ These extend the [Milestone 2 betting-state invariants](#betting-state-invariant
 
 - For every participant, stack plus total contribution equals their chips at the start of the hand, including after returned chips, until payout (milestone 4).
 - The middle pot plus every street contribution equals the sum of total contributions, and the pot amounts add up to the middle pot.
-- `all_in` is true exactly when a participant's stack is zero.
+- `all_in` is true exactly when a participant's stack is zero, until payout (milestone 4).
 - No street contribution is above `current_bet` (this replaces `current_bet == max(street_contribution)`).
 - A completed round has no chips in front and no unmatched chips: the highest total contribution belongs to at least two participants.
 - `last_full_raise_size` is the big blind when a round starts and changes only on a full bet or raise.

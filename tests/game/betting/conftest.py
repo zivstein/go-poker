@@ -7,10 +7,10 @@ from itertools import pairwise
 import pytest
 
 from go_poker.core.deck import Deck
-from go_poker.game.betting.actions import Action
+from go_poker.game.betting.actions import AMOUNT_ACTION_TYPES, Action
 from go_poker.game.betting.apply import apply_action
 from go_poker.game.betting.initialization import initialize_betting
-from go_poker.game.betting.legal_actions import legal_actions
+from go_poker.game.betting.legal_actions import LegalActions, legal_actions
 from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.rounds import is_round_complete, start_betting_round
 from go_poker.game.betting.stakes import Stakes
@@ -91,6 +91,8 @@ class CheckedHand:
         self.hand = hand
         # Recorded before betting starts: every player's chips at the start of the hand.
         self.starting_chips = {hand_player.seat_number: hand_player.player.stack for hand_player in hand.players}
+        # The seats that have acted in the current betting round; posting a blind is not an action.
+        self.acted: set[int] = set()
 
     @property
     def betting(self) -> BettingState:
@@ -105,18 +107,44 @@ class CheckedHand:
         """The intended hand start: initialize betting (post the blinds), then deal the hole cards."""
         initialize_betting(self.hand, stakes)
         deal_hole_cards(self.hand)
+        self.acted = set()
+        # The preflop round starts at the full big blind, whatever the blinds actually posted.
+        assert (self.betting.current_bet, self.betting.last_full_raise_size) == (stakes.big_blind, stakes.big_blind)
         self.check()
 
     def act(self, *actions: tuple[int, Action]) -> None:
         for seat_number, action in actions:
+            legal = legal_actions(self.hand)
+            bet_before = self.betting.current_bet
+            full_raise_before = self.betting.last_full_raise_size
             apply_action(self.hand, seat_number, action)
+            self.acted.add(seat_number)
+            self._check_betting_context(action, legal, bet_before, full_raise_before)
             self.check()
 
     def next_street(self) -> None:
         """Deal the next street, then start its betting round."""
         deal_next_street(self.hand)
         start_betting_round(self.hand)
+        self.acted = set()
+        # A later round starts unopened, with the big-blind minimum restored.
+        assert (self.betting.current_bet, self.betting.last_full_raise_size) == (0, self.betting.stakes.big_blind)
         self.check()
+
+    def _check_betting_context(
+        self, action: Action, legal: LegalActions, bet_before: int, full_raise_before: int
+    ) -> None:
+        """Only a bet or raise moves the current bet, and only a full one changes the last full raise size, which
+        never shrinks within a round."""
+        betting = self.betting
+        if action.type in AMOUNT_ACTION_TYPES:
+            assert betting.current_bet == action.amount
+            if action.amount == legal.short_all_in_target:
+                assert betting.last_full_raise_size == full_raise_before
+            else:
+                assert betting.last_full_raise_size >= full_raise_before
+        else:
+            assert (betting.current_bet, betting.last_full_raise_size) == (bet_before, full_raise_before)
 
     def check(self) -> None:
         players = self.hand.players
@@ -125,7 +153,7 @@ class CheckedHand:
         assert all(hp.all_in == (hp.player.stack == 0) for hp in players)
         assert all(hp.street_contribution <= hp.total_contribution for hp in players)
         assert max(hp.street_contribution for hp in players) <= betting.current_bet
-        assert betting.acted_at_bet.keys() <= {hp.seat_number for hp in players}
+        assert betting.acted_at_bet.keys() == self.acted  # exactly the seats that have acted in this round
         assert all(acted_at <= betting.current_bet for acted_at in betting.acted_at_bet.values())
         assert not {hp.seat_number for hp in players if hp.folded or hp.all_in} & betting.pending_actors
         assert betting.current_actor is None or betting.current_actor in betting.pending_actors
@@ -160,10 +188,18 @@ class CheckedHand:
             assert pot.eligible_seats <= previous_eligible
             previous_eligible = set(pot.eligible_seats)
 
+        # What a live player can win: from each participant, as many collected chips as the player has collected.
+        for hp in players:
+            if not hp.folded:
+                winnable = sum(min(chips, collected[hp.seat_number]) for chips in collected.values())
+                assert sum(pot.amount for pot in layers if hp.seat_number in pot.eligible_seats) == winnable
+
         if is_round_complete(self.betting):  # a completed round is collected: nothing in front, nothing unmatched
             assert all(hp.street_contribution == 0 for hp in players)
             highest = max(hp.total_contribution for hp in players)
             assert sum(hp.total_contribution == highest for hp in players) >= 2
+            # A player who can still bet has matched the highest total contribution.
+            assert all(hp.total_contribution == highest for hp in players if not hp.folded and not hp.all_in)
 
 
 @pytest.fixture

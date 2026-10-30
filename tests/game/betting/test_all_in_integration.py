@@ -174,16 +174,20 @@ def test_short_all_in_opening_bet_keeps_the_full_raise_size_for_the_next_raise(
 # =============================================================================
 
 
-def test_short_all_in_raise_does_not_reopen_raising_for_the_bettor(
+def test_short_all_in_raise_makes_earlier_actors_respond_without_reopening_raising(
     checked: Callable[[PokerHand], CheckedHand], make_hand: HandFactory
 ) -> None:
-    """On the flop the small blind bets 100 and the big blind raises all-in to 170, below the minimum raise to 200.
-    The button, yet to act, may still raise to the full minimum of 270, but calls. The small blind acted at 100 and
-    faces only 70 more, less than the full raise size of 100, so it may only call or fold."""
-    h = called_around_to_the_flop(
-        checked, make_hand({1: 1000, 2: 1000, 3: 270}, button_seat_number=THREE_HANDED_BUTTON)
-    )
-    h.act((2, bet(100)))
+    """Four-handed on the flop: the small blind bets 100, the big blind calls, and UTG raises all-in to 170, below
+    the minimum raise to 200. Every other player owes a response again, but the raise is short, so the last full raise
+    size stays 100. The button, yet to act, may still raise to the full minimum of 270, but calls. The bettor and the
+    caller both acted at 100 and face only 70 more, less than a full raise: each is pending and may call the 70 or
+    fold, but not raise."""
+    h = checked(make_hand({5: 1000, 8: 1000, 1: 1000, 3: 270}, button_seat_number=FOUR_HANDED_BUTTON))
+    h.start(STAKES)
+    h.act((3, CALL), (5, CALL), (8, CALL), (1, CHECK))
+    h.next_street()
+
+    h.act((8, bet(100)), (1, CALL))
     assert legal_actions(h.hand) == legal(
         can_call=True,
         amount_owed=100,
@@ -195,33 +199,41 @@ def test_short_all_in_raise_does_not_reopen_raising_for_the_bettor(
     )
     h.act((3, raise_to(170)))
     assert (h.betting.current_bet, h.betting.last_full_raise_size) == (170, 100)
-    assert h.betting.pending_actors == {1, 2}
+    assert (h.betting.current_actor, h.betting.pending_actors) == (5, {5, 8, 1})
 
     assert legal_actions(h.hand) == legal(
         can_call=True, amount_owed=170, call_amount=170, can_raise=True, min_full_target=270, max_target=900
     )
-    h.act((1, CALL))
+    h.act((5, CALL))
+    assert (h.betting.current_actor, h.betting.pending_actors) == (8, {8, 1})
     assert legal_actions(h.hand) == legal(can_call=True, amount_owed=70, call_amount=70)
-    h.act((2, CALL))
+    h.act((8, CALL))
+    assert (h.betting.current_actor, h.betting.pending_actors) == (1, {1})
+    assert legal_actions(h.hand) == legal(can_call=True, amount_owed=70, call_amount=70)
+    h.act((1, CALL))
 
     assert is_round_complete(h.betting)
-    assert totals(h) == {1: 270, 2: 270, 3: 270}
-    assert pots(h.hand) == (pot(810, 1, 2, 3),)
+    assert totals(h) == {5: 270, 8: 270, 1: 270, 3: 270}
+    assert pots(h.hand) == (pot(1080, 5, 8, 1, 3),)
 
 
 def test_cumulative_short_all_ins_reopen_raising_only_for_a_full_raise_since_acting(
     checked: Callable[[PokerHand], CheckedHand], make_hand: HandFactory
 ) -> None:
     """On the flop the small blind bets 100, the big blind goes all-in to 160, UTG calls 160 and the button goes all-in
-    to 200, each all-in below the minimum raise. The small blind acted at 100 and now faces 100 more, a full raise in
-    total, so it may raise to at least 300; it calls. UTG acted at 160 and faces only 40 more, so it may only call or
-    fold. The last full raise size stays 100 throughout."""
+    to 200, each all-in below the minimum raise. Each short all-in makes every other player who can act owe a
+    response, and the last full raise size stays 100 throughout, so the next full raise is always to the current bet
+    plus 100. The small blind acted at 100 and now faces 100 more, a full raise in total, so it may raise to at least
+    300; it calls. UTG acted at 160 and faces only 40 more, so it may only call or fold."""
     h = checked(make_hand({5: 300, 8: 1000, 1: 260, 3: 1000}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(STAKES)
     h.act((3, CALL), (5, CALL), (8, CALL), (1, CHECK))
     h.next_street()
 
-    h.act((8, bet(100)), (1, raise_to(160)), (3, CALL))
+    h.act((8, bet(100)), (1, raise_to(160)))
+    assert (h.betting.current_bet, h.betting.last_full_raise_size) == (160, 100)
+    assert (h.betting.current_actor, h.betting.pending_actors) == (3, {3, 5, 8})
+    h.act((3, CALL))
     assert legal_actions(h.hand) == legal(
         can_call=True,
         amount_owed=160,
@@ -235,12 +247,12 @@ def test_cumulative_short_all_ins_reopen_raising_only_for_a_full_raise_since_act
     assert (h.betting.current_bet, h.betting.last_full_raise_size) == (200, 100)
     assert h.betting.acted_at_bet == {8: 100, 1: 160, 3: 160, 5: 200}
 
-    assert h.betting.current_actor == 8
+    assert (h.betting.current_actor, h.betting.pending_actors) == (8, {8, 3})
     assert legal_actions(h.hand) == legal(
         can_call=True, amount_owed=100, call_amount=100, can_raise=True, min_full_target=300, max_target=900
     )
     h.act((8, CALL))
-    assert h.betting.current_actor == 3
+    assert (h.betting.current_actor, h.betting.pending_actors) == (3, {3})
     assert legal_actions(h.hand) == legal(can_call=True, amount_owed=40, call_amount=40)
     h.act((3, CALL))
 
@@ -304,6 +316,59 @@ def test_short_big_blind_multiway_keeps_the_nominal_big_blind_and_is_never_pendi
     assert is_round_complete(h.betting)
 
 
+@pytest.mark.parametrize(
+    "blind_chips, posted, pending, owed, matched",
+    [
+        pytest.param({2: 30}, {2: 30, 3: 100}, {1, 3}, 0, 30, id="short-small-blind"),
+        pytest.param({3: 30}, {2: 50, 3: 30}, {1, 2}, 0, 30, id="big-blind-below-the-small-blind"),
+        pytest.param({3: 70}, {2: 50, 3: 70}, {1, 2}, 20, 70, id="big-blind-between-the-blinds"),
+        pytest.param({3: 100}, {2: 50, 3: 100}, {1, 2}, 50, 100, id="big-blind-of-exactly-the-whole-stack"),
+    ],
+)
+def test_all_in_blind_keeps_the_nominal_big_blind_and_is_called_for_what_it_can_contest(
+    blind_chips: dict[int, int],
+    posted: dict[int, int],
+    pending: set[int],
+    owed: int,
+    matched: int,
+    checked: Callable[[PokerHand], CheckedHand],
+    make_hand: HandFactory,
+) -> None:
+    """Three-handed, one blind posts its whole stack and is all-in: a short small blind of 30, a big blind of 30
+    (below the small blind), a big blind of 70 (between the blinds), or a big blind of exactly 100. The current bet
+    and the last full raise size stay at the full big blind, and the all-in blind never owes an action. While the
+    other blind can still respond, the button owes the nominal 100 and may raise to 200; it folds. The other blind is
+    then the only player who can act, and it owes only what the all-in blind can contest: the difference, which it
+    calls, or nothing when it already has as much in front. In that case the round completes as soon as the button
+    folds, a big blind with chips gets no option because nobody could respond, and the other blind's unmatched chips
+    go back. Either way both blinds end with the same total in one pot."""
+    starting_chips = {1: 1000, 2: 1000, 3: 1000} | blind_chips
+    h = checked(make_hand(starting_chips, button_seat_number=THREE_HANDED_BUTTON))
+    h.start(STAKES)
+    assert in_front(h) == {1: 0} | posted
+    assert {seat for seat, hp in h.seats.items() if hp.all_in} == set(blind_chips)
+    assert (h.betting.current_bet, h.betting.last_full_raise_size) == (100, 100)
+    assert (h.betting.current_actor, h.betting.pending_actors) == (1, pending)
+    assert legal_actions(h.hand) == legal(
+        can_call=True, amount_owed=100, call_amount=100, can_raise=True, min_full_target=200, max_target=1000
+    )
+
+    h.act((1, FOLD))
+    if owed:
+        assert (h.betting.current_actor, h.betting.pending_actors) == (2, {2})
+        assert legal_actions(h.hand) == legal(can_call=True, amount_owed=owed, call_amount=owed)
+        h.act((2, CALL))
+    else:
+        assert (h.betting.current_actor, h.betting.pending_actors) == (None, set())
+
+    assert is_round_complete(h.betting)
+    assert is_betting_closed(h.hand)
+    assert h.betting.current_bet == 100
+    assert stacks(h) == {1: 1000, 2: starting_chips[2] - matched, 3: starting_chips[3] - matched}
+    assert totals(h) == {1: 0, 2: matched, 3: matched}
+    assert pots(h.hand) == (pot(2 * matched, 2, 3),)
+
+
 def test_heads_up_short_big_blind_is_called_for_what_it_can_contest(
     checked: Callable[[PokerHand], CheckedHand], make_hand: HandFactory
 ) -> None:
@@ -340,10 +405,11 @@ def test_short_all_in_player_is_skipped_while_deeper_players_keep_betting(
     checked: Callable[[PokerHand], CheckedHand], make_hand: HandFactory
 ) -> None:
     """UTG raises all-in to 150 preflop, below the minimum raise to 200. The big blind, yet to act, makes a full raise
-    to 400 and the others call. On the flop, turn and river the deeper players keep betting and raising, and one of
-    them folds; UTG is never pending or to act again. On the river two players can still act, so betting is not
-    closed even with the round complete. UTG stays eligible for the main pot, and the folded small blind's chips stay
-    in both pots they reached while it is eligible for none."""
+    to 400 and the others call. On the flop, turn and river the deeper players keep betting and raising, and the
+    small blind folds on the flop; UTG is never pending or to act again. Each street's betting grows only the side
+    pots: UTG stays eligible for the main pot its 150 reach, of 600, and for no side pot, while the folded small
+    blind's chips stay in both pots they reached and it is eligible for none. On the river two players can still act,
+    so betting is not closed even with the round complete."""
     h = checked(make_hand({5: 2000, 8: 2000, 1: 2000, 3: 150}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(STAKES)
     h.act((3, raise_to(150)), (5, CALL), (8, CALL))
@@ -355,14 +421,22 @@ def test_short_all_in_player_is_skipped_while_deeper_players_keep_betting(
     assert (h.betting.last_full_raise_size, h.betting.pending_actors) == (250, {5, 8})
     h.act((5, CALL), (8, CALL))
     assert totals(h) == {5: 400, 8: 400, 1: 400, 3: 150}
+    assert middle_pot(h.hand) == 1350
+    assert pots(h.hand) == (pot(600, 5, 8, 1, 3), pot(750, 5, 8, 1))
 
     h.next_street()
     assert (h.betting.current_actor, h.betting.pending_actors) == (8, {8, 1, 5})
     h.act((8, CHECK), (1, bet(300)), (5, raise_to(900)), (8, FOLD), (1, CALL))
+    assert totals(h) == {5: 1300, 8: 400, 1: 1300, 3: 150}
+    assert middle_pot(h.hand) == 3150
+    assert pots(h.hand) == (pot(600, 5, 1, 3), pot(750, 5, 1), pot(1800, 5, 1))
 
     h.next_street()
     assert (h.betting.current_actor, h.betting.pending_actors) == (1, {1, 5})
     h.act((1, CHECK), (5, bet(500)), (1, CALL))
+    assert middle_pot(h.hand) == 4150
+    turn_pots = (pot(600, 5, 1, 3), pot(750, 5, 1), pot(2800, 5, 1))
+    assert pots(h.hand) == turn_pots
 
     h.next_street()
     assert (h.betting.current_actor, h.betting.pending_actors) == (1, {1, 5})
@@ -372,7 +446,7 @@ def test_short_all_in_player_is_skipped_while_deeper_players_keep_betting(
     assert not is_betting_closed(h.hand)
     assert totals(h) == {5: 1800, 8: 400, 1: 1800, 3: 150}
     assert stacks(h) == {5: 200, 8: 1600, 1: 200, 3: 0}
-    assert pots(h.hand) == (pot(600, 5, 1, 3), pot(750, 5, 1), pot(2800, 5, 1))
+    assert pots(h.hand) == turn_pots
 
 
 # =============================================================================
@@ -429,11 +503,13 @@ def test_folded_chips_stay_in_every_pot_they_reached_while_all_in_players_stay_e
     checked: Callable[[PokerHand], CheckedHand], make_hand: HandFactory
 ) -> None:
     """Four-handed: UTG is all-in for 150 preflop, and the button calls all-in for 400 after the big blind's raise. The
-    blinds keep betting on the flop; on the turn the big blind raises all-in to 1300 and the small blind folds after
-    putting 1200 into the hand. Its chips stay in all three pots they reached, but it is eligible for none, while each
-    all-in player stays eligible for every pot it reaches. The big blind's 800 above the small blind's folded 1200 are
-    uncalled and go back to it at the collection, so it has chips again and is no longer all-in, and the top pot is
-    the small blind's dead 800 plus the big blind's matching 800."""
+    blinds keep betting on the flop; on the turn the big blind raises all-in to 1300 and the small blind, the only
+    player left who can act, owes 800 more, all it has, and folds after putting 1200 into the hand. Its chips stay in
+    all three pots they reached, but it is eligible for none, while each all-in player stays eligible for every pot it
+    reaches. The big blind's 800 above the small blind's folded 1200 are uncalled and go back to it at the collection
+    (measured against the button's 400, the largest live contribution, it would be 1600), so it has chips again and is
+    no longer all-in. Only the contested chips are collected: 500 from each blind, so the middle pot grows from 1950
+    to 2950, and the top pot is the small blind's dead 800 plus the big blind's matching 800."""
     h = checked(make_hand({5: 400, 8: 2000, 1: 2000, 3: 150}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(STAKES)
     h.act((3, raise_to(150)), (5, CALL), (8, CALL), (1, raise_to(400)), (5, CALL), (8, CALL))
@@ -447,10 +523,15 @@ def test_folded_chips_stay_in_every_pot_they_reached_while_all_in_players_stay_e
     h.next_street()
     h.act((8, bet(500)), (1, raise_to(1300)))
     assert (stacks(h)[1], h.seats[1].all_in) == (0, True)
+    assert in_front(h) == {5: 0, 8: 500, 1: 1300, 3: 0}
+    assert middle_pot(h.hand) == 1950
+    assert legal_actions(h.hand) == legal(can_call=True, amount_owed=800, call_amount=800, call_is_all_in=True)
     h.act((8, FOLD))
 
+    assert in_front(h) == {5: 0, 8: 0, 1: 0, 3: 0}
     assert totals(h) == {5: 400, 8: 1200, 1: 1200, 3: 150}
-    assert (stacks(h)[1], h.seats[1].all_in) == (800, False)
+    assert stacks(h) == {5: 0, 8: 800, 1: 800, 3: 0}
+    assert (h.seats[1].all_in, h.seats[8].folded) == (False, True)
     assert middle_pot(h.hand) == 2950
     assert pots(h.hand) == (pot(600, 5, 1, 3), pot(750, 5, 1), pot(1600, 1))
     assert is_betting_closed(h.hand)
