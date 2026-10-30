@@ -171,6 +171,62 @@ The Lead's final report to the user, concise:
 9. **Process improvements**: recurring friction, missing instructions, repeated mistakes, or a better way to work, when noticed; always considered at the end of a milestone.
 10. **Git status**: the uncommitted changes awaiting the user's approval.
 
+## Model and effort routing
+
+Use the cheapest model that does a role reliably, and keep stronger reasoning for decisions where mistakes are expensive. Name models by family alias (`opus`, `sonnet`, `haiku`), not by pinned version, so defaults follow each family's current model.
+
+| Role or work | Model | Set by |
+| --- | --- | --- |
+| Lead: milestone architecture and difficult planning | Opus | the session model |
+| Lead: Cycle Brief | Opus | the session model, in plan mode under `opusplan` |
+| Lead: normal Cycle execution and orchestration | Sonnet | the session model |
+| Engineer | Sonnet | `model: sonnet` in its agent file |
+| QA Engineer | Sonnet | `model: sonnet` in its agent file |
+| Reviewer | Opus | `model: opus` in its agent file |
+| Mechanical one-off work | Sonnet, or Haiku for trivial edits | the session model, or a one-off model override; no dedicated agent |
+
+- `opusplan` uses Opus in plan mode and Sonnet otherwise, which matches the Lead's split. If it is unavailable, switch between `opus` and `sonnet` by hand; the principle is what matters, not the alias.
+- The Lead may override a subagent's model for a single task that needs stronger reasoning, but never moves a gate to a cheaper model to save usage.
+- Do not set `CLAUDE_CODE_SUBAGENT_MODEL` or any other setting that forces one model on every subagent: it overrides the per-role defaults.
+
+The Lead sets its own effort per session (`/effort`, `--effort`): Medium, High, or `xhigh`, depending on the task. The Engineer, QA Engineer, and Reviewer default to High through `effort: high` in their agent files, independently of the Lead, so raising the Lead's effort does not raise the whole team. Escalating a subagent above High is a deliberate choice for one task the Lead judges hard, never automatic.
+
+| Work | Effort |
+| --- | --- |
+| Routine or mechanical work | Medium |
+| Normal implementation, QA, and review | High |
+| Difficult architecture, broad ambiguous reasoning, hard debugging | Extra High (`xhigh`) |
+| Genuinely difficult, correctness-critical work, as an explicit escalation | Max |
+
+Normal Cycles never require Extra High or Max. Escalate for the hard step, then return to the default.
+
+Recommended settings:
+
+| Work | Session |
+| --- | --- |
+| Milestone planning | fresh session, `/model opus`, `/effort xhigh` |
+| Implementation Cycle | fresh session, `/model opusplan`, `/effort high`: draft the Cycle Brief in plan mode on Opus, then leave plan mode to run the Cycle on Sonnet; Engineer and QA run on Sonnet and the Reviewer on Opus, all at High, by their defaults |
+| Mechanical task | `/model sonnet` (or `haiku`), `/effort medium` |
+| Hard-debugging escalation | `/model opus`, `/effort xhigh`; `/effort max` only as an explicit escalation; return to the Cycle settings afterward |
+
+## Context budget
+
+The repository is the durable project memory; a conversation is not.
+
+- Start a fresh session, or `/clear`, after a Cycle is complete and committed, and after milestone planning before implementation.
+- Use `/compact` only to continue the same unfinished task when the conversation still holds useful transient context.
+- Do not carry several completed Cycles in one conversation for continuity.
+- A new session recovers state from `CLAUDE.md`, this document, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/CURRENT_CYCLE.md`, Git status and history, and the relevant code and tests.
+
+Habits:
+
+- Reference repository paths and doc sections in handoffs instead of pasting large files.
+- Read the focused files a task needs; do not load unrelated files or re-read the whole repository.
+- Keep `CLAUDE.md` a concise operational entry point.
+- Use a subagent for isolation, independent validation, or parallel work, not for a trivial single-step task.
+
+Usage optimization never weakens quality. Behavioral changes still go Engineer → QA → Reviewer, and the Verification commands still run in full. Savings come from model routing, effort routing, shorter contexts, and fewer unnecessary agent and tool calls.
+
 ## Isolation for deliberate breakage
 
 Mutation and deliberate-breakage experiments (breaking code on purpose to check that a test fails) run only in an isolated copy, never by editing and restoring files in the active working tree, even briefly. This applies to every role.
