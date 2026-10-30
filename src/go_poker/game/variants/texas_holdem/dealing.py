@@ -19,7 +19,7 @@ class HandPastPreflopError(RuntimeError):
 
 
 class InvalidHoleCardCountError(RuntimeError):
-    """Raised when dealing board cards while a participant does not hold exactly two hole cards."""
+    """Raised when board cards are dealt or a showdown is evaluated while a player lacks exactly two hole cards."""
 
 
 class NoNextStreetError(RuntimeError):
