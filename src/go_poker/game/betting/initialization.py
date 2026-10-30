@@ -32,9 +32,10 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     """Post the blinds and attach the hand's preflop betting state.
 
     The small blind and big blind post in full as real chips; posting the last chips marks that player all-in. The
-    current bet and last full raise size start at the big blind. Posting a blind is not an action, so every eligible
-    player, blinds included, is pending, and the first pending player clockwise after the big blind acts first. The hand
-    must be preflop without betting yet; it is validated before anything changes, so a rejection leaves it unchanged.
+    current bet and last full raise size start at the big blind. Posting a blind is not an action, so nobody has acted
+    yet (`acted_at_bet` is empty), every eligible player, blinds included, is pending, and the first pending player
+    clockwise after the big blind acts first. The hand must be preflop without betting yet; it is validated before
+    anything changes, so a rejection leaves it unchanged.
     """
     if hand.betting is not None:
         raise BettingAlreadyInitializedError("Betting has already been initialized for this hand")
@@ -62,4 +63,5 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
         last_full_raise_size=stakes.big_blind,
         current_actor=first_pending_after(hand.players, big_blind_player.seat_number, pending),
         pending_actors=pending,
+        acted_at_bet={},
     )

@@ -9,7 +9,7 @@ The active milestone is broken into cycles in [CURRENT_CYCLE.md](CURRENT_CYCLE.m
 | 0 | Engine foundation | Complete |
 | 1 | PokerHand + dealing + streets | **COMPLETE** |
 | 2 | Betting engine + legal actions | **COMPLETE** |
-| 3 | All-ins + main/side pots | **Current** (planned; Cycle 1 next) |
+| 3 | All-ins + main/side pots | **Current** (Cycle 1 complete; Cycle 2 next) |
 | 4 | Showdown + settlement | Planned |
 | 5 | Complete continuous PokerHand/game loop | Planned |
 | 6 | Structured Hand History / Event Log | Planned |

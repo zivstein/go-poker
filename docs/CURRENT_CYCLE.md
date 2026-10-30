@@ -1,8 +1,8 @@
 # Current Cycle
 
-**Milestone 3: All-ins + Main/Side Pots** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (planned for implementation)
+**Milestone 3: All-ins + Main/Side Pots** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
 
-The milestone plan is documented and Cycle 1 is next; no cycle has started. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
+Cycle 1 is complete and Cycle 2 is next. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
 ## Goal
 
@@ -24,12 +24,12 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 
 | Cycle | Title | Status |
 | --- | --- | --- |
-| 1 | Short-all-in state and raise rights | Next (not started) |
-| 2 | Short calls, bets, raises and blinds | Planned |
+| 1 | Short-all-in state and raise rights | Complete |
+| 2 | Short calls, bets, raises and blinds | Next (not started) |
 | 3 | Accounting, collection and pots | Planned |
 | 4 | Extreme integration hardening | Planned |
 
-### Cycle 1 — Short-all-in state and raise rights
+### Cycle 1 — Short-all-in state and raise rights (complete)
 
 - `BettingState`: document `current_bet` as the nominal betting target that a fully funded player must match; it is never below a street contribution but may be above the highest one.
 - Add the per-round action context `acted_at_bet: dict[int, int]` (seat → `current_bet` right after that seat's latest action). Every applied action records it, and it is empty when betting is initialized and whenever a betting round starts. Posting a blind is not an action.
@@ -41,6 +41,8 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 - Derive raise rights separately from `pending_actors`. A player has them when they have not acted this round, or when `current_bet - acted_at_bet[seat] >= last_full_raise_size` (the No-Limit reopening rule, next to the sizing helpers). `BET` and `RAISE` need raise rights.
 - Replace the test invariant `current_bet == max(street_contribution)` with `max(street_contribution) <= current_bet`.
 - Preserve the existing full-action behavior. Short all-ins are still not legal in this cycle, so every bet or raise is full and raise rights never yet deny a pending player. Existing tests change only for the new fields and the new `BettingState` state.
+
+Delivered: `BettingState.acted_at_bet` (recorded by `apply_action` for every action, empty after `initialize_betting`, cleared by `start_betting_round`) with the documented `current_bet` and `last_full_raise_size` meanings; `has_raise_rights` in `no_limit.py`, required by `legal_actions` for `BET` and `RAISE`; and the refined `LegalActions` fields (`amount_owed`, `call_amount` as the chips a legal call commits, `call_is_all_in`, `min_full_target`, `max_target`, and `short_all_in_target`, always `None`). Short calls, bets, raises, and blinds stay rejected as in Milestone 2. Tests cover the new fields, the recording and clearing of `acted_at_bet`, the reopening rule at its boundaries (`test_no_limit.py`), a limper who regains raise rights after a full raise, and the gate on a hand-built state with a short all-in raise; the integration invariant is now `max(street_contribution) <= current_bet`.
 
 ### Cycle 2 — Short calls, bets, raises and blinds
 
@@ -125,4 +127,4 @@ All Milestone 3 architecture, product, and domain decisions are resolved and rec
 8. Pots are derived from collected contributions as `Pot(amount, eligible_seats)` layers, with boundaries from every participant's contribution (folded included). Eligibility need not shrink strictly from one layer to the next. No pot classes or managers are stored.
 9. `is_betting_closed(hand)` derives that no further betting is possible. Card reveal and board runout stay in future orchestration.
 
-No decisions remain open before Cycle 1. Whether to add Hypothesis is decided with the user at Cycle 4.
+No decisions remain open. Whether to add Hypothesis is decided with the user at Cycle 4.

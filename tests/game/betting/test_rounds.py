@@ -49,8 +49,10 @@ def test_flop_round_resets_street_contributions_and_starts_after_the_button(
     started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, stakes: Stakes
 ) -> None:
     """Four-handed, the flop round starts with no street contributions, totals kept, no bet, the big-blind minimum
-    restored, everyone pending, and the small blind (first after the button) to act."""
+    restored, nobody having acted yet (the preflop actions are cleared), everyone pending, and the small blind (first
+    after the button) to act."""
     hand = called_around_to_the_flop(started_hand, {5: 1000, 8: 1000, 1: 1000, 3: 1000}, button_seat_number=5)
+    assert betting(hand).acted_at_bet == {5: 10, 8: 10, 1: 10, 3: 10}
     start_betting_round(hand)
 
     assert {seat: (hp.street_contribution, hp.total_contribution) for seat, hp in by_seat(hand).items()} == {
@@ -66,6 +68,7 @@ def test_flop_round_resets_street_contributions_and_starts_after_the_button(
         last_full_raise_size=stakes.big_blind,
         current_actor=8,
         pending_actors={5, 8, 1, 3},
+        acted_at_bet={},
     )
 
 

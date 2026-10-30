@@ -151,14 +151,14 @@ def test_raises_add_target_minus_contribution_and_set_the_next_minimum(
     assert (seats[3].player.stack, seats[3].street_contribution) == (970, 30)
     assert (betting(hand).current_bet, betting(hand).last_full_raise_size) == (30, 20)
     assert betting(hand).pending_actors == {5, 8, 1}
-    assert legal_actions(hand).min_target == 50
+    assert legal_actions(hand).min_full_target == 50
 
     play(hand, (5, FOLD), (8, raise_to(80)))
     assert (seats[8].player.stack, seats[8].street_contribution, seats[8].total_contribution) == (920, 80, 80)
     assert (betting(hand).current_bet, betting(hand).last_full_raise_size) == (80, 50)
     assert betting(hand).pending_actors == {1, 3}
     assert betting(hand).current_actor == 1
-    assert legal_actions(hand).min_target == 130
+    assert legal_actions(hand).min_full_target == 130
 
 
 def test_bet_after_checks_reopens_action(
@@ -200,10 +200,45 @@ def test_full_action_with_whole_stack_puts_player_all_in(
     assert betting(hand).current_actor == 5
 
     # A re-raise makes every other eligible player owe a response again, but never the all-in player.
-    min_reraise = legal_actions(hand).min_target
+    min_reraise = legal_actions(hand).min_full_target
     assert min_reraise is not None
     apply_action(hand, 5, raise_to(min_reraise))
     assert betting(hand).pending_actors == {8, 1}
+
+
+# =============================================================================
+# ACTED-AT BETS
+# =============================================================================
+
+
+def test_call_raise_and_fold_record_the_current_bet_right_after_them(
+    started_hand: HandFactory, betting: BettingLookup, play: Play
+) -> None:
+    """A call or fold records the bet it faced and a raise its new bet. The blinds' posts are not actions, so they
+    have no entry until they act, and a player's latest action replaces their earlier entry."""
+    hand = started_hand(FOUR_HANDED, button_seat_number=5)
+
+    play(hand, (3, CALL), (5, raise_to(30)), (8, FOLD))
+    assert betting(hand).acted_at_bet == {3: 10, 5: 30, 8: 30}
+
+    play(hand, (1, CALL), (3, CALL))
+    assert betting(hand).acted_at_bet == {3: 30, 5: 30, 8: 30, 1: 30}
+
+
+def test_checks_and_a_bet_record_the_current_bet_right_after_them(
+    started_hand: HandFactory, betting: BettingLookup, play: Play
+) -> None:
+    """A check is an action: the big blind's option check records the big blind, and the flop checks record the
+    unopened bet of 0. The flop bet records its target."""
+    hand = started_hand({1: 1000, 2: 1000, 3: 1000}, button_seat_number=1)
+    deal_hole_cards(hand)
+    play(hand, (1, CALL), (2, CALL), (3, CHECK))
+    assert betting(hand).acted_at_bet == {1: 10, 2: 10, 3: 10}
+
+    deal_next_street(hand)
+    start_betting_round(hand)
+    play(hand, (2, CHECK), (3, CHECK), (1, bet(25)))
+    assert betting(hand).acted_at_bet == {2: 0, 3: 0, 1: 25}
 
 
 # =============================================================================

@@ -65,9 +65,9 @@ def start_betting_round(hand: PokerHand) -> None:
 
     The previous round must be complete and the hand must be on a different street than the betting state; the street
     sequence itself belongs to the variant's dealing rules and is not checked here. Street contributions reset to zero
-    (total contributions are kept), the current bet is zero and the last full raise size returns to the big blind.
-    Every eligible player is pending, and the first pending player clockwise after the button acts first, so heads-up
-    the big blind acts first. A rejection leaves the hand unchanged.
+    (total contributions are kept), the current bet is zero, the last full raise size returns to the big blind, and
+    nobody has acted yet, so `acted_at_bet` is cleared. Every eligible player is pending, and the first pending player
+    clockwise after the button acts first, so heads-up the big blind acts first. A rejection leaves the hand unchanged.
     """
     betting = hand.betting
     if betting is None:
@@ -82,6 +82,7 @@ def start_betting_round(hand: PokerHand) -> None:
     betting.street = hand.street
     betting.current_bet = 0
     betting.last_full_raise_size = betting.stakes.big_blind
+    betting.acted_at_bet = {}
     betting.pending_actors = pending_at_round_start(hand.players, current_bet=0)
     # Players are ordered clockwise from the button, so the button is the first of them.
     betting.current_actor = first_pending_after(hand.players, hand.players[0].seat_number, betting.pending_actors)

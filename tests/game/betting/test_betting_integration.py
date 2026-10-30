@@ -87,7 +87,9 @@ class CheckedHand:
         betting = self.betting
         assert {hp.seat_number: hp.player.stack + hp.total_contribution for hp in players} == self.starting_chips
         assert all(hp.street_contribution <= hp.total_contribution for hp in players)
-        assert betting.current_bet == max(hp.street_contribution for hp in players)
+        assert max(hp.street_contribution for hp in players) <= betting.current_bet
+        assert betting.acted_at_bet.keys() <= {hp.seat_number for hp in players}
+        assert all(acted_at <= betting.current_bet for acted_at in betting.acted_at_bet.values())
         assert not {hp.seat_number for hp in players if hp.folded or hp.all_in} & betting.pending_actors
         assert betting.current_actor is None or betting.current_actor in betting.pending_actors
         assert (betting.current_actor is None) == (not betting.pending_actors)
@@ -144,6 +146,7 @@ def test_multiway_preflop_limp_raise_and_responses(
         last_full_raise_size=30,
         current_actor=None,
         pending_actors=set(),
+        acted_at_bet={7: 40, 9: 40, 1: 40, 2: 40, 4: 40, 5: 40},
     )
     assert is_round_complete(h.betting)
 
@@ -187,7 +190,7 @@ def test_raise_reraise_and_four_bet_each_reset_the_minimum_and_reopen_action(
         return (
             h.betting.current_bet,
             h.betting.last_full_raise_size,
-            legal_actions(h.hand).min_target,
+            legal_actions(h.hand).min_full_target,
             h.betting.pending_actors,
         )
 
@@ -314,11 +317,14 @@ def test_last_player_calls_all_in_opponents_and_later_rounds_start_complete(
         can_fold=True,
         can_check=False,
         can_call=True,
+        amount_owed=290,
         call_amount=290,
+        call_is_all_in=False,
         can_bet=False,
         can_raise=False,
-        min_target=None,
+        min_full_target=None,
         max_target=None,
+        short_all_in_target=None,
     )
     h.act((3, CALL))
     assert is_round_complete(h.betting)
@@ -431,7 +437,7 @@ def test_rejected_operation_mid_hand_changes_nothing(
     h.act((1, CALL), (2, CALL), (3, CHECK))
     h.next_street()
     h.act((2, bet(20)), (3, raise_to(60)))
-    assert (h.betting.current_actor, legal_actions(h.hand).min_target) == (1, 100)
+    assert (h.betting.current_actor, legal_actions(h.hand).min_full_target) == (1, 100)
     h.act(*actions_first)
     before = hand_snapshot(h.hand)
 

@@ -37,7 +37,8 @@ def test_multiway_blinds_are_posted_and_first_player_after_big_blind_acts(
     player_snapshot: PlayerSnapshotter,
     stakes: Stakes,
 ) -> None:
-    """Four-handed, the blinds post real chips, everyone is pending and the player after the big blind acts first."""
+    """Four-handed, the blinds post real chips, everyone is pending and the player after the big blind acts first.
+    Posting a blind is not an action, so nobody has acted yet."""
     hand = make_hand({1: 1000, 3: 1000, 5: 1000, 8: 1000}, button_seat_number=5)
     seats = by_seat(hand)
     assert [hand_player.seat_number for hand_player in hand.players] == [5, 8, 1, 3]
@@ -59,6 +60,7 @@ def test_multiway_blinds_are_posted_and_first_player_after_big_blind_acts(
         last_full_raise_size=10,
         current_actor=3,
         pending_actors={1, 3, 5, 8},
+        acted_at_bet={},
     )
 
 

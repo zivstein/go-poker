@@ -18,11 +18,11 @@ For the module tree and feature list, see the [README](../README.md). For planne
 | `core/` | Current | Cards, deck, hand evaluation | Tables, players, accounts, APIs, clients |
 | `game/` | Current | Players, seats, table, game lifecycle, hand setup, streets, and the `PokerHand` aggregate | Accounts, persistence, APIs, clients |
 | `game/variants/` | Current | Variant-specific poker rules; first implementation in `game/variants/texas_holdem/`: hole-card and board dealing | Accounts, persistence, APIs, clients |
-| `game/betting/` | Current | Betting-structure–specific rules; first implementation: No-Limit betting (milestone 2): stakes, betting state, chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, legal actions, applying actions, betting-round progression, and later-street round starts (see [Betting](#betting-milestone-2)). Milestone 3 (planned) adds short all-ins and short blinds, raise reopening, the end-of-round collection, and derived main and side pots (see [All-ins and pots](#all-ins-and-pots-milestone-3-planned)) | Accounts, persistence, APIs, clients |
+| `game/betting/` | Current | Betting-structure–specific rules; first implementation: No-Limit betting (milestone 2): stakes, betting state, chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, legal actions, applying actions, betting-round progression, and later-street round starts (see [Betting](#betting-milestone-2)). Milestone 3 extends it: its Cycle 1 is implemented (the nominal current bet, `acted_at_bet`, derived raise rights, and the refined `LegalActions`), while short all-ins and short blinds, the end-of-round collection, and derived main and side pots are still planned (see [All-ins and pots](#all-ins-and-pots-milestone-3-planned)) | Accounts, persistence, APIs, clients |
 | Hand history / events | Planned (milestone 6) | Structured raw record of every hand | APIs, clients |
 | Accounts, persistence, API, clients | Planned (milestones 13+) | Users, storage, networking, presentation | — (they depend on the engine, never the reverse) |
 
-Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` exists (No-Limit betting, built up through milestone 2).
+Paths are relative to `src/go_poker/`. The `game/variants/` and `game/betting/` locations are module-ownership decisions; a package is created only when its first responsibility appears. `game/variants/` exists (Texas Hold'em dealing); `game/betting/` exists (No-Limit betting, built up through milestone 2 and being extended by milestone 3).
 
 ## Core
 
@@ -101,7 +101,7 @@ There is therefore no runtime duplicate-card scan. A test-only card-accounting i
 
 This section records the Milestone 2 design, which is fully implemented under `game/betting/`: `Stakes`, `BettingState`, the player contributions and chip commitment, betting initialization with blind posting, the action model, No-Limit sizing, legal-action calculation, applying actions (`apply_action`), round progression and completion with its early endings, and starting later betting rounds (`start_betting_round`). The behavior it defers (short all-ins, pots, showdown, orchestration, and other betting structures) is listed under [Scope](#scope).
 
-Milestone 3 is planned to change parts of this design: the meaning of the current bet, short all-ins and short blinds, raise reopening, the end-of-round collection that replaces the street-contribution reset, and pots. Those planned changes are recorded in [All-ins and pots](#all-ins-and-pots-milestone-3-planned). Until each one is implemented, this section describes the engine's current behavior.
+Milestone 3 changes parts of this design; its design is recorded in [All-ins and pots](#all-ins-and-pots-milestone-3-planned). Its first cycle is implemented and already reflected here: the current bet as a nominal betting target, the per-round `acted_at_bet` action context with derived raise rights, and the refined `LegalActions` representation. Short all-ins and short blinds, the end-of-round collection that replaces the street-contribution reset, and pots are still planned. Until each one is implemented, this section describes the engine's current behavior.
 
 ### Scope
 
@@ -138,10 +138,11 @@ Betting progress is held in one explicit `BettingState` (`game/betting/state.py`
 
 - the `Street` its current or completed betting round belongs to
 - the hand's `Stakes`, so later rounds can restore the big-blind minimum-bet context
-- the current bet: the street contribution every remaining player must match (milestone 3 redefines it as a nominal betting target; see [The current bet](#the-current-bet))
-- the last full raise size
+- the current bet: the nominal betting target, the street contribution a fully funded player must match. No street contribution is ever above it, but it is not guaranteed to equal the highest one (see [The current bet](#the-current-bet)). Until short all-ins are supported, every blind, call, bet, and raise is full, so in practice it still equals the highest street contribution
+- the last full raise size: the size of the last full bet or raise, the big blind when a round starts and changed only by a full bet or raise (a future short all-in never changes it)
 - the current actor, or none when the round has ended
-- the players still pending action in the current betting round
+- the players still pending action in the current betting round. This answers only who still owes an action; whether a player may bet or raise is derived separately (see [Legal actions](#legal-actions))
+- `acted_at_bet`: for each seat that has acted in the current betting round, the current bet right after that seat's latest action. It is empty when betting is initialized and whenever a round starts, and raise rights are derived from it (see [Raise rights and reopening](#raise-rights-and-reopening))
 
 Players are identified by seat number, which is stable and unique within a hand.
 
@@ -157,6 +158,7 @@ The lifecycle signatures are unchanged: `start_game(table, choose_button) -> Pok
 - sets the last full raise size to the big blind
 - selects the first actor: the first pending player clockwise after the big blind, following `PokerHand.players`
 - builds the pending players: every eligible player, blinds included, subject to [No opponent can respond](#no-opponent-can-respond)
+- starts with an empty `acted_at_bet`, because nobody has acted yet
 
 The intended hand-start sequence is: start the hand → initialize betting (post blinds) → variant hole-card dealing. There is no orchestration abstraction for this sequence yet (milestone 5).
 
@@ -164,22 +166,22 @@ Initialization is rejected, leaving the hand and every stack unchanged, when the
 
 Betting relies on hands containing only players who started the hand with chips (see the start-of-hand chip rule); the betting layer adds no zero-stack or eligibility stack checks of its own (the short-blind check at initialization remains). Eligibility to act comes from the hand flags (`folded`, `all_in`), and `commit_chips` sets `all_in` when a stack reaches zero.
 
-Posting a blind is not an action, so the blinds still owe an action in the preflop round. This is what gives the big blind its option when everyone calls.
+Posting a blind is not an action, so the blinds still owe an action in the preflop round and have no `acted_at_bet` entry until they act. This is what gives the big blind its option when everyone calls, and its right to raise.
 
 ### Actions
 
 The normal action set is `FOLD`, `CHECK`, `CALL`, `BET`, and `RAISE` (`ActionType` in `game/betting/actions.py`). There is no separate `ALL_IN` action.
 
-`BET` and `RAISE` carry a **target** amount: the player's street contribution after the action ("bet to" / "raise to"), never the number of chips added. If a player has contributed 100 on this street and raises to 500, the action amount is `500`, not the additional 400. This semantic is used consistently in engine APIs, tests, and future history and API design. `FOLD`, `CHECK`, and `CALL` carry no amount; the call amount is the current bet minus the player's street contribution.
+`BET` and `RAISE` carry a **target** amount: the player's street contribution after the action ("bet to" / "raise to"), never the number of chips added. If a player has contributed 100 on this street and raises to 500, the action amount is `500`, not the additional 400. This semantic is used consistently in engine APIs, tests, and future history and API design. `FOLD`, `CHECK`, and `CALL` carry no amount; the amount owed is the current bet minus the player's street contribution, and a `CALL` commits it.
 
 An action is an `Action(type, amount=None)` value. Construction checks only its shape and raises `InvalidActionError` otherwise: `BET` and `RAISE` need a positive target amount, and `FOLD`, `CHECK`, and `CALL` must have none. Whether a target is in range for the current hand is decided by the legal actions, and `apply_action` validates a requested action against them.
 
 ### No-Limit sizing
 
-The sizing rules are small No-Limit helpers in `game/betting/no_limit.py` (`min_bet_target`, `min_raise_target`, `max_target`), used by the legal-action calculation.
+The sizing rules are small No-Limit helpers in `game/betting/no_limit.py` (`min_bet_target`, `min_raise_target`, `max_target`), used by the legal-action calculation. The same module holds the No-Limit reopening rule, `has_raise_rights` (see [Raise rights and reopening](#raise-rights-and-reopening)), the only place that rule lives.
 
-- `BET` is used when `current_bet == 0`; the minimum bet target is the big blind.
-- `RAISE` is used when `current_bet > 0`; the minimum raise target is `current_bet + last_full_raise_size`.
+- `BET` is used when `current_bet == 0`; the minimum full bet target is the big blind.
+- `RAISE` is used when `current_bet > 0`; the minimum full raise target is `current_bet + last_full_raise_size`.
 - The maximum target is `street_contribution + stack`. There is no artificial cap to keep a stack above zero.
 - After a full bet or raise, `last_full_raise_size = new_current_bet - previous_current_bet` (set by `apply_action`).
 
@@ -187,22 +189,32 @@ Preflop starts with `current_bet = big_blind` and `last_full_raise_size = big_bl
 
 ### All-in boundary
 
-A normal `CALL`, `BET`, or `RAISE` may use the player's entire remaining stack when it otherwise satisfies the ordinary full-action rules: a call of the full call amount, or a bet or raise to at least the minimum target. When a supported action (or a blind posted in full) leaves `Player.stack == 0`, the player's `all_in` flag becomes true and they owe no further actions in the hand.
+A normal `CALL`, `BET`, or `RAISE` may use the player's entire remaining stack when it otherwise satisfies the ordinary full-action rules: a call of the full amount owed, or a bet or raise to at least the minimum full target. When a supported action (or a blind posted in full) leaves `Player.stack == 0`, the player's `all_in` flag becomes true and they owe no further actions in the hand.
 
-Milestone 2 supports only these full-action all-ins. Because short all-ins are deferred, a call the player cannot cover in full is not legal in Milestone 2, and neither is a bet or raise when the player's maximum target is below the minimum target. Milestone 3 adds those actions together with pots (see [All-ins and pots](#all-ins-and-pots-milestone-3-planned)).
+Milestone 2 supports only these full-action all-ins. Because short all-ins are deferred, a call the player cannot cover in full is not legal in Milestone 2, and neither is a bet or raise when the player's maximum target is below the minimum full target. Milestone 3 adds those actions together with pots (see [All-ins and pots](#all-ins-and-pots-milestone-3-planned)).
 
 ### Legal actions
 
 Legal actions are derived state, calculated from the current hand state on request. No mutable list of legal actions is stored on `PokerHand` or `BettingState`. The calculation communicates:
 
 - whether fold, check, and call are legal
-- the call amount
+- the amount owed, the chips a call commits, and whether the call is all-in
 - whether bet or raise is legal
-- the minimum and maximum target amounts
+- the minimum full target and the maximum (all-in) target
 
-`legal_actions(hand)` (`game/betting/legal_actions.py`) returns a frozen `LegalActions` value for the current actor: `can_fold`, `can_check`, `can_call`, `call_amount`, `can_bet`, `can_raise`, and `min_target` / `max_target`, which are set only when a bet or raise is legal. When the round has no current actor, nothing is legal (every flag false, a call amount of zero, no targets). A hand without a betting state raises `BettingNotInitializedError` (`game/betting/state.py`).
+`legal_actions(hand)` (`game/betting/legal_actions.py`) returns a frozen, flat `LegalActions` value for the current actor:
 
-`FOLD` is legal whenever a live, eligible player is the current actor, including when `CHECK` is also available. `CHECK` is legal when the call amount is zero, and `CALL` when it is positive and the player can cover it. `BET` and `RAISE` additionally require at least one other player who can respond: someone who has not folded, is not all-in, and can still take a future betting action. "Can respond" reuses the betting eligibility predicate (`is_eligible` in `game/betting/rounds.py`: not folded, not all-in); like the rest of the betting layer it adds no zero-stack checks. When every other non-folded player is all-in, the actor may only resolve the outstanding bet (see [No opponent can respond](#no-opponent-can-respond)). The exact representation is an implementation choice within these boundaries.
+- `can_fold`, `can_check`, `can_call`
+- `amount_owed`: the current bet minus the actor's street contribution, 0 when nothing is owed
+- `call_amount`: the chips a `CALL` commits, which is the amount owed when `CALL` is legal and 0 when it is not
+- `call_is_all_in`: `CALL` is legal and uses the actor's whole stack
+- `can_bet`, `can_raise`
+- `min_full_target` (the minimum full bet or raise target) and `max_target` (the all-in target, street contribution plus stack), set only when a bet or raise is legal
+- `short_all_in_target`, always `None` until short all-in bets and raises are supported
+
+The fields' complete meanings, including the short-all-in values milestone 3 adds later, are in [Legal actions with short all-ins](#legal-actions-with-short-all-ins). When the round has no current actor, nothing is legal (every flag false, amounts of zero, no targets). A hand without a betting state raises `BettingNotInitializedError` (`game/betting/state.py`).
+
+`FOLD` is legal whenever a live, eligible player is the current actor, including when `CHECK` is also available. `CHECK` is legal when the amount owed is zero, and `CALL` when it is positive and the player can cover it. `BET` and `RAISE` need the actor's maximum target to reach the minimum full target, raise rights for the actor (see [Raise rights and reopening](#raise-rights-and-reopening)), and at least one other player who can respond: someone who has not folded, is not all-in, and can still take a future betting action. Until short all-ins are supported, every bet or raise is full, so a pending player always has raise rights. "Can respond" reuses the betting eligibility predicate (`is_eligible` in `game/betting/rounds.py`: not folded, not all-in); like the rest of the betting layer it adds no zero-stack checks. When every other non-folded player is all-in, the actor may only resolve the outstanding bet (see [No opponent can respond](#no-opponent-can-respond)). The exact representation is an implementation choice within these boundaries.
 
 ### Action order
 
@@ -224,7 +236,7 @@ A betting round is not complete when "everyone has acted once", because a bet or
 
 Example: A checks, B checks, C bets; A and B now owe an action again.
 
-`apply_action(hand, seat_number, action)` (`game/betting/apply.py`) implements these rules. Before changing anything it rejects a hand without betting (`BettingNotInitializedError`), a seat that is not the current actor, including any action once the round is complete (`NotPlayersTurnError`), and an action that the current legal actions do not allow, including a `BET` or `RAISE` target outside the legal minimum and maximum (`IllegalActionError`); legality comes from `legal_actions`, not a second implementation. It then applies the action: `FOLD` sets `folded`; `CALL` commits the call amount; `BET` or `RAISE` to a target commits the target minus the actor's street contribution and updates the current bet and last full raise size. Chips move only through `commit_chips`, which marks a player who empties their stack all-in. Finally it settles the pending players with the early endings below and passes the action to the next pending player clockwise. `is_round_complete(betting)` (`game/betting/rounds.py`) reports whether nobody is pending, so nobody is to act.
+`apply_action(hand, seat_number, action)` (`game/betting/apply.py`) implements these rules. Before changing anything it rejects a hand without betting (`BettingNotInitializedError`), a seat that is not the current actor, including any action once the round is complete (`NotPlayersTurnError`), and an action that the current legal actions do not allow, including a `BET` or `RAISE` target outside `min_full_target` through `max_target` (`IllegalActionError`); legality comes from `legal_actions`, not a second implementation. It then applies the action: `FOLD` sets `folded`; `CALL` commits the call amount; `BET` or `RAISE` to a target commits the target minus the actor's street contribution and updates the current bet and last full raise size. Every action, a check included, then records the current bet in `acted_at_bet` for the actor. Chips move only through `commit_chips`, which marks a player who empties their stack all-in. Finally it settles the pending players with the early endings below and passes the action to the next pending player clockwise. `is_round_complete(betting)` (`game/betting/rounds.py`) reports whether nobody is pending, so nobody is to act.
 
 A betting round is complete only when every eligible player has responded to the current bet and no action remains pending. Two special cases end a round early: everyone else folding, and no opponent being able to respond (both below).
 
@@ -237,7 +249,7 @@ Both early endings live in one helper (`settle_pending` in `game/betting/rounds.
 When at most one player can still act (every other non-folded player is all-in), there is no further betting, but the hand is not over: unlike when everyone else folds, it can still continue through later streets toward showdown.
 
 - `BET` and `RAISE` are never legal, because no opponent could respond.
-- If that player still owes chips to the current bet, they must resolve it with a supported action: in Milestone 2, `CALL` if they can cover the complete call amount, or `FOLD`. The betting round is complete after that response. If they cannot cover the complete call, that short all-in call is unsupported until milestone 3; Milestone 2 has no partial-call behavior.
+- If that player still owes chips to the current bet, they must resolve it with a supported action: in Milestone 2, `CALL` if they can cover the complete amount owed, or `FOLD`. The betting round is complete after that response. If they cannot cover the complete call, that short all-in call is unsupported until milestone 3; Milestone 2 has no partial-call behavior.
 - If that player owes nothing, the betting round completes automatically, with no current actor and nobody pending. No meaningless `CHECK` is required to close it.
 
 The same rule applies when a round starts, including a later street's round, so such a round is complete as soon as it starts.
@@ -250,6 +262,7 @@ Dealing stays independent from betting. After the variant dealing layer advances
 - requires `hand.street` to differ from `betting_state.street`, then sets `betting_state.street = hand.street`, so the same street's round cannot be started twice
 - resets every player's `street_contribution` to zero and preserves `total_contribution` (in milestone 3 the [end-of-round collection](#end-of-round-collection) takes over this reset)
 - sets `current_bet = 0` and restores the normal minimum-bet context: `last_full_raise_size` returns to the big blind
+- clears `acted_at_bet`, because nobody has acted in the new round
 - builds the pending players from the eligible (non-folded, non-all-in) players
 - chooses the first eligible player clockwise after the button, so heads-up postflop starts with the big blind
 
@@ -276,7 +289,7 @@ There is no `Pot` abstraction in Milestone 2; it would only hold one number. The
 
 ## All-ins and pots (milestone 3, planned)
 
-This section records the approved Milestone 3 design. None of it is implemented yet; the cycle plan is in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). It extends the [Milestone 2 betting design](#betting-milestone-2) so that No-Limit betting and chip accounting are correct for every realistic all-in case, including deep 9-max side pots, and so that future UI, hand history, rake, analytics, and AI can read the state directly without reconstructing poker rules.
+This section records the approved Milestone 3 design; the cycle plan is in [CURRENT_CYCLE.md](CURRENT_CYCLE.md). Cycle 1's parts are implemented: the current bet as a nominal betting target ([The current bet](#the-current-bet)), `acted_at_bet` and derived raise rights ([Raise rights and reopening](#raise-rights-and-reopening)), and the refined `LegalActions` representation ([Legal actions with short all-ins](#legal-actions-with-short-all-ins)). Because short all-ins are not legal yet, those fields still take their full-action values: a call must cover the whole amount owed, `call_amount` equals `amount_owed` when `CALL` is legal, `short_all_in_target` is always `None`, and raise rights never deny a pending player. Short calls, bets, raises, and blinds, the call-target cap when no opponent can respond, the end-of-round collection with the return of unmatched chips, the middle pot and pots, and `is_betting_closed` are still planned. It extends the [Milestone 2 betting design](#betting-milestone-2) so that No-Limit betting and chip accounting are correct for every realistic all-in case, including deep 9-max side pots, and so that future UI, hand history, rake, analytics, and AI can read the state directly without reconstructing poker rules.
 
 ### Milestone 3 scope
 

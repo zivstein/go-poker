@@ -29,9 +29,9 @@ def _validated_target(action: Action, legal: LegalActions) -> int | None:
             if (
                 can_size
                 and target is not None
-                and legal.min_target is not None
+                and legal.min_full_target is not None
                 and legal.max_target is not None
-                and legal.min_target <= target <= legal.max_target
+                and legal.min_full_target <= target <= legal.max_target
             ):
                 return target
             is_legal = False
@@ -45,8 +45,9 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
 
     The action must come from the current actor and be legal for them (see `legal_actions`); a rejection leaves the
     hand unchanged. Check, call and fold settle the actor's obligation; a bet or raise to a target makes every other
-    eligible player owe a response again. The round ends early when only one player has not folded, or when no
-    opponent can respond and nothing is owed. Otherwise the next pending player clockwise acts.
+    eligible player owe a response again. Every action records the current bet right after it in `acted_at_bet`. The
+    round ends early when only one player has not folded, or when no opponent can respond and nothing is owed.
+    Otherwise the next pending player clockwise acts.
     """
     betting = hand.betting
     if betting is None:
@@ -78,5 +79,7 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
         commit_chips(actor, legal.call_amount)
     # A check moves no chips; like every action, it only settles the actor's obligation.
 
+    # Every action, a check included, records the bet the actor has now acted at; raise rights are derived from it.
+    betting.acted_at_bet[seat_number] = betting.current_bet
     betting.pending_actors = settle_pending(hand.players, pending, betting.current_bet)
     betting.current_actor = first_pending_after(hand.players, seat_number, betting.pending_actors)
