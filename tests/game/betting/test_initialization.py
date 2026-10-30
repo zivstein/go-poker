@@ -180,31 +180,37 @@ def test_short_blind_posts_the_whole_stack_and_keeps_the_full_big_blind_bet(
     )
 
 
-def test_heads_up_big_blind_all_in_below_the_small_blind_leaves_the_round_complete(
+def test_heads_up_big_blind_all_in_below_the_small_blind_leaves_the_round_complete_and_collected(
     make_hand: HandFactory, player_snapshot: PlayerSnapshotter, betting: BettingLookup, stakes: Stakes
 ) -> None:
     """Heads-up, the big blind is all-in for 3, less than the small blind's 5. The small blind already has more in
     front than the big blind can contest, so it owes nothing: nobody is pending and the round is complete as soon as
-    betting is initialized. Its extra 2 stay in front (unmatched chips are not returned yet)."""
+    betting is initialized. Initialization collects it at once: the small blind's unmatched 2 go back to its stack and
+    the matched 3 of each blind move into the middle, leaving nothing in front. The current bet stays nominal."""
     hand = make_hand({3: 3, 7: 1000}, button_seat_number=7)
     initialize_betting(hand, stakes)
 
     assert player_snapshot(hand) == {
-        7: (995, 5, 5, False, False),  # button and small blind
-        3: (0, 3, 3, False, True),  # big blind
+        7: (997, 0, 3, False, False),  # button and small blind
+        3: (0, 0, 3, False, True),  # big blind
     }
     assert betting(hand).current_bet == 10
     assert betting(hand).current_actor is None
     assert betting(hand).pending_actors == set()
 
 
-def test_heads_up_small_blind_all_in_leaves_the_round_complete(
-    make_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, stakes: Stakes
+def test_heads_up_small_blind_all_in_leaves_the_round_complete_and_collected(
+    make_hand: HandFactory, player_snapshot: PlayerSnapshotter, betting: BettingLookup, stakes: Stakes
 ) -> None:
-    """When the small blind is all-in by posting and the big blind owes nothing, nobody can respond: no one acts."""
+    """When the small blind is all-in by posting and the big blind owes nothing, nobody can respond: no one acts. The
+    big blind's 5 above the small blind are unmatched and go back to its stack at the collection."""
     hand = make_hand({3: 1000, 7: 5}, button_seat_number=7)
     initialize_betting(hand, stakes)
-    assert by_seat(hand)[7].all_in is True
+
+    assert player_snapshot(hand) == {
+        7: (0, 0, 5, False, True),  # button and small blind
+        3: (995, 0, 5, False, False),  # big blind
+    }
     assert betting(hand).current_actor is None
     assert betting(hand).pending_actors == set()
 

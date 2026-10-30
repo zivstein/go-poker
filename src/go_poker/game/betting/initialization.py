@@ -1,5 +1,6 @@
 from go_poker.game.betting.chips import commit_chips
-from go_poker.game.betting.rounds import first_pending_after, pending_at_round_start
+from go_poker.game.betting.collection import collect_round
+from go_poker.game.betting.rounds import first_pending_after, is_round_complete, pending_at_round_start
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
 from go_poker.game.hand_state import HandPlayerState
@@ -27,7 +28,9 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     short blind), and posting the last chips marks that player all-in. The current bet and last full raise size start
     at the full big blind, whatever the blinds actually posted. Posting a blind is not an action, so nobody has acted
     yet (`acted_at_bet` is empty), every eligible player, blinds included, is pending (subject to the round's early
-    endings, see `settle_pending`), and the first pending player clockwise after the big blind acts first.
+    endings, see `settle_pending`), and the first pending player clockwise after the big blind acts first. When those
+    endings leave nobody pending, the preflop round is complete as soon as the blinds are posted and is collected at
+    once (see `collect_round`), so the part of a blind that nobody can match goes back to its player.
 
     A hand that already has betting or is no longer preflop is rejected before anything changes, leaving it unchanged.
     Blind stacks are not checked: hands contain only players who start with chips (the start-of-hand chip rule), so
@@ -55,3 +58,5 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
         pending_actors=pending,
         acted_at_bet={},
     )
+    if is_round_complete(hand.betting):
+        collect_round(hand.players)

@@ -2,6 +2,7 @@
 
 import copy
 from collections.abc import Callable
+from itertools import pairwise
 
 import pytest
 
@@ -10,7 +11,8 @@ from go_poker.game.betting.actions import Action
 from go_poker.game.betting.apply import apply_action
 from go_poker.game.betting.initialization import initialize_betting
 from go_poker.game.betting.legal_actions import legal_actions
-from go_poker.game.betting.rounds import start_betting_round
+from go_poker.game.betting.pots import middle_pot, pots
+from go_poker.game.betting.rounds import is_round_complete, start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
 from go_poker.game.hand_state import HandPlayerState
@@ -128,10 +130,40 @@ class CheckedHand:
         assert not {hp.seat_number for hp in players if hp.folded or hp.all_in} & betting.pending_actors
         assert betting.current_actor is None or betting.current_actor in betting.pending_actors
         assert (betting.current_actor is None) == (not betting.pending_actors)
+        self._check_accounting()
 
         before = _hand_snapshot(self.hand)
         legal_actions(self.hand)
-        assert _hand_snapshot(self.hand) == before  # legal actions are derived, never stored
+        middle_pot(self.hand)
+        pots(self.hand)
+        assert _hand_snapshot(self.hand) == before  # legal actions and pots are derived, never stored
+
+    def _check_accounting(self) -> None:
+        """Every committed chip is either in front of a player or in the middle, and the pots layer the middle."""
+        players = self.hand.players
+        middle = middle_pot(self.hand)
+        assert middle + sum(hp.street_contribution for hp in players) == sum(hp.total_contribution for hp in players)
+
+        layers = pots(self.hand)
+        assert sum(pot.amount for pot in layers) == middle
+        collected = {hp.seat_number: hp.total_contribution - hp.street_contribution for hp in players}
+        folded = {hp.seat_number for hp in players if hp.folded}
+        levels = sorted({chips for chips in collected.values() if chips > 0})
+        assert len(layers) == len(levels)
+        previous_eligible = {hp.seat_number for hp in players}
+        for pot, (previous, level) in zip(layers, pairwise([0, *levels]), strict=True):
+            assert sum(chips > previous for chips in collected.values()) >= 2  # never a one-contributor pot
+            assert pot.amount > 0
+            assert pot.eligible_seats
+            assert not pot.eligible_seats & folded
+            assert all(collected[seat_number] >= level for seat_number in pot.eligible_seats)
+            assert pot.eligible_seats <= previous_eligible
+            previous_eligible = set(pot.eligible_seats)
+
+        if is_round_complete(self.betting):  # a completed round is collected: nothing in front, nothing unmatched
+            assert all(hp.street_contribution == 0 for hp in players)
+            highest = max(hp.total_contribution for hp in players)
+            assert sum(hp.total_contribution == highest for hp in players) >= 2
 
 
 @pytest.fixture

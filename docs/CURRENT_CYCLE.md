@@ -2,7 +2,7 @@
 
 **Milestone 3: All-ins + Main/Side Pots** (see [ROADMAP.md](ROADMAP.md)) — **CURRENT** (in progress)
 
-Cycles 1 and 2 are complete and Cycle 3 is next. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
+Cycles 1–3 are complete and Cycle 4 is next. The previous milestone, Milestone 2 (Betting Engine + Legal Actions), is complete, and its design is recorded in [ARCHITECTURE.md](ARCHITECTURE.md#betting-milestone-2).
 
 ## Goal
 
@@ -26,8 +26,8 @@ The approved design, ownership rules, invariants, and boundaries this milestone 
 | --- | --- | --- |
 | 1 | Short-all-in state and raise rights | Complete |
 | 2 | Short calls, bets, raises and blinds | Complete |
-| 3 | Accounting, collection and pots | Next (not started) |
-| 4 | Extreme integration hardening | Planned |
+| 3 | Accounting, collection and pots | Complete |
+| 4 | Extreme integration hardening | Next (not started) |
 
 ### Cycle 1 — Short-all-in state and raise rights (complete)
 
@@ -59,7 +59,7 @@ Delivered: `BettingState.acted_at_bet` (recorded by `apply_action` for every act
 
 Delivered: `call_target` in `rounds.py`, the single call-target rule used by `legal_actions` (`amount_owed`) and `settle_pending` (who stays pending when no opponent can respond); `legal_actions` with short all-in calls (`call_amount = min(amount_owed, stack)`), aggression whenever the actor has raise rights, chips beyond the current bet, and an opponent who can respond, and `short_all_in_target` as the only legal target when the all-in is below `min_full_target`; `apply_action` accepting exactly that target, setting `last_full_raise_size` only for a full bet or raise, and committing `call_amount` for a call; short small and big blinds posting `min(blind, stack)` with `ShortBlindAllInNotSupportedError` removed; and `is_betting_closed(hand)` in `rounds.py`. As planned, a completed round keeps its chips in front and returns no unmatched chips until Cycle 3. Tests replace the Milestone 2 short-blind rejection with short-blind posting tests, and add focused tests for the short-call, short-bet, and short-raise legal shapes and their application, the call target against the larger of two all-in opponents, atomic rejection of illegal short all-in actions (including a raise without raise rights after a short all-in), and `is_betting_closed`. The integration checker moved into the betting `conftest.py` and now also asserts that a player is all-in exactly when their stack is empty; `test_all_in_integration.py` adds eight short all-in scenarios, with the Milestone 2 scenarios unchanged. They are the single place for the interactions they prove: a short raise or a short opening bet that does not reopen raising for earlier actors, including a checker (which replaces the hand-built raise-rights gate test), cumulative short all-ins that do, the heads-up short big blind called for what it can contest, and the multiway short big blind that leaves the full big blind owed.
 
-### Cycle 3 — Accounting, collection and pots
+### Cycle 3 — Accounting, collection and pots (complete)
 
 - `return_chips` in `chips.py` is the explicit chip-return path. The amount must be positive and no larger than the player's chips in front. It raises the stack, lowers both contributions, and clears `all_in`.
 - End-of-round collection, run by `apply_action` (and `initialize_betting` when the preflop round starts complete) when a round completes:
@@ -75,6 +75,8 @@ Delivered: `call_target` in `rounds.py`, the single call-target rule used by `le
   - Adjacent layers may have identical eligibility.
   - Depth is arbitrary.
 - Update the Milestone 2 tests whose expectations change: chips in front after a completed round, and the raiser's committed chips after everyone folds.
+
+Delivered: `return_chips` in `chips.py`, the only reverse chip movement, rejecting a non-positive amount (`InvalidChipAmountError`) or more than the chips in front (the new `InsufficientChipsInFrontError`) without changes, and clearing `all_in`; `collect_round` in the new `collection.py`, run by `apply_action` when an action leaves nobody pending and by `initialize_betting` when the posted blinds already complete the preflop round: a sole top contributor gets back the chips above every other participant's highest total contribution (folded players included), then every street contribution resets to zero, while `current_bet`, `last_full_raise_size`, and `acted_at_bet` keep the round's final values; `start_betting_round` no longer resets street contributions; and the new `pots.py` with `middle_pot(hand)` and the frozen `Pot(amount, eligible_seats)` layers from `pots(hand)`, both derived from collected contributions only. Betting decisions are unchanged. Tests cover `return_chips` and its atomic rejections, the collection through real actions (a return measured against a folded total rather than a smaller all-in call, a matched top contribution that returns nothing, and an atomic rejection by the last pending player), the middle pot, and pot layering on hand-built collected contributions (folded dead money, a folded boundary with unchanged eligibility, all-in eligibility, and eight layers from nine contributions). The shared `CheckedHand.check` now also asserts the chip-location and pot invariants after every step: the middle pot plus the chips in front equal the total contributions, the pots add up to the middle pot, each pot has at least two contributors, a positive amount, and eligible seats that have not folded, reach its level, and are a subset of the previous pot's, a completed round has nothing in front and a highest total shared by at least two participants, and the middle pot and pots change nothing. The Milestone 2 and Cycle 2 tests that asserted chips still in front or an uncalled excess still committed now assert the collected state, the returned chips, and the derived pots, and `test_all_in_integration.py` adds a chips-in-front versus middle-pot scenario (a matched call and a short all-in call) and a player who folds after contributing to three pot layers.
 
 ### Cycle 4 — Extreme integration hardening
 

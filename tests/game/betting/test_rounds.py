@@ -50,12 +50,12 @@ def called_around_to_the_flop(started_hand: HandFactory, stacks: dict[int, int],
 # =============================================================================
 
 
-def test_flop_round_resets_street_contributions_and_starts_after_the_button(
+def test_flop_round_starts_with_no_bet_and_the_first_player_after_the_button(
     started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, stakes: Stakes
 ) -> None:
-    """Four-handed, the flop round starts with no street contributions, totals kept, no bet, the big-blind minimum
-    restored, nobody having acted yet (the preflop actions are cleared), everyone pending, and the small blind (first
-    after the button) to act."""
+    """Four-handed, the flop round starts with nothing in front (the preflop round was collected when it completed),
+    totals kept, no bet, the big-blind minimum restored, nobody having acted yet (the preflop actions are cleared),
+    everyone pending, and the small blind (first after the button) to act."""
     hand = called_around_to_the_flop(started_hand, {5: 1000, 8: 1000, 1: 1000, 3: 1000}, button_seat_number=5)
     assert betting(hand).acted_at_bet == {5: 10, 8: 10, 1: 10, 3: 10}
     start_betting_round(hand)

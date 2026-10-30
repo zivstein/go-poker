@@ -1,5 +1,6 @@
 from go_poker.game.betting.actions import Action, ActionType
 from go_poker.game.betting.chips import commit_chips
+from go_poker.game.betting.collection import collect_round
 from go_poker.game.betting.legal_actions import LegalActions, legal_actions
 from go_poker.game.betting.rounds import first_pending_after, is_eligible, is_round_complete, settle_pending
 from go_poker.game.betting.state import BettingNotInitializedError
@@ -55,7 +56,8 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
     the full minimum target and then sets the last full raise size; a short all-in leaves that size unchanged. Every
     action records the current bet right after it in `acted_at_bet`. The round ends early when only one player has
     not folded, or when no opponent can respond and nothing is owed to the call target. Otherwise the next pending
-    player clockwise acts.
+    player clockwise acts. An action that completes the round also collects it (see `collect_round`): unmatched chips
+    go back to their player and every player's chips in front move into the middle.
     """
     betting = hand.betting
     if betting is None:
@@ -93,3 +95,5 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
     betting.acted_at_bet[seat_number] = betting.current_bet
     betting.pending_actors = settle_pending(hand.players, pending, betting.current_bet)
     betting.current_actor = first_pending_after(hand.players, seat_number, betting.pending_actors)
+    if is_round_complete(betting):
+        collect_round(hand.players)

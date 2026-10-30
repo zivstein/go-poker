@@ -15,6 +15,7 @@ from go_poker.game.betting.actions import Action, ActionType
 from go_poker.game.betting.apply import IllegalActionError, NotPlayersTurnError, apply_action
 from go_poker.game.betting.initialization import BettingAlreadyInitializedError, initialize_betting
 from go_poker.game.betting.legal_actions import LegalActions, legal_actions
+from go_poker.game.betting.pots import middle_pot
 from go_poker.game.betting.rounds import (
     BettingRoundAlreadyStartedError,
     BettingRoundNotCompleteError,
@@ -61,7 +62,8 @@ def test_multiway_preflop_limp_raise_and_responses(
 ) -> None:
     """Six-handed from a real game start: UTG limps, the hijack raises, which reopens the action for everyone,
     including the limper and the big blind; the cutoff and small blind fold, everyone else calls, and the round
-    completes after the limper re-acts."""
+    completes after the limper re-acts. Every call matched the raise, so the collection returns nothing and moves all
+    the chips in front, the folded small blind's included, into the middle."""
     table = Table(9)
     for seat_number, stack in {1: 1000, 2: 1500, 4: 800, 5: 2000, 7: 1200, 9: 900}.items():
         table.sit_in(Player(f"P{seat_number}", stack=stack), seat_number)
@@ -76,13 +78,14 @@ def test_multiway_preflop_limp_raise_and_responses(
     h.act((7, CALL))
 
     assert player_snapshot(h.hand) == {
-        2: (1460, 40, 40, False, False),
-        4: (795, 5, 5, True, False),
-        5: (1960, 40, 40, False, False),
-        7: (1160, 40, 40, False, False),
-        9: (860, 40, 40, False, False),
+        2: (1460, 0, 40, False, False),
+        4: (795, 0, 5, True, False),
+        5: (1960, 0, 40, False, False),
+        7: (1160, 0, 40, False, False),
+        9: (860, 0, 40, False, False),
         1: (1000, 0, 0, True, False),
     }
+    assert middle_pot(h.hand) == 165
     assert h.betting == BettingState(
         street=Street.PREFLOP,
         stakes=stakes,
@@ -102,7 +105,7 @@ def test_bet_after_checks_reopens_action_for_the_checkers(
     stakes: Stakes,
 ) -> None:
     """On a dealt flop, three players check and the button bets: all three checkers owe a response again, and the
-    round completes once they have called or folded."""
+    round completes once they have called or folded. The matched bets are collected into the middle."""
     h = checked(make_hand({5: 1000, 8: 1000, 1: 1000, 3: 1000}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(stakes)
     h.act((3, CALL), (5, CALL), (8, CALL), (1, CHECK))
@@ -113,11 +116,12 @@ def test_bet_after_checks_reopens_action_for_the_checkers(
     h.act((8, CALL), (1, FOLD), (3, CALL))
 
     assert player_snapshot(h.hand) == {
-        5: (960, 30, 40, False, False),
-        8: (960, 30, 40, False, False),
+        5: (960, 0, 40, False, False),
+        8: (960, 0, 40, False, False),
         1: (990, 0, 10, True, False),
-        3: (960, 30, 40, False, False),
+        3: (960, 0, 40, False, False),
     }
+    assert middle_pot(h.hand) == 130
     assert is_round_complete(h.betting)
 
 
@@ -219,15 +223,17 @@ def test_full_raise_and_full_call_all_ins_are_skipped_on_later_streets(
 # =============================================================================
 
 
-def test_everyone_folding_to_a_raise_ends_the_round_without_payout(
+def test_everyone_folding_to_a_raise_returns_the_uncalled_chips_without_payout(
     checked: Callable[[PokerHand], CheckedHand],
     make_hand: HandFactory,
     player_snapshot: PlayerSnapshotter,
     hand_snapshot: HandSnapshotter,
     stakes: Stakes,
 ) -> None:
-    """After UTG raises, everyone else folds: the round ends at once, the raiser's chips stay committed (no payout
-    in Milestone 2), and any further action is rejected without changes."""
+    """After UTG raises to 30, everyone else folds: the round ends at once and is collected. The raiser's 20 above the
+    big blind are uncalled and go back to its stack, the blinds' 5 and 10 and the raiser's matching 10 are collected
+    into the middle, nothing is awarded (payout belongs to settlement), and any further action is rejected without
+    changes."""
     h = checked(make_hand({5: 1000, 8: 1000, 1: 1000, 3: 1000}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(stakes)
     h.act((3, raise_to(30)), (5, FOLD), (8, FOLD), (1, FOLD))
@@ -235,10 +241,11 @@ def test_everyone_folding_to_a_raise_ends_the_round_without_payout(
     assert (h.betting.current_actor, h.betting.pending_actors) == (None, set())
     assert player_snapshot(h.hand) == {
         5: (1000, 0, 0, True, False),
-        8: (995, 5, 5, True, False),
-        1: (990, 10, 10, True, False),
-        3: (970, 30, 30, False, False),
+        8: (995, 0, 5, True, False),
+        1: (990, 0, 10, True, False),
+        3: (990, 0, 10, False, False),
     }
+    assert middle_pot(h.hand) == 25
 
     before = hand_snapshot(h.hand)
     with pytest.raises(NotPlayersTurnError):
@@ -284,11 +291,12 @@ def test_last_player_calls_all_in_opponents_and_later_rounds_start_complete(
 # =============================================================================
 
 
-def test_later_streets_reset_street_contributions_and_skip_folded_players(
+def test_later_streets_start_with_nothing_in_front_and_skip_folded_players(
     checked: Callable[[PokerHand], CheckedHand], make_hand: HandFactory, stakes: Stakes
 ) -> None:
-    """From preflop through the river, each new round resets street contributions, keeps totals, restores the
-    big-blind minimum and starts with the first live player after the button, skipping players who folded."""
+    """From preflop through the river, each completed round is collected, so each new round starts with nothing in
+    front, keeps totals, restores the big-blind minimum and starts with the first live player after the button,
+    skipping players who folded."""
     h = checked(make_hand({5: 800, 8: 1200, 1: 1000, 3: 600}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(stakes)
     seats = h.seats

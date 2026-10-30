@@ -15,6 +15,7 @@ type HandFactory = Callable[..., PokerHand]
 type SeatLookup = Callable[[PokerHand], dict[int, HandPlayerState]]
 type BettingLookup = Callable[[PokerHand], BettingState]
 type HandSnapshotter = Callable[[PokerHand], object]
+type PlayerSnapshotter = Callable[[PokerHand], dict[int, tuple[int, int, int, bool, bool]]]
 type Play = Callable[..., None]
 
 FOLD = Action(ActionType.FOLD)
@@ -340,17 +341,22 @@ def test_checks_and_a_bet_record_the_current_bet_right_after_them(
 # =============================================================================
 
 
-def test_everyone_else_folding_ends_the_round_without_awarding_chips(
-    started_hand: HandFactory, by_seat: SeatLookup, betting: BettingLookup, play: Play
+def test_everyone_else_folding_ends_the_round_and_returns_the_uncalled_chips_without_awarding_any(
+    started_hand: HandFactory, player_snapshot: PlayerSnapshotter, betting: BettingLookup, play: Play
 ) -> None:
-    """When the button and small blind fold, the big blind is the only player left: nobody acts, no chips move."""
+    """When the button and small blind fold, the big blind is the only player left: nobody acts, and the round is
+    collected. The big blind's 5 above the small blind are uncalled and go back to its stack; the other 10 are
+    collected into the middle and not awarded to anyone (payout belongs to settlement)."""
     hand = started_hand({1: 1000, 2: 1000, 3: 1000}, button_seat_number=1)
     play(hand, (1, FOLD), (2, FOLD))
 
     assert betting(hand).current_actor is None
     assert betting(hand).pending_actors == set()
-    big_blind = by_seat(hand)[3]
-    assert (big_blind.player.stack, big_blind.total_contribution) == (990, 10)
+    assert player_snapshot(hand) == {
+        1: (1000, 0, 0, True, False),  # button
+        2: (995, 0, 5, True, False),  # small blind
+        3: (995, 0, 5, False, False),  # big blind
+    }
 
 
 def test_player_owing_chips_to_all_in_opponents_must_call_or_fold_then_round_completes(

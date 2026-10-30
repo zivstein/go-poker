@@ -99,10 +99,11 @@ def start_betting_round(hand: PokerHand) -> None:
     """Start the betting round for the street the dealing layer has moved the hand to.
 
     The previous round must be complete and the hand must be on a different street than the betting state; the street
-    sequence itself belongs to the variant's dealing rules and is not checked here. Street contributions reset to zero
-    (total contributions are kept), the current bet is zero, the last full raise size returns to the big blind, and
-    nobody has acted yet, so `acted_at_bet` is cleared. Every eligible player is pending, and the first pending player
-    clockwise after the button acts first, so heads-up the big blind acts first. A rejection leaves the hand unchanged.
+    sequence itself belongs to the variant's dealing rules and is not checked here. A completed round has already been
+    collected (see `collect_round`), so nobody has chips in front. The current bet is zero, the last full raise size
+    returns to the big blind, and nobody has acted yet, so `acted_at_bet` is cleared. Every eligible player is
+    pending, and the first pending player clockwise after the button acts first, so heads-up the big blind acts first.
+    A rejection leaves the hand unchanged.
     """
     betting = hand.betting
     if betting is None:
@@ -112,8 +113,6 @@ def start_betting_round(hand: PokerHand) -> None:
     if hand.street is betting.street:
         raise BettingRoundAlreadyStartedError(f"The {hand.street.value} betting round has already started")
 
-    for hand_player in hand.players:
-        hand_player.street_contribution = 0
     betting.street = hand.street
     betting.current_bet = 0
     betting.last_full_raise_size = betting.stakes.big_blind
