@@ -20,11 +20,12 @@ Do not add AI/Claude attribution, Co-Authored-By trailers, generated-by text, or
 
 ## Verification
 
-For code or test changes, the standard verification is:
+For code or test changes, the standard verification is one command:
 
-- `uv run pytest`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
+- `uv run scripts/verify.py`
+
+It runs Ruff check, Ruff format check, mypy, and pytest, keeps their real exit codes, and ends with `VERIFY: PASS` or `VERIFY: FAIL`. Only `VERIFY: PASS` with exit code 0 passes. Run it directly; do not pipe or truncate it.
+
+Every gate (Engineer delivery, QA, Reviewer, Lead final verification, and `/finish-cycle`) runs it independently, without `--fix`. While implementing, the Engineer may run `uv run scripts/verify.py --fix`, which first rewrites files with Ruff's fixes and formatting.
 
 Never hide, weaken, or bypass failures.

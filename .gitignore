@@ -31,3 +31,7 @@ __pycache__/
 # Coverage
 .coverage
 htmlcov/
+
+# Machine-local Claude Code settings and usage metrics (never commit)
+.claude/settings.local.json
+.claude/usage/

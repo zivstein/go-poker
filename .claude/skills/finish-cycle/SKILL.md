@@ -1,62 +1,29 @@
 ---
 name: finish-cycle
-description: Verify, commit, push, and close already-approved completed work.
+description: Commit and push already-approved completed work from its closeout manifest.
 argument-hint: "[optional commit message]"
 disable-model-invocation: true
-model: sonnet
 effort: medium
 ---
 
 # Finish Cycle
 
-Invocation is explicit user approval to commit and push the current approved closeout only. It does not authorize pushing older local commits.
+Invocation is the user's explicit approval to commit and push the work in the latest closeout manifest only. It does not authorize pushing older local commits or any other change.
 
-Follow the closeout policy in `docs/ENGINEERING_PROCESS.md`.
+`scripts/finish_cycle.py` performs and checks the whole Git closeout and stops without committing or pushing on anything unexpected. Do not run Git commands that change state yourself.
 
-## Git Preflight
+## Steps
 
-Before staging or committing:
+1. Take the closeout manifest from the latest Cycle Report in this conversation. If there is none, or the work changed after that report, stop and say so. Never build a manifest from `git status`.
+2. If `$ARGUMENTS` is non-empty, use it exactly as the `message:` line. Otherwise keep the manifest's message.
+3. Run the script once, passing the manifest through a quoted heredoc so the shell does not interpret it:
 
-1. Determine the current branch and its upstream.
-2. Fetch the upstream so the comparison is current.
-3. Stop if the branch is detached or has no upstream.
-4. Stop if the branch is ahead of, behind, or diverged from its upstream. List any pre-existing unpushed commits by hash and message instead of pushing them.
+       python3 scripts/finish_cycle.py <<'MANIFEST'
+       message: <commit message>
+       path: <path>
+       MANIFEST
 
-## Closeout
-
-1. Inspect Git state, including untracked files, and confirm only approved work will be committed.
-2. Run the standard verification from `CLAUDE.md`.
-3. Stage only approved files, by explicit path.
-4. If `$ARGUMENTS` is non-empty, use it exactly as the commit message. Otherwise derive a concise Conventional Commit message from the approved changes.
-5. Commit.
-6. Verify the branch is now exactly one commit ahead of its upstream and that commit is the one just created.
-7. Push the current branch normally.
-8. Verify the push, the upstream state, and the working tree.
-
-Stop and report instead of committing or pushing when:
-
-- verification fails;
-- approved scope is unclear;
-- unrelated changes cannot be safely separated;
-- Git state is unsafe or does not match the checks above.
-
-Never:
-
-- force-push;
-- rewrite history;
-- amend;
-- reset;
-- restore unrelated changes;
-- stash unrelated changes;
-- skip hooks or checks;
-- include unrelated or machine-local files.
-
-Finish with:
-
-    SESSION COMPLETE
-    Commit: <hash> <message>
-    Branch: <branch>
-    Push: <status>
-    Working tree: <status>
+4. If it prints `SESSION COMPLETE`, finish with its final block exactly as printed.
+5. If it stops, report its reason and Git state, explain the likely cause from this conversation, and stop. Do not retry with a different manifest and do not repair Git state; the user decides the next step.
 
 Do no further project work after `SESSION COMPLETE`.

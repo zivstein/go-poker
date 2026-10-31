@@ -237,9 +237,18 @@ Lead reports:
 - Plan vs implementation;
 - deferred work;
 - proposed engineering-process improvements discovered during the Cycle;
-- Git state.
+- Git state;
+- the closeout manifest, last.
 
 Keep reports proportional to the work.
+
+The closeout manifest is the proposed commit message and every path the Cycle commit will contain, in the exact form `/finish-cycle` passes to `scripts/finish_cycle.py`:
+
+    message: feat: add continuous Hold'em game
+    path: src/go_poker/game/variants/texas_holdem/game.py
+    path: tests/game/variants/texas_holdem/test_holdem_game.py
+
+It lists every changed path in the working tree, including deleted files and both sides of a rename. The script commits nothing unless the working tree's changes match it exactly.
 
 ## Ownership
 
@@ -300,15 +309,17 @@ Routing is a default, not a quality ceiling.
 | Work | Default |
 | --- | --- |
 | milestone architecture / difficult design | Opus, `xhigh`, Plan Mode |
-| normal Cycle Lead | `opusplan`, `high` |
+| normal Cycle Lead | Opus, `high`, for the whole session |
 | Engineer | Sonnet, `high` |
 | QA Engineer | Sonnet, `high` |
 | Reviewer | Opus, `high` |
-| mechanical work | Sonnet or Haiku, `medium` |
+| mechanical work in a fresh subagent | Sonnet or Haiku, `medium` |
 | difficult debugging / ambiguous cross-cutting work | Opus, `xhigh` |
 | exceptional correctness-critical reasoning | `max`, as an explicit escalation |
 
 Use model-family aliases rather than pinned versions unless a concrete reason requires otherwise.
+
+A session keeps one model. Prompt caches are per model, so switching a large session's model for a skill or a step rewrites its whole context into a fresh cache, which usually costs more than the cheaper model saves. Skills do not set `model`; they inherit the session model. Fresh subagents start with a small context and keep their configured models.
 
 Do not remove quality gates to save usage.
 
@@ -350,11 +361,19 @@ Task prompts should normally contain only:
 
 Detailed company/reference docs under `docs/company/` are loaded only for Meta work, organization design, onboarding, or AI-engineering analysis.
 
+### Usage Measurement
+
+`scripts/usage_report.py` summarizes this project's local Claude Code session transcripts: Lead phases (planning, execution, finish), agents, models, context, cache, and verification signals. Run it after a Cycle when measuring workflow cost.
+
+- Costs appear only with a local pricing file; prices are not recorded in process docs.
+- 5-hour and weekly percentages are recorded only when read from the app's usage display, never estimated.
+- Pricing and history live in the git-ignored `.claude/usage/`; personal usage data never enters the repository.
+
 ## Cycle Closeout
 
-Only the user invokes `/finish-cycle`; the Lead never invokes it. Invoking it is the user's approval to commit and push the completed, approved work.
+Only the user invokes `/finish-cycle`; the Lead never invokes it. Invoking it is the user's approval to commit and push the work in the latest Cycle Report's closeout manifest. A non-empty `/finish-cycle` argument replaces the manifest's commit message.
 
-The skill owns the mechanical closeout.
+The skill passes the manifest to `scripts/finish_cycle.py`, which performs and checks the whole Git closeout and stops without committing or pushing on anything unexpected. The script's docstring lists its checks. No role runs the script, commits, or pushes outside `/finish-cycle`.
 
 After it returns `SESSION COMPLETE`:
 
@@ -398,6 +417,7 @@ Control/process files include:
 - `docs/ENGINEERING_PROCESS.md`;
 - `.claude/agents/`;
 - `.claude/skills/`;
+- workflow tooling under `scripts/` (verification, closeout, and usage measurement);
 - future hooks/config that change AI-team behavior.
 
 They are not modified during feature work.

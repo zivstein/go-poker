@@ -111,10 +111,9 @@ Requires Python 3.14+ and [`uv`](https://docs.astral.sh/uv/).
 
     uv sync
 
-    uv run pytest
-    uv run ruff check .
-    uv run ruff format --check .
-    uv run mypy src
+    uv run scripts/verify.py
+
+This runs Ruff check, Ruff format check, mypy, and pytest, and ends with `VERIFY: PASS` or `VERIFY: FAIL`.
 
 Coverage:
 

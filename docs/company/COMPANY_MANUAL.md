@@ -400,7 +400,7 @@ Current strategy:
     → Opus xhigh
 
     normal Cycle Lead
-    → opusplan high
+    → Opus high, for the whole session
 
     Engineer
     → Sonnet high
