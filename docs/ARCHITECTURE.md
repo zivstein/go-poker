@@ -376,7 +376,7 @@ All-in players remain live and eligible for pots.
 
 ## Chip Accounting
 
-There are three relevant chip locations.
+Before settlement, there are three relevant chip locations.
 
 ### Behind
 
@@ -395,6 +395,10 @@ These chips are committed in the current betting round but not yet collected.
 Summed across players, this is the derived `middle_pot`.
 
 `total_contribution` is the hand-wide source of truth for chips committed and not returned.
+
+### After Settlement
+
+After settlement, [payout](#payout) has moved the contested chips into stacks. The contributions, the collected amounts, and the middle pot are unchanged history of what was contested, and `hand.settlement` records that they were paid. They are not additional physical chips and must not be added to stacks: the chips on the table are then the stacks alone.
 
 ### Chip Movement
 
@@ -431,7 +435,7 @@ Pots are derived values rather than mutable stored state.
 
 `Pot(amount, eligible_seats)`
 
-`middle_pot(hand)` contains collected chips only.
+`middle_pot(hand)` contains collected chips only. For `pots(hand)` and `middle_pot(hand)` after settlement, see [After Settlement](#after-settlement).
 
 `pots(hand)` derives layers from each participant's collected contribution.
 
@@ -512,6 +516,8 @@ Across the hand:
 and:
 
 `sum(pot.amount) == middle_pot`
+
+These remain true after settlement as accounting identities over the unchanged contributions, not as physical chip conservation. After settlement, current chips are conserved as `sum(player.stack) == sum(starting_chips)`.
 
 Other invariants:
 

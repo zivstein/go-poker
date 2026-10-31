@@ -26,8 +26,10 @@ def middle_pot(hand: PokerHand) -> int:
     """The chips collected into the middle from completed betting rounds. Derived on request, never stored.
 
     It counts every player's collected contribution, folded players' included, and never the chips still in front of
-    the players in the current round. It is the physical, displayed pot and the boundary a future rake takes its share
-    from. It is not the pot-sizing base of a future Pot-Limit structure, which may need to count chips in front.
+    the players in the current round. Before settlement it is the physical, displayed pot and the boundary a future
+    rake takes its share from. After settlement it is unchanged and describes what was contested; `hand.settlement`
+    records that it was paid. It is not the pot-sizing base of a future Pot-Limit structure, which may need to count
+    chips in front.
     """
     return sum(_collected_contribution(hand_player) for hand_player in hand.players)
 
