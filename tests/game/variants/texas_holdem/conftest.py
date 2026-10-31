@@ -50,14 +50,12 @@ class StackedRandom(Random):
         x[:] = rest + list(reversed(self._draw_order))
 
 
-def _stacked_hand(
-    holes: dict[int, str], board: str, button: int = BUTTON, stacks: dict[int, int] | None = None
-) -> PokerHand:
-    """A hand of the seats in `holes` (button seat 1 unless given) whose hole cards and board are the given ones once
-    dealt. Every seat in the hand needs hole cards, so `holes` also says who plays.
+def _draw_order(holes: dict[int, str], board: str, button: int = BUTTON) -> list[Card]:
+    """The cards in the order a hand of the seats in `holes` with this button draws them, so that the hole cards and
+    board are the given ones once dealt. Every seat in the hand needs hole cards, so `holes` also says who plays.
 
-    Every seat starts with STARTING_CHIPS unless `stacks` gives its chips. The hole cards are dealt one per player per
-    round starting left of the button; each street burns one card first, which here are cards nobody else uses.
+    The hole cards are dealt one per player per round starting left of the button; each street burns one card first,
+    which here are cards nobody else uses.
     """
     hole_cards = {seat: _cards(text) for seat, text in holes.items()}
     board_cards = _cards(board)
@@ -69,6 +67,19 @@ def _stacked_hand(
 
     draw_order = [hole_cards[seat][round_index] for round_index in range(HOLE_CARD_COUNT) for seat in deal_order]
     draw_order += [next(burns), *board_cards[:3], next(burns), board_cards[3], next(burns), board_cards[4]]
+    return draw_order
+
+
+def _stacked_hand(
+    holes: dict[int, str], board: str, button: int = BUTTON, stacks: dict[int, int] | None = None
+) -> PokerHand:
+    """A hand of the seats in `holes` (button seat 1 unless given) whose hole cards and board are the given ones once
+    dealt. Every seat in the hand needs hole cards, so `holes` also says who plays.
+
+    Every seat starts with STARTING_CHIPS unless `stacks` gives its chips. See `_draw_order` for the dealing.
+    """
+    assignments = assign_hand_seats(tuple(sorted(holes)), button)
+    draw_order = _draw_order(holes, board, button)
 
     deck = Deck()
     deck.shuffle(_rng=StackedRandom(draw_order))
@@ -82,6 +93,22 @@ def _stacked_hand(
         for seat, assignment in assignments.items()
     )
     return PokerHand(players=players, deck=deck)
+
+
+class DeckQueue(Random):
+    """A shuffle that stacks each new deck with the next queued draw order, one order per hand."""
+
+    def __init__(self, draw_orders: list[list[Card]]) -> None:
+        super().__init__()
+        self._pending = list(draw_orders)
+
+    def shuffle(self, x: MutableSequence[Any]) -> None:
+        assert self._pending, "a hand was started without a queued deck"
+        StackedRandom(self._pending.pop(0)).shuffle(x)
+
+    @property
+    def unused(self) -> int:
+        return len(self._pending)
 
 
 def _deal_to(hand: PokerHand, street: Street) -> None:
@@ -103,3 +130,22 @@ def stacked_hand() -> Callable[..., PokerHand]:
 @pytest.fixture
 def deal_to() -> Callable[[PokerHand, Street], None]:
     return _deal_to
+
+
+@pytest.fixture
+def draw_order() -> Callable[..., list[Card]]:
+    return _draw_order
+
+
+@pytest.fixture
+def queue_decks(monkeypatch: pytest.MonkeyPatch) -> Callable[..., DeckQueue]:
+    """Queue one stacked draw order per hand: the lifecycle's next shuffles use them in turn, through Deck's own
+    `_rng` seam, and fail when more hands start than were queued."""
+
+    def queue(*draw_orders: list[Card]) -> DeckQueue:
+        rng = DeckQueue(list(draw_orders))
+        original = Deck.shuffle
+        monkeypatch.setattr(Deck, "shuffle", lambda deck, *, _rng=None: original(deck, _rng=rng))
+        return rng
+
+    return queue

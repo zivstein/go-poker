@@ -48,6 +48,12 @@ The engine is intentionally independent from persistence, networking, and presen
 - Uncontested wins and showdowns
 - Per-pot winners, ties, and odd-chip allocation
 - Chip payout and an immutable stored settlement
+- Interactive SHOW / MUCK showdown on the river, with automatic all-in showdowns
+
+### Hand and Game Orchestration
+
+- Automatic hand orchestration: after each action the engine collects betting rounds, deals streets, runs out the board, starts the showdown, and settles
+- Continuous `HoldemGame` loop: start the game once, play a hand through `act`, then `next_hand`, with busted players skipped and new players entering between hands
 
 ### Quality
 
@@ -68,7 +74,7 @@ The engine is intentionally independent from persistence, networking, and presen
         ├── betting/           No-Limit betting + pots
         ├── settlement         pot awards + payout
         └── variants/
-            └── texas_holdem/  Hold'em-specific dealing + showdown
+            └── texas_holdem/  Hold'em dealing, showdown, hand_flow (one hand), game (continuous HoldemGame)
 
 The engine owns poker rules.
 
@@ -116,7 +122,7 @@ Coverage:
 
 ## Project Status
 
-The Current Capabilities above describe what the engine supports today. Automatic board runout and a complete automatic hand loop, structured history, persistence, API, networking, and clients are not implemented yet.
+The Current Capabilities above describe what the engine supports today. Structured hand history, persistence, API, networking, and clients are not implemented yet.
 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — authoritative milestone status
 - [`docs/CURRENT_CYCLE.md`](docs/CURRENT_CYCLE.md) — active work

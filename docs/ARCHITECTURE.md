@@ -476,6 +476,7 @@ Settlement turns the contested pots into stack payouts and records the result. T
 | `game/showdown.py` | variant-agnostic: `Showdown`, `ShowdownKind`, `ShowdownAction`, the derived showdown state, the turn rule `Showdown.decide` and `NotShowdownTurnError`, canonical seat order and the decision-order helper (see [Showdown](#showdown)); imports neither `settlement.py` nor `poker_hand.py` |
 | `game/variants/texas_holdem/showdown.py` | Hold'em: the internal showdown classification and readiness rule, the internal `_showdown_ranks`, the public `start_showdown`, `apply_showdown_action` and `settle_hand`, `IncompleteBoardError`, `ShowdownNotReadyError`, `UncontestedHandError`, `ShowdownAlreadyStartedError`, `ShowdownNotStartedError`, `ShowdownIncompleteError` |
 | `game/variants/texas_holdem/hand_flow.py` | Hold'em: single-hand orchestration over the operations above (see [Hand Flow](#hand-flow)) |
+| `game/variants/texas_holdem/game.py` | Hold'em: `HoldemGame`, the continuous game over the lifecycle and `hand_flow`, and `HandInProgressError` (see [Hold'em Game](#holdem-game)) |
 
 `settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API. Public hand strength is not exposed: `_showdown_ranks(hand, seats)` is internal.
 
@@ -592,6 +593,35 @@ Each low-level operation and `begin_hand` share one private validator per operat
 
 Atomicity is narrow. The expected public precondition and validation rejections of `begin_hand` and `act` leave the hand unchanged. Once valid execution begins, an unexpected internal engine defect raised later, for example while advancing, propagates; there is no rollback or transaction guarantee.
 
+### Hold'em Game
+
+`game/variants/texas_holdem/game.py` runs a table hand after hand. `HoldemGame(table, stakes)` composes `game_lifecycle` and `hand_flow` and holds only the table, the stakes and the current hand. The contract is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md); the constructor changes nothing.
+
+It owns no button, participation, turn, legal-action or settlement rule, and stores no phase, actor or "started" flag. `hand is None` is the only sign that the instance has not started, and a hand is finished exactly when `hand.settlement is not None`. The stakes are fixed for the instance's lifetime, as current behavior; any change is a future decision tracked in the [roadmap](ROADMAP.md).
+
+Public surface:
+
+- `start(choose_button)`: `start_game`, then `begin_hand`; sets and returns the first hand;
+- `next_hand()`: `start_next_hand`, then `begin_hand`; sets and returns the next hand;
+- `act(seat, action)`: `hand_flow.act` on the current hand, unchanged; returns `None`;
+- `hand`: the current `PokerHand`, read-only, `None` before `start`.
+
+A returned hand is settled (the blinds alone can end it) or waits for a betting actor or showdown decider (see `current_actor` under [Hand Flow](#hand-flow)).
+
+Rejections, checked in this order, each leaving the table, the players, `game.hand` and the hand unchanged:
+
+- `start`: a game that already has a hand, settled or not, raises `GameAlreadyStartedError`, before anything else; then the errors of `start_game` pass through. `start` is a one-time operation per instance, never a reset or restart, even when no `READY` player is seated any more;
+- `next_hand`: `GameNotStartedError` before `start`; `HandInProgressError` while the current hand is not settled; then the errors of `start_next_hand` pass through unchanged;
+- `act`: `GameNotStartedError` before `start`; then the errors of `hand_flow.act`, including `HandAlreadySettledError` for a settled hand.
+
+`game.hand` is replaced only after both the lifecycle call and `begin_hand` succeed. Atomicity is narrow, as in [Hand Flow](#hand-flow): the lifecycle rolls back its own changes, but an unexpected engine defect raised after it returned propagates with no rollback.
+
+There is no game-over state. With busts only, `next_hand` fails with `InvalidPlayerCount` when fewer than two players can play, and nothing changes; seating a new player with chips lets it succeed. The lifecycle's `GameNotStartedError` arises from `next_hand` only when status or seating changes (for example sitting out or standing up the remaining `READY` players with chips) leave no `READY` player with chips. If `next_hand` cannot proceed because of seating or status configuration, the caller corrects that configuration; `start` is not the recovery path.
+
+Caller precondition, not enforced ([ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md) §9): during a hand, do not stand up a hand participant or directly change a participant's stack. A status change during a hand affects only later hands. Mixing this level with low-level calls on `game.hand` is not supported.
+
+A `Table` is not locked to one `HoldemGame`. Driving the same table through multiple `HoldemGame` instances is unsupported; exclusive table/session ownership is deferred to a later session/platform boundary.
+
 ### Payout
 
 `_settle` derives the pots, awards, and settlement before changing anything. It then adds each seat's payout to its stack, clears `all_in` for every paid seat, and stores the settlement on the hand.
@@ -614,6 +644,8 @@ Atomicity is narrow. The expected public precondition and validation rejections 
 - `settle_hand` (the internal `_settle` also keeps its own check)
 - `begin_hand`
 - `act`
+
+`HoldemGame.act` is guarded through `hand_flow.act`.
 
 A rejection leaves the hand unchanged. The guard comes first because a payout can clear `all_in` and make a settled hand look open to further dealing or betting.
 
@@ -647,6 +679,7 @@ Other invariants:
 
 - a participant is `all_in` exactly when their stack is zero, before and after payout;
 - a settled hand (`hand.settlement is not None`) is rejected first by every public hand-level mutation entry point, leaving it unchanged;
+- across a `HoldemGame`, `sum(player.stack)` over the seated players is conserved from hand to hand, absent caller seating changes (a player who sits down or stands up takes their chips with them);
 - under `hand_flow`, every successful `begin_hand` or `act` ends with a betting actor, a showdown decider, or a settlement;
 - `hand.showdown` is `None` or its `order` is exactly the non-folded seats; an `ALL_IN` showdown has its seats in canonical order and no decisions; decisions are only added, one at a time, never once complete; a mucked seat is never folded;
 - a settled contested hand has a complete showdown; an uncontested hand has none;
