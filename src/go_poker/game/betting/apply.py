@@ -54,7 +54,8 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
     Check, call and fold settle the actor's obligation; a call commits the legal call amount, which may be a short
     all-in below the current bet, and never changes the current bet. A bet or raise to a target makes it the current
     bet and makes every other eligible player owe a response again. It is full when the target reaches the full
-    minimum target and then sets the last full raise size; a short all-in leaves that size unchanged. Every action
+    minimum target and then sets the last full raise size; a short all-in leaves that size unchanged. A bet or
+    raise, a short all-in one included, also makes the actor the round's last aggressor. Every action
     records the current bet right after it in `acted_at_bet`. The round ends early when only one player has not
     folded, or when no opponent can respond and nothing is owed to the call target. Otherwise the next pending player
     clockwise acts. An action that completes the round also collects it (see `collect_round`): unmatched chips go back
@@ -82,6 +83,7 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
         if legal.min_full_target is not None and target >= legal.min_full_target:
             betting.last_full_raise_size = target - betting.current_bet
         betting.current_bet = target
+        betting.last_aggressor = seat_number
         pending = {
             hand_player.seat_number
             for hand_player in hand.players

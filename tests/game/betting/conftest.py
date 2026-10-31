@@ -110,6 +110,7 @@ class CheckedHand:
         self.acted = set()
         # The preflop round starts at the full big blind, whatever the blinds actually posted.
         assert (self.betting.current_bet, self.betting.last_full_raise_size) == (stakes.big_blind, stakes.big_blind)
+        assert self.betting.last_aggressor is None
         self.check()
 
     def act(self, *actions: tuple[int, Action]) -> None:
@@ -117,9 +118,14 @@ class CheckedHand:
             legal = legal_actions(self.hand)
             bet_before = self.betting.current_bet
             full_raise_before = self.betting.last_full_raise_size
+            aggressor_before = self.betting.last_aggressor
             apply_action(self.hand, seat_number, action)
             self.acted.add(seat_number)
             self._check_betting_context(action, legal, bet_before, full_raise_before)
+            # Only a bet or raise, a short all-in one included, makes its actor the round's last aggressor.
+            assert self.betting.last_aggressor == (
+                seat_number if action.type in AMOUNT_ACTION_TYPES else aggressor_before
+            )
             self.check()
 
     def next_street(self) -> None:
@@ -129,6 +135,7 @@ class CheckedHand:
         self.acted = set()
         # A later round starts unopened, with the big-blind minimum restored.
         assert (self.betting.current_bet, self.betting.last_full_raise_size) == (0, self.betting.stakes.big_blind)
+        assert self.betting.last_aggressor is None
         self.check()
 
     def _check_betting_context(

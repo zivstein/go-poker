@@ -5,6 +5,7 @@ from go_poker.core.card import Card
 from go_poker.core.deck import Deck
 from go_poker.game.betting.state import BettingState
 from go_poker.game.hand_state import HandPlayerState
+from go_poker.game.reveal import Reveal
 from go_poker.game.street import Street
 
 if TYPE_CHECKING:
@@ -25,7 +26,9 @@ class PokerHand:
     the lifecycle that creates the hand. A hand starts on the preflop street with an empty board and no burned cards;
     variant rules deal the board, burn cards and advance the street. The hand has no betting state until the betting
     layer initializes it; betting rules live in that layer, not here. It has no settlement until the hand is settled;
-    the stored settlement is immutable, and its presence marks the hand as settled.
+    the stored settlement is immutable, and its presence marks the hand as settled. It has no reveal until its live
+    players are revealed (see `Reveal`); the reveal is set at most once, is separate from the settlement, and is not
+    cleared by settling.
     """
 
     players: tuple[HandPlayerState, ...]
@@ -36,6 +39,7 @@ class PokerHand:
     burned_cards: list[Card] = field(default_factory=list)
     betting: BettingState | None = None
     settlement: Settlement | None = None
+    reveal: Reveal | None = None
 
 
 def _require_unsettled(hand: PokerHand) -> None:

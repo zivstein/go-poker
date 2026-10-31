@@ -25,7 +25,7 @@ from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
-from go_poker.game.variants.texas_holdem.showdown import settle_hand
+from go_poker.game.variants.texas_holdem.showdown import reveal_hands, settle_hand
 
 STAKES = Stakes(small_blind=5, big_blind=10)
 FOLD = Action(ActionType.FOLD)
@@ -50,6 +50,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "deck": len(hand.deck),
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
+        "reveal": hand.reveal,
         "players": [
             (
                 state.seat_number,
@@ -77,6 +78,7 @@ def assert_rejected(hand: PokerHand, operation: Operation) -> None:
 
     assert snapshot(hand) == before
     assert hand.settlement is before["settlement"]
+    assert hand.reveal is before["reveal"]
 
 
 def play(hand: PokerHand, *actions: tuple[int, Action]) -> None:
@@ -226,6 +228,7 @@ OPERATIONS: dict[str, Operation] = {
     "deal_next_street": deal_next_street,
     "start_betting_round": start_betting_round,
     "apply_action": lambda hand: apply_action(hand, 1, CHECK),
+    "reveal_hands": reveal_hands,
     "settle_hand": settle_hand,
 }
 
@@ -323,6 +326,20 @@ def test_apply_action_reports_settled_over_not_players_turn(stacked_hand: Stacke
     assert hand.betting.current_actor is None
 
     assert_rejected(hand, lambda settled: apply_action(settled, seat, CHECK))
+
+
+def test_reveal_hands_reports_settled_over_already_revealed(stacked_hand: StackedHand) -> None:
+    """The reveal was recorded before the settlement, so a second reveal would also be a double reveal."""
+    hand = dealt_hand(stacked_hand, stacks={1: 100, 2: 100, 3: 100})
+    play(hand, (1, Action(ActionType.RAISE, 100)), (2, CALL), (3, CALL))
+    reveal_hands(hand)
+    reveal = hand.reveal
+    while hand.street is not Street.RIVER:
+        deal_next_street(hand)
+    settle_hand(hand)
+    assert hand.reveal is reveal
+
+    assert_rejected(hand, reveal_hands)
 
 
 def test_deal_next_street_reports_settled_over_no_next_street(stacked_hand: StackedHand) -> None:

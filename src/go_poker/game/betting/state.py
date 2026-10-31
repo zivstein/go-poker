@@ -31,3 +31,7 @@ class BettingState:
     # Seat number -> the current bet right after that seat's latest action in the current round. Only seats that have
     # acted have an entry; posting a blind is not an action. Cleared whenever a betting round starts.
     acted_at_bet: dict[int, int]
+    # The seat of the last bet or raise in the current round, a short all-in bet or raise included; None until someone
+    # bets or raises. Folds, checks and calls never change it. Set to None when the blinds are posted and whenever a
+    # betting round starts, so an earlier street's aggressor never carries into a later round.
+    last_aggressor: int | None

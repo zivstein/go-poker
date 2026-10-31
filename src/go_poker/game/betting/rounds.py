@@ -119,6 +119,7 @@ def start_betting_round(hand: PokerHand) -> None:
     betting.current_bet = 0
     betting.last_full_raise_size = betting.stakes.big_blind
     betting.acted_at_bet = {}
+    betting.last_aggressor = None
     betting.pending_actors = pending_at_round_start(hand.players, current_bet=0)
     # Players are ordered clockwise from the button, so the button is the first of them.
     betting.current_actor = first_pending_after(hand.players, hand.players[0].seat_number, betting.pending_actors)

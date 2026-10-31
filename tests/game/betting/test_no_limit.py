@@ -19,6 +19,7 @@ def flop_betting(*, current_bet: int, last_full_raise_size: int, acted_at_bet: d
         current_actor=1,
         pending_actors={1},
         acted_at_bet=acted_at_bet,
+        last_aggressor=None,
     )
 
 

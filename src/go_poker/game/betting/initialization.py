@@ -27,10 +27,11 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     The small blind and big blind post real chips: each posts their blind, or their whole stack when it is smaller (a
     short blind), and posting the last chips marks that player all-in. The current bet and last full raise size start
     at the full big blind, whatever the blinds actually posted. Posting a blind is not an action, so nobody has acted
-    yet (`acted_at_bet` is empty), every eligible player, blinds included, is pending (subject to the round's early
-    endings, see `settle_pending`), and the first pending player clockwise after the big blind acts first. When those
-    endings leave nobody pending, the preflop round is complete as soon as the blinds are posted and is collected at
-    once (see `collect_round`), so the part of a blind that nobody can match goes back to its player.
+    yet (`acted_at_bet` is empty) and there is no `last_aggressor`. Every eligible player, blinds included, is pending
+    (subject to the round's early endings, see `settle_pending`), and the first pending player clockwise after the big
+    blind acts first. When those endings leave nobody pending, the preflop round is complete as soon as the blinds are
+    posted and is collected at once (see `collect_round`), so the part of a blind that nobody can match goes back to
+    its player.
 
     A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. A hand that already has
     betting or is no longer preflop is then rejected before anything changes, leaving it unchanged.
@@ -59,6 +60,7 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
         current_actor=first_pending_after(hand.players, big_blind_player.seat_number, pending),
         pending_actors=pending,
         acted_at_bet={},
+        last_aggressor=None,
     )
     if is_round_complete(hand.betting):
         collect_round(hand.players)

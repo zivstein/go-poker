@@ -74,6 +74,7 @@ def test_flop_round_starts_with_no_bet_and_the_first_player_after_the_button(
         current_actor=8,
         pending_actors={5, 8, 1, 3},
         acted_at_bet={},
+        last_aggressor=None,
     )
 
 

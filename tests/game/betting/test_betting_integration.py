@@ -94,6 +94,7 @@ def test_multiway_preflop_limp_raise_and_responses(
         current_actor=None,
         pending_actors=set(),
         acted_at_bet={7: 40, 9: 40, 1: 40, 2: 40, 4: 40, 5: 40},
+        last_aggressor=9,
     )
     assert is_round_complete(h.betting)
 

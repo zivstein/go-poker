@@ -22,7 +22,7 @@ Paths are under `src/go_poker/`.
 | Area | Responsibility |
 | --- | --- |
 | `core/` | cards, deck, hand ranks, hand evaluation |
-| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, settlement |
+| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, reveal, settlement |
 | `game/variants/` | poker-variant-specific rules |
 | `game/betting/` | betting-structure rules, currently No-Limit |
 
@@ -170,11 +170,14 @@ It owns:
 - current `Street`;
 - burned cards;
 - optional `BettingState`;
-- optional immutable `Settlement`, present only once the hand is settled.
+- optional immutable `Settlement`, present only once the hand is settled;
+- optional immutable `Reveal`, present only once the hand's live players have been revealed (see [Reveal](#reveal)).
 
 It is a state container rather than the owner of participation, variant dealing, or betting rules.
 
 The settlement marker's presence makes every public hand-level mutation entry point reject the hand first with `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)).
+
+The reveal is separate from the settlement and is set at most once.
 
 ### HandPlayerState
 
@@ -253,7 +256,8 @@ No-Limit betting lives under `game/betting/`.
 - `last_full_raise_size`;
 - `current_actor`;
 - `pending_actors`;
-- `acted_at_bet`.
+- `acted_at_bet`;
+- `last_aggressor`.
 
 `current_bet` is the nominal target a fully funded player normally matches.
 
@@ -268,6 +272,8 @@ Invariant:
 `acted_at_bet[seat]` stores the `current_bet` immediately after that player's latest action in the round.
 
 Posting a blind is not an action.
+
+`last_aggressor` is the seat of the last bet or raise in the current round, including a short all-in bet or raise, or `None`. Checks, calls, and folds never change it. It is `None` when the blinds are posted and whenever a betting round starts, so an earlier street's aggressor never carries into a later round. It exists for the river show order (see [Reveal](#reveal)).
 
 ## Actions and Legal Actions
 
@@ -360,6 +366,7 @@ It starts with:
 - `current_bet = 0`;
 - `last_full_raise_size = big blind`;
 - empty `acted_at_bet`;
+- no `last_aggressor`;
 - first eligible actor clockwise after the button.
 
 ### Betting Closed
@@ -464,9 +471,10 @@ Settlement turns the contested pots into stack payouts and records the result. T
 | Module | Responsibility |
 | --- | --- |
 | `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding (winners, ties, odd chips), the internal `_settle` operation and payout; re-exports `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)) |
-| `game/variants/texas_holdem/showdown.py` | Hold'em hand strength (`showdown_ranks`), readiness rules, the public `settle_hand`, `ShowdownNotReadyError` |
+| `game/reveal.py` | variant-agnostic: `Reveal`, `RevealKind`, canonical seat order and the generic show-order helper (see [Reveal](#reveal)); does not depend on `settlement.py`, and `settlement.py` does not depend on it |
+| `game/variants/texas_holdem/showdown.py` | Hold'em hand strength (`showdown_ranks`), the internal reveal classification and readiness rule, the public `reveal_hands` and `settle_hand`, `ShowdownNotReadyError`, `UncontestedHandError`, `HandAlreadyRevealedError` |
 
-`settle_hand(hand)` is the only public settle entry. `_settle(hand, ranks)` is shared engine implementation for variant entry points and is not a client-facing API.
+`settle_hand(hand)` is the only public settle entry; `reveal_hands(hand)` is the only public reveal entry. `_settle(hand, ranks)` is shared engine implementation for variant entry points and is not a client-facing API.
 
 `PotAward` holds a `Pot` and the exact chips each winning seat receives, ordered clockwise from the button. Odd chips make amounts unequal.
 
@@ -485,9 +493,39 @@ Each pot is split independently: each tied winner gets `amount // winners`, and 
 3. exactly one player has not folded: the hand is settled uncontested on any street, with nothing evaluated;
 4. the board is incomplete: `IncompleteBoardError`;
 5. further betting is possible: `ShowdownNotReadyError`;
-6. otherwise every live hand is evaluated and the hand is settled.
+6. otherwise every live hand is evaluated and the hand is settled; a contested hand that has no reveal yet is revealed by the settlement.
 
-A contested hand is ready when the current betting round is complete and either that round belongs to the river or `is_betting_closed(hand)`. A river dealt without its round started, while two players can act, is not ready. Remaining streets after an all-in need to be dealt, but their betting rounds need not be started.
+A contested hand is ready by the reveal classification (see [Reveal](#reveal)), which `reveal_hands` and `settle_hand` share. A river dealt without its round started, while two players can act, is not ready. Remaining streets after an all-in need to be dealt, but their betting rounds need not be started.
+
+For a contested hand with no reveal, `settle_hand` classifies and builds the candidate `Reveal` before the payout, because the payout clears `all_in`. It completes every rejecting check (board, readiness, hole cards, ranks), calls `_settle`, and only then stores the candidate on `hand.reveal`, so a rejected settlement leaves `hand.reveal` unset. An existing reveal is kept as it is. An uncontested hand records no reveal. `Settlement`, `_settle`, and the settlement's odd-chip order do not depend on the reveal module; the two orders happen to rotate seats the same way but are separate contracts.
+
+### Reveal
+
+A reveal records which live seats are revealed and in what order. It records seats, not cards. The contract is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md).
+
+`Reveal(kind, seats)` is immutable. `RevealKind` is `ALL_IN` or `SHOWDOWN`. Folded seats never appear, and the winner of an uncontested hand is not revealed.
+
+`game/reveal.py` provides the canonical seat order (clockwise starting with the first seat left of the button, the button last; heads-up the big blind first) and a show-order helper: the live seats in canonical order, rotated to start at the last aggressor when one is given. The helpers take seat sequences, so they know nothing about streets or kinds of showdown.
+
+One engine-internal Hold'em rule in `showdown.py` classifies a hand with at least two live players as not ready, `ALL_IN`, or `SHOWDOWN`:
+
+- ready: the current betting round is complete and either it is the river round or `is_betting_closed(hand)`;
+- `ALL_IN` when any live player is all-in, else `SHOWDOWN`. A closed round before the river with two or more live players always has a live all-in player.
+
+All-in is read after the river round is collected and before payout.
+
+- `ALL_IN`: every live seat in canonical order. This is storage order only, not a reveal sequence; the last aggressor is ignored, including when a player all-in from an earlier street faces two others who bet the river.
+- `SHOWDOWN`: the river show order. The river round's `last_aggressor` shows first, then clockwise; with no river bet or raise, the first live seat left of the button shows first.
+
+`reveal_hands(hand)` validates in this order, and a rejection leaves the hand unchanged:
+
+1. the hand is already settled: `HandAlreadySettledError`;
+2. the hand has no betting state: `BettingNotInitializedError`;
+3. the hand is already revealed: `HandAlreadyRevealedError`;
+4. fewer than two players have not folded: `UncontestedHandError`;
+5. further betting is possible: `ShowdownNotReadyError`.
+
+Otherwise it sets only `hand.reveal`. It checks neither the board nor hole cards, so betting closed before the board is run out is revealed at once.
 
 ### Payout
 
@@ -506,6 +544,7 @@ A contested hand is ready when the current betting round is complete and either 
 - `deal_next_street`
 - `start_betting_round`
 - `apply_action`
+- `reveal_hands`
 - `settle_hand` (the internal `_settle` also keeps its own check)
 
 A rejection leaves the hand unchanged. The guard comes first because a payout can clear `all_in` and make a settled hand look open to further dealing or betting.
@@ -540,6 +579,8 @@ Other invariants:
 
 - a participant is `all_in` exactly when their stack is zero, before and after payout;
 - a settled hand (`hand.settlement is not None`) is rejected first by every public hand-level mutation entry point, leaving it unchanged;
+- `hand.reveal` is `None` or covers exactly the live seats, is set at most once, and its `ALL_IN` seats are in canonical order;
+- a settled contested hand has a reveal; an uncontested hand has none;
 - settlement is stored once; contributions, `folded`, hole cards, board, burned cards, the deck, the betting state, and derived pots are unchanged by it;
 - betting moves chips between stacks and contributions only through `commit_chips` and `return_chips`;
 - no street contribution exceeds `current_bet`;
@@ -547,6 +588,7 @@ Other invariants:
 - unmatched top excess is returned before pot derivation;
 - `last_full_raise_size` changes only after a full bet/raise;
 - `acted_at_bet` contains exactly players who acted this round;
+- `last_aggressor` is `None` until someone bets or raises in the round, then the last bettor or raiser;
 - folded players are never pot-eligible;
 - every pot has at least one eligible seat, and each pot's eligible seats are a subset of the previous pot's;
 - rejected operations do not partially mutate state.

@@ -60,6 +60,7 @@ def test_multiway_blinds_are_posted_and_first_player_after_big_blind_acts(
         current_actor=3,
         pending_actors={1, 3, 5, 8},
         acted_at_bet={},
+        last_aggressor=None,
     )
 
 
@@ -177,6 +178,7 @@ def test_short_blind_posts_the_whole_stack_and_keeps_the_full_big_blind_bet(
         current_actor=3,
         pending_actors=pending,
         acted_at_bet={},
+        last_aggressor=None,
     )
 
 
