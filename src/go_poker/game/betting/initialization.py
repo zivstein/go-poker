@@ -4,7 +4,7 @@ from go_poker.game.betting.rounds import first_pending_after, is_round_complete,
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
 from go_poker.game.hand_state import HandPlayerState
-from go_poker.game.poker_hand import PokerHand
+from go_poker.game.poker_hand import PokerHand, _require_unsettled
 from go_poker.game.position import Blind
 from go_poker.game.street import Street
 
@@ -32,10 +32,12 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     endings leave nobody pending, the preflop round is complete as soon as the blinds are posted and is collected at
     once (see `collect_round`), so the part of a blind that nobody can match goes back to its player.
 
-    A hand that already has betting or is no longer preflop is rejected before anything changes, leaving it unchanged.
+    A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. A hand that already has
+    betting or is no longer preflop is then rejected before anything changes, leaving it unchanged.
     Blind stacks are not checked: hands contain only players who start with chips (the start-of-hand chip rule), so
     every blind posts a positive amount.
     """
+    _require_unsettled(hand)
     if hand.betting is not None:
         raise BettingAlreadyInitializedError("Betting has already been initialized for this hand")
 

@@ -3,11 +3,8 @@ from dataclasses import dataclass
 
 from go_poker.core.hand_rank import HandRank
 from go_poker.game.betting.pots import Pot, pots
-from go_poker.game.poker_hand import PokerHand
-
-
-class HandAlreadySettledError(RuntimeError):
-    """Raised when settling a hand that has already been settled."""
+from go_poker.game.poker_hand import HandAlreadySettledError as HandAlreadySettledError
+from go_poker.game.poker_hand import PokerHand, _require_unsettled
 
 
 @dataclass(frozen=True)
@@ -82,12 +79,6 @@ def _award_pots(
     """
     seat_order = (*seats_from_button[1:], *seats_from_button[:1])
     return tuple(_award_pot(pot, ranks, seat_order) for pot in pots)
-
-
-def _require_unsettled(hand: PokerHand) -> None:
-    """Reject a hand that already carries its settlement. Shared by every settle entry point."""
-    if hand.settlement is not None:
-        raise HandAlreadySettledError("This hand has already been settled")
 
 
 def _settle(hand: PokerHand, ranks: Mapping[int, HandRank]) -> None:

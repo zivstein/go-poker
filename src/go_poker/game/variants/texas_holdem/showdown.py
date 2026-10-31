@@ -2,8 +2,8 @@ from go_poker.core.evaluator import evaluate_best
 from go_poker.core.hand_rank import HandRank
 from go_poker.game.betting.rounds import is_betting_closed, is_round_complete
 from go_poker.game.betting.state import BettingNotInitializedError
-from go_poker.game.poker_hand import PokerHand
-from go_poker.game.settlement import _require_unsettled, _settle
+from go_poker.game.poker_hand import PokerHand, _require_unsettled
+from go_poker.game.settlement import _settle
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import (
     BOARD_CARD_COUNTS,

@@ -12,6 +12,10 @@ if TYPE_CHECKING:
     from go_poker.game.settlement import Settlement
 
 
+class HandAlreadySettledError(RuntimeError):
+    """Raised when a public hand operation is applied to a hand that is settled (carries its settlement)."""
+
+
 @dataclass
 class PokerHand:
     """One hand of poker: its participants, its own deck, the community board, the street and the burned cards.
@@ -32,3 +36,9 @@ class PokerHand:
     burned_cards: list[Card] = field(default_factory=list)
     betting: BettingState | None = None
     settlement: Settlement | None = None
+
+
+def _require_unsettled(hand: PokerHand) -> None:
+    """Reject a settled hand. Engine-internal; the first validation of every public hand-level mutation entry point."""
+    if hand.settlement is not None:
+        raise HandAlreadySettledError("This hand has already been settled")

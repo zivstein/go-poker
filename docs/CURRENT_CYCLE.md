@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 5 — Complete continuous PokerHand/game loop** is planned. Cycle 1 is next; no Cycle has started.
+**Milestone 5 — Complete continuous PokerHand/game loop** is in progress. Cycle 1 is complete; Cycle 2 is next.
 
 Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand lifecycle and orchestration contract lives in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md); its numbered decisions are cited below as ADR 0002 §N. Implemented behavior is recorded in `ARCHITECTURE.md` as each Cycle lands.
 
@@ -21,8 +21,8 @@ Tests drive whole hands through public operations, using the existing `stacked_h
 
 | Cycle | Title | Status |
 | --- | --- | --- |
-| 1 | Post-settlement boundary | Next (not started) |
-| 2 | Reveal and show order | Planned |
+| 1 | Post-settlement boundary | Complete |
+| 2 | Reveal and show order | Next (not started) |
 | 3 | Single-hand orchestration | Planned |
 | 4 | Continuous game loop and milestone close | Planned |
 

@@ -1,6 +1,6 @@
 from go_poker.game.betting.state import BettingNotInitializedError, BettingState
 from go_poker.game.hand_state import HandPlayerState
-from go_poker.game.poker_hand import PokerHand
+from go_poker.game.poker_hand import PokerHand, _require_unsettled
 
 
 class BettingRoundNotCompleteError(RuntimeError):
@@ -98,13 +98,15 @@ def first_pending_after(players: tuple[HandPlayerState, ...], anchor_seat_number
 def start_betting_round(hand: PokerHand) -> None:
     """Start the betting round for the street the dealing layer has moved the hand to.
 
-    The previous round must be complete and the hand must be on a different street than the betting state; the street
-    sequence itself belongs to the variant's dealing rules and is not checked here. A completed round has already been
-    collected (see `collect_round`), so nobody has chips in front. The current bet is zero, the last full raise size
-    returns to the big blind, and nobody has acted yet, so `acted_at_bet` is cleared. Every eligible player is
-    pending, and the first pending player clockwise after the button acts first, so heads-up the big blind acts first.
-    A rejection leaves the hand unchanged.
+    A settled hand is rejected first (`HandAlreadySettledError`), before any other validation, because a payout can
+    clear `all_in` and make a new round look startable. The previous round must be complete and the hand must be on
+    a different street than the betting state; the street sequence itself belongs to the variant's dealing rules and
+    is not checked here. A completed round has already been collected (see `collect_round`), so nobody has chips in
+    front. The current bet is zero, the last full raise size returns to the big blind, and nobody has acted yet, so
+    `acted_at_bet` is cleared. Every eligible player is pending, and the first pending player clockwise after the
+    button acts first, so heads-up the big blind acts first. A rejection leaves the hand unchanged.
     """
+    _require_unsettled(hand)
     betting = hand.betting
     if betting is None:
         raise BettingNotInitializedError("Betting has not been initialized for this hand")

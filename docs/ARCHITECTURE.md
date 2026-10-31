@@ -174,6 +174,8 @@ It owns:
 
 It is a state container rather than the owner of participation, variant dealing, or betting rules.
 
+The settlement marker's presence makes every public hand-level mutation entry point reject the hand first with `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)).
+
 ### HandPlayerState
 
 Per-hand player state owns:
@@ -461,7 +463,7 @@ Settlement turns the contested pots into stack payouts and records the result. T
 
 | Module | Responsibility |
 | --- | --- |
-| `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding (winners, ties, odd chips), the internal `_settle` operation and payout, `HandAlreadySettledError` |
+| `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding (winners, ties, odd chips), the internal `_settle` operation and payout; re-exports `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)) |
 | `game/variants/texas_holdem/showdown.py` | Hold'em hand strength (`showdown_ranks`), readiness rules, the public `settle_hand`, `ShowdownNotReadyError` |
 
 `settle_hand(hand)` is the only public settle entry. `_settle(hand, ranks)` is shared engine implementation for variant entry points and is not a client-facing API.
@@ -493,7 +495,22 @@ A contested hand is ready when the current betting round is complete and either 
 
 `total_contribution`, `street_contribution`, `folded`, the board, the betting state, and the derived pots keep describing what was contested; `hand.settlement` records that it was paid.
 
-Blocking dealing and betting after settlement is not implemented.
+### Settled-Hand Guard
+
+`HandAlreadySettledError` ("this hand is settled") and `_require_unsettled(hand)` live in `game/poker_hand.py`, which does not import settlement at runtime. `settlement.py` re-exports the same error class, so importing it from either module gives the same class.
+
+`_require_unsettled` is the first validation, before any other state validation, in each public hand-level mutation entry point:
+
+- `initialize_betting`
+- `deal_hole_cards`
+- `deal_next_street`
+- `start_betting_round`
+- `apply_action`
+- `settle_hand` (the internal `_settle` also keeps its own check)
+
+A rejection leaves the hand unchanged. The guard comes first because a payout can clear `all_in` and make a settled hand look open to further dealing or betting.
+
+Internal helpers (`commit_chips`, `return_chips`, `collect_round`, payout) and derived reads (`legal_actions`, `is_betting_closed`, `pots`, `middle_pot`) are not guarded. This is a guard, not immutability: the `Player` objects are shared with the table, so their stacks still change in later hands.
 
 ## Durable Invariants
 
@@ -522,6 +539,7 @@ These remain true after settlement as accounting identities over the unchanged c
 Other invariants:
 
 - a participant is `all_in` exactly when their stack is zero, before and after payout;
+- a settled hand (`hand.settlement is not None`) is rejected first by every public hand-level mutation entry point, leaving it unchanged;
 - settlement is stored once; contributions, `folded`, hole cards, board, burned cards, the deck, the betting state, and derived pots are unchanged by it;
 - betting moves chips between stacks and contributions only through `commit_chips` and `return_chips`;
 - no street contribution exceeds `current_bet`;

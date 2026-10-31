@@ -1,5 +1,5 @@
 from go_poker.core.deck import DeckEmptyError
-from go_poker.game.poker_hand import PokerHand
+from go_poker.game.poker_hand import PokerHand, _require_unsettled
 from go_poker.game.street import Street
 
 HOLE_CARD_COUNT = 2
@@ -30,8 +30,10 @@ def deal_hole_cards(hand: PokerHand) -> None:
     """Deal HOLE_CARD_COUNT cards to every participant from the hand's deck, one card per player per round.
 
     Each round starts with the player clockwise of the button and ends with the button. No card is burned.
-    The hand is validated before any card is drawn, so a failure leaves it unchanged.
+    A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. The hand is validated
+    before any card is drawn, so a failure leaves it unchanged.
     """
+    _require_unsettled(hand)
     if hand.street is not Street.PREFLOP:
         raise HandPastPreflopError(f"Hole cards are dealt preflop, but the hand is on the {hand.street.value}")
 
@@ -54,8 +56,10 @@ def deal_next_street(hand: PokerHand) -> None:
 
     Streets go preflop, flop, turn, river. Every participant must hold exactly HOLE_CARD_COUNT hole cards first.
     Burned cards go to the hand's burned cards and board cards onto its board, in draw order. The hand is validated
-    before any card is drawn, so a failure leaves it unchanged.
+    before any card is drawn, so a failure leaves it unchanged. A settled hand is rejected first
+    (`HandAlreadySettledError`), before any other validation.
     """
+    _require_unsettled(hand)
     next_street = _NEXT_STREET.get(hand.street)
     if next_street is None:
         raise NoNextStreetError(f"There is no street after the {hand.street.value}")

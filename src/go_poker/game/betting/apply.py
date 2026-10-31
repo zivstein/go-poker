@@ -4,7 +4,7 @@ from go_poker.game.betting.collection import collect_round
 from go_poker.game.betting.legal_actions import LegalActions, legal_actions
 from go_poker.game.betting.rounds import first_pending_after, is_eligible, is_round_complete, settle_pending
 from go_poker.game.betting.state import BettingNotInitializedError
-from go_poker.game.poker_hand import PokerHand
+from go_poker.game.poker_hand import PokerHand, _require_unsettled
 
 
 class NotPlayersTurnError(RuntimeError):
@@ -49,16 +49,18 @@ def _validated_target(action: Action, legal: LegalActions) -> int | None:
 def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
     """Apply the current actor's action, then pass the action on or end the betting round.
 
-    The action must come from the current actor and be legal for them (see `legal_actions`); a rejection leaves the
-    hand unchanged. Check, call and fold settle the actor's obligation; a call commits the legal call amount, which
-    may be a short all-in below the current bet, and never changes the current bet. A bet or raise to a target makes
-    it the current bet and makes every other eligible player owe a response again. It is full when the target reaches
-    the full minimum target and then sets the last full raise size; a short all-in leaves that size unchanged. Every
-    action records the current bet right after it in `acted_at_bet`. The round ends early when only one player has
-    not folded, or when no opponent can respond and nothing is owed to the call target. Otherwise the next pending
-    player clockwise acts. An action that completes the round also collects it (see `collect_round`): unmatched chips
-    go back to their player and every player's chips in front move into the middle.
+    A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. The action must come
+    from the current actor and be legal for them (see `legal_actions`); a rejection leaves the hand unchanged.
+    Check, call and fold settle the actor's obligation; a call commits the legal call amount, which may be a short
+    all-in below the current bet, and never changes the current bet. A bet or raise to a target makes it the current
+    bet and makes every other eligible player owe a response again. It is full when the target reaches the full
+    minimum target and then sets the last full raise size; a short all-in leaves that size unchanged. Every action
+    records the current bet right after it in `acted_at_bet`. The round ends early when only one player has not
+    folded, or when no opponent can respond and nothing is owed to the call target. Otherwise the next pending player
+    clockwise acts. An action that completes the round also collects it (see `collect_round`): unmatched chips go back
+    to their player and every player's chips in front move into the middle.
     """
+    _require_unsettled(hand)
     betting = hand.betting
     if betting is None:
         raise BettingNotInitializedError("Betting has not been initialized for this hand")
