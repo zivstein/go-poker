@@ -21,6 +21,8 @@ Operational sources of truth include:
 
 Future organization planning belongs in `ORGANIZATION_ROADMAP.md`.
 
+Measured AI-engineering improvements and their lessons are recorded in `AI_ENGINEERING_LOG.md`.
+
 ## Purpose
 
 Go! Poker has two parallel goals.
