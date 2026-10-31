@@ -1,6 +1,8 @@
 # 0002: Hand lifecycle and orchestration contract
 
-Status: Accepted (2026-10-31)
+Status: Accepted (2026-10-31); partly superseded by [ADR 0003](0003-interactive-showdown-and-muck.md) (2026-10-31)
+
+> **Supersession note (2026-10-31).** This record is kept as written. [ADR 0003](0003-interactive-showdown-and-muck.md) §11 supersedes parts of it: the Context premise that all live hands compete with no muck; `reveal_hands` in decisions 1, 2 and 7, `game/reveal.py` and `act` accepting only betting actions in decision 2, and the reveal in decision 7's list of a settled hand's own state; the `RevealKind.SHOWDOWN` river reveal and the reveal kind names in decision 4; the river order in decision 5, now a decision order; the reveal record of decision 6, replaced entirely by the showdown record; the reveal parts of decision 8; and the reveal-based Consequences. Everything else stands, including decision 3's fixed stakes for the life of a `HoldemGame`.
 
 ## Context
 

@@ -1,6 +1,8 @@
 # 0001: Showdown and settlement contract
 
-Status: Accepted (2026-10-30)
+Status: Accepted (2026-10-30); partly superseded by [ADR 0003](0003-interactive-showdown-and-muck.md) (2026-10-31)
+
+> **Supersession note (2026-10-31).** This record is kept as written. [ADR 0003](0003-interactive-showdown-and-muck.md) §11 supersedes parts of it: decision 2 (all live hands compete, with no muck) now holds only for an all-in showdown, and its "which hands are revealed, and in what order" is now decided by ADR 0003; decision 5's showdown ranks cover shown players only; decision 6's settle readiness also needs a complete showdown; and the rejected alternative of conceding at showdown is reversed. Everything else stands.
 
 ## Context
 

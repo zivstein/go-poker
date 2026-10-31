@@ -43,22 +43,39 @@ Approved for Milestone 4: settling a hand that has reached its end. Each pot is 
 
 Board runout, revealing hands, and full-hand orchestration stay in Milestone 5.
 
-Approved for Milestone 5: running a whole Hold'em hand, and one hand after another, with player decisions as the only inputs. Being all-in does not by itself reveal hole cards. Once betting is closed with at least two live players, hand orchestration reveals the relevant hands, completes the board runout, then proceeds to showdown. The hand lifecycle and orchestration contract (the two usage levels, engine-owned sequencing through `hand_flow` and `HoldemGame`, the game lifecycle, all-in and river-showdown reveals, river show order, the reveal record, the settled-hand guard, hand start order, and mid-hand table changes staying outside the engine) is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md).
+Approved for Milestone 5: running a whole Hold'em hand, and one hand after another, with player decisions as the only inputs. Being all-in does not by itself reveal hole cards. The hand lifecycle and orchestration contract (the two usage levels, engine-owned sequencing through `hand_flow` and `HoldemGame`, the game lifecycle, the settled-hand guard, hand start order, and mid-hand table changes staying outside the engine) is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md).
+
+Approved for Milestone 5 on 2026-10-31, after Cycle 2: interactive showdown and muck. When all betting is complete and any live player is all-in, every live hand is tabled at once, the board is run out, and the hand settles, with side-pot eligibility exactly as the pots define it. In a non-all-in river showdown, the last river aggressor decides first (with none, the first live seat left of the button), then clockwise; each player may SHOW or MUCK, a muck is not a fold, and a last remaining contender wins without showing. Only shown hands are evaluated or reported. The showdown contract (the two showdown kinds, decision order, SHOW/MUCK, the showdown record, the low-level operations, and the settlement interaction) is in [ADR 0003](adr/0003-interactive-showdown-and-muck.md), which supersedes the affected parts of ADR 0001 and ADR 0002.
 
 Deferred beyond Milestone 5:
 
-- voluntary show, automatic muck, and show/muck preferences;
-- reporting the best five cards;
+- voluntary show by a player not asked to decide (an uncontested winner or a last remaining contender), automatic muck, show/muck preferences, and showdown timers;
+- reporting the best five cards (derived hand strength, Milestone 6);
 - leaving, sitting out, timeouts, and auto-fold during a hand (Milestones 14–15);
 - busting, rebuys, and top-ups (no milestone assigned yet);
 - blind levels, antes, straddles, dead-button and missed-blind rules (Milestone 19);
 - run it twice.
+
+### Change Table Rules Only Between Hands
+
+An active hand captures the effective rules it starts with; a hand already captures its stakes when betting is initialized. Game and table configuration changes take effect only at a hand boundary.
+
+Milestone 5's `HoldemGame` keeps its stakes fixed for its lifetime ([ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md) §3). That is the Milestone 5 implementation contract, not a permanent product rule. Changing stakes, betting structures (Milestone 8), per-hand variant selection (Milestone 10), antes, straddles, and other house rules are future work. No generic configuration framework is built until a milestone needs one.
 
 ### Build Reconstructable Data
 
 Milestone 6 introduces structured raw hand history/events before persistence, analytics, or AI depend on them.
 
 Raw history/events remain reconstructable source data. Later statistics and analytics are derived from history rather than becoming the only source of truth.
+
+Approved for Milestone 6: derived player hand strength for client display. From the flop onward, Hold'em derives for a seat its current hand category and rank, the exact best five cards, and a human-readable description (for example "Eights full of Aces" or "Ace-high flush"):
+
+- preflop: no five-card result;
+- flop: the five available cards;
+- turn: the best five of six;
+- river: the best five of seven.
+
+It is derived, read-only data. It is not stored on `PokerHand` and is not part of showdown or settlement state. A future API projection exposes anything derived from hidden hole cards only to that seat's player until those cards are shown.
 
 ### Exercise the Engine at Scale
 

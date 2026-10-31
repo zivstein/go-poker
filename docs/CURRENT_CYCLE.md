@@ -2,15 +2,15 @@
 
 **Milestone 5 — Complete continuous PokerHand/game loop** is in progress. Cycles 1 and 2 are complete; Cycle 3 is next.
 
-Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand lifecycle and orchestration contract lives in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md); its numbered decisions are cited below as ADR 0002 §N. Implemented behavior is recorded in `ARCHITECTURE.md` as each Cycle lands.
+Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand lifecycle and orchestration contract lives in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md), and the showdown contract in [ADR 0003](adr/0003-interactive-showdown-and-muck.md), which supersedes parts of ADR 0002 and [ADR 0001](adr/0001-showdown-settlement-contract.md). Their numbered decisions are cited below as ADR 0002 §N and ADR 0003 §N. Implemented behavior is recorded in `ARCHITECTURE.md` as each Cycle lands.
 
 ## Goal
 
 Run a No-Limit Texas Hold'em hand from creation to settlement, then the next hand, with player decisions as the only external inputs:
 
 - every public hand-level mutation entry point rejects a settled hand;
-- live hands are revealed once showdown is certain: an all-in reveal, or, when the river betting round completes with no live all-in player, a river showdown in show order;
-- `begin_hand` / `act` advance a hand automatically until a decision is required or it is settled;
+- once showdown is certain, a showdown starts: an `ALL_IN` showdown tables every live hand at once; an `INTERACTIVE` river showdown asks players in decision order to SHOW or MUCK until it is complete; settlement evaluates only shown hands;
+- `begin_hand` / `act` advance a hand automatically until a betting or showdown decision is required or it is settled;
 - `HoldemGame` owns the table, stakes, and current hand, and starts the next hand only after settlement.
 
 Out of scope: the items deferred in `ROADMAP.md`.
@@ -23,60 +23,85 @@ Tests drive whole hands through public operations, using the existing `stacked_h
 | --- | --- | --- |
 | 1 | Post-settlement boundary | Complete |
 | 2 | Reveal and show order | Complete |
-| 3 | Single-hand orchestration | Next (not started) |
-| 4 | Continuous game loop and milestone close | Planned |
+| 3 | Interactive showdown and muck | Next (not started) |
+| 4 | Single-hand orchestration | Planned |
+| 5 | Continuous `HoldemGame` and milestone close | Planned |
 
-Cycles 1 and 2 are independent. Cycle 3 depends on both; Cycle 4 depends on Cycle 3.
+Cycle 3 depends on Cycles 1 and 2; Cycle 4 depends on Cycle 3; Cycle 5 depends on Cycle 4.
 
 ### Cycle 1 — Post-settlement boundary (ADR 0002 §7)
 
 - Move the settled check and `HandAlreadySettledError` to `game/poker_hand.py`; `settlement.py` keeps exporting the error.
-- Guard `initialize_betting`, `deal_hole_cards`, `deal_next_street`, `start_betting_round`, `apply_action`, and `settle_hand`; the check runs before any other validation. Internal helpers get no guard. `reveal_hands`, `begin_hand`, and `act` get the same guard in the Cycles that add them.
+- Guard `initialize_betting`, `deal_hole_cards`, `deal_next_street`, `start_betting_round`, `apply_action`, and `settle_hand`; the check runs before any other validation. Internal helpers get no guard. Later entry points get the same guard in the Cycles that add them.
 - Tests: each entry point rejects a settled hand and leaves it unchanged; the settled check wins over each entry point's other errors; existing import path still works.
 
 ### Cycle 2 — Reveal and show order (ADR 0002 §4–6, §8 direct settlement)
 
-- `game/reveal.py`: `Reveal`, `RevealKind`, canonical seat order, generic show-order helper (seat order + last aggressor), with no street or showdown-kind knowledge.
-- `BettingState.last_aggressor`; `PokerHand.reveal`.
-- Hold'em `showdown.py`: the single classification rule (not ready / `ALL_IN` / `SHOWDOWN`), refactoring `settle_hand`'s readiness onto it; `reveal_hands`; contested direct `settle_hand` records the reveal with the settlement after all rejectable checks.
-- Tests: early all-in reveal on each street; river round with an all-in player is `ALL_IN`; river showdown with a river aggressor, with none, and wrapping past the button; folded never revealed; uncontested not revealed; `reveal_hands` rejections; a rejected direct settlement leaves the reveal unset; an existing reveal is kept.
+Delivered `Reveal`, `RevealKind`, `reveal_hands`, `PokerHand.reveal`, `BettingState.last_aggressor`, canonical seat order, the show-order helper, and the shared classification rule. Cycle 3 replaces the reveal record and API (ADR 0003 §11); `last_aggressor`, canonical order, and the classification rule carry over.
 
-### Cycle 3 — Single-hand orchestration (ADR 0002 §1–2, §8 hand start)
+### Cycle 3 — Interactive showdown and muck (ADR 0003)
 
-- `texas_holdem/hand_flow.py`: `begin_hand` (blinds, then hole cards, then advance), `act`, and private `_advance` (below).
-- Tests, only through `begin_hand` / `act`: fold-out on each street; river showdown; all-in on each street with runout; blinds completing preflop at once; one player with chips against all-ins; multi-way side pots; atomic rejections. Extend the seeded stress test to drive hands only through `act`.
+- `game/showdown.py` replaces `game/reveal.py`: `Showdown(kind, order, decisions)`, `ShowdownKind` (`ALL_IN` / `INTERACTIVE`), `ShowdownAction` (`SHOW` / `MUCK`), the derived shown, mucked, contenders, current decider and completion, the turn rule for a decision and its turn error, canonical seat order, and the decision-order helper (the renamed show-order helper).
+- `PokerHand.showdown` replaces `PokerHand.reveal`. No compatibility aliases for the reveal API.
+- Hold'em `showdown.py`:
+  - the classification rule returns `ShowdownKind`;
+  - `start_showdown` replaces `reveal_hands`, with the same checks and order (ADR 0003 §7);
+  - `apply_showdown_action` (ADR 0003 §7);
+  - `settle_hand` rejects an `INTERACTIVE` hand whose showdown has not started or has pending decisions, evaluates only shown seats, passes settlement the final contenders, and still records an `ALL_IN` showdown with a direct settlement.
+  - Both new operations are guarded against a settled hand.
+- `game/settlement.py`: `_settle` receives the final contender seats instead of assuming every live seat competes; each pot is awarded among its eligible seats that are contenders. Before changing anything it checks both pot invariants (below) and raises a violation as an engine defect, with no fallback payout. It never sees a showdown action.
+- Migrate the Cycle 2 reveal tests and the Milestone 4 tests that settle a non-all-in river directly (they now start the showdown and record decisions first). Both seeded stress drivers make seeded SHOW/MUCK decisions and check the new invariants.
+- `ARCHITECTURE.md`: replace the Reveal section with the showdown, and update settlement order, module responsibilities, the settled-hand guard list, and invariants.
+- Tests:
+  - record: derived state after every decision prefix; `ALL_IN` complete with no decisions; completion when everyone decided and when one contender remains; decisions rejected once complete or from the wrong seat;
+  - `start_showdown`: the Cycle 2 kind and order cases under the new names; its rejections, including an already started showdown;
+  - `apply_showdown_action`: rejection order; first decider mucks; show then muck; everyone but the last mucks, who wins unshown; any decision on an `ALL_IN` showdown; settled hand; rejections leave the hand unchanged;
+  - `settle_hand`: rejects an `INTERACTIVE` showdown not started or pending, unchanged; `showdown_ranks` holds only shown seats; a mucked seat is never paid; an unshown last contender takes every pot; ties and odd chips among shown contenders; folded dead money and pot layering with mucks; `ALL_IN` side pots unchanged;
+  - pot invariants: each violation is raised before any change, tested directly against the internal settlement function, since no public sequence produces one.
 
-### Cycle 4 — Continuous game loop and milestone close (ADR 0002 §2–3, §9)
+### Cycle 4 — Single-hand orchestration (ADR 0002 §1–2, §8 hand start; ADR 0003 §9)
 
-- `texas_holdem/game.py`: `HoldemGame`, `HandInProgressError`.
-- Tests: `start` / `next_hand` return a hand awaiting a decision or settled; button movement; busted players skipped; waiting players entering; `next_hand` rejected mid-hand without changes; the game cannot continue below two players; seeded multi-hand stress with chip conservation across hands.
-- Close out: `ARCHITECTURE.md` (lifecycle, reveal, orchestration, invariants, §9 caller precondition), README capabilities, `ROADMAP.md` status.
+- `texas_holdem/hand_flow.py`: `begin_hand` (blinds, then hole cards, then advance), `act(hand, seat, action)` taking an `Action` or a `ShowdownAction`, a derived `current_actor(hand)` (the betting actor, else the showdown decider, else `None`), and private `_advance` (below).
+- `act` sends a betting action to `apply_action` and a showdown action to `apply_showdown_action`, then advances. An action of the wrong kind is rejected by that operation, so `act` stays atomic.
+- Tests, only through `begin_hand` / `act`: fold-out on each street; interactive river showdown with shows, mucks, and an unshown winner; all-in on each street with runout; blinds completing preflop at once; one player with chips against all-ins; multi-way side pots; wrong-kind and out-of-turn actions; atomic rejections. Extend the seeded stress test to drive hands only through `act`.
+
+### Cycle 5 — Continuous `HoldemGame` and milestone close (ADR 0002 §2–3, §9)
+
+- `texas_holdem/game.py`: `HoldemGame` with `act(seat, action)` taking either action kind, and `HandInProgressError`. Stakes stay fixed for the game's lifetime as the Milestone 5 contract (see `ROADMAP.md`).
+- Tests: `start` / `next_hand` return a hand awaiting a decision or settled; button movement; busted players skipped; waiting players entering; `next_hand` rejected mid-hand, including during a showdown, without changes; the game cannot continue below two players; seeded multi-hand stress with chip conservation across hands.
+- Close out: `ARCHITECTURE.md` (lifecycle, orchestration, invariants, §9 caller precondition, fixed stakes as a Milestone 5 limitation), README capabilities, `ROADMAP.md` status.
 
 ## `_advance` contract
 
 Private to `hand_flow`; runs after `begin_hand` and after every successful `act`. Each pass:
 
 1. hand settled → stop;
-2. one live player → `settle_hand` (it owns the uncontested case) → stop;
-3. a player is to act → stop;
-4. ask the shared Hold'em classification rule:
-   - ready (`ALL_IN` or `SHOWDOWN`) → `reveal_hands` → deal any remaining streets without starting their betting rounds → `settle_hand` → stop;
+2. one live (non-folded) player → `settle_hand` (it owns the uncontested case) → stop;
+3. a betting actor is to act → stop;
+4. a showdown has started:
+   - not complete → stop (a showdown decision is required);
+   - complete → deal any remaining streets without starting their betting rounds → `settle_hand` → stop;
+5. no showdown yet; ask the shared Hold'em classification rule:
+   - ready (`ALL_IN` or `INTERACTIVE`) → `start_showdown` → next pass;
    - not ready → `deal_next_street` + `start_betting_round` → next pass (at most once per street).
 
-Postcondition: the hand is settled or has a current actor. A failure after a valid action is an engine defect and is raised, never swallowed.
+Postcondition: the hand is settled, has a betting actor, or has a showdown decider. A failure after a valid action is an engine defect and is raised, never swallowed.
 
 ## Invariants to establish
 
 - A settled hand rejects every public mutation entry point, and its own state is not changed by further operations on it. Shared `Player` objects still change in later hands, so a settled `PokerHand` is not a historical snapshot.
-- `hand.reveal` is `None` or covers exactly the live seats, and is set at most once; a settled contested hand has a reveal; `ALL_IN` seats are in clockwise-left-of-button storage order.
-- Under `hand_flow`, every call ends with a current actor or a settlement.
+- `hand.showdown` is `None` or its `order` is exactly the non-folded seats; an `ALL_IN` showdown has its seats in canonical order and no decisions; decisions are only added, one at a time, never once complete; a mucked seat is never folded.
+- A settled contested hand has a complete showdown; an uncontested hand has none.
+- `Settlement.showdown_ranks` holds exactly the shown seats.
+- Every pot has at least one final contender among its eligible seats; a pot with more than one has a showdown rank for each; only contenders are paid.
+- Under `hand_flow`, every call ends with a betting actor, a showdown decider, or a settlement.
 - Across a `HoldemGame`, `sum(player.stack)` is conserved from hand to hand.
 
 ## Risks
 
-- Import cycles from moving the settled check into `poker_hand.py` or from `BettingState` gaining state; resolved in implementation without behavior change.
-- Refactoring `settle_hand`'s readiness onto the shared classification must keep every Milestone 4 test passing unchanged.
+- Migrating the Cycle 2 and Milestone 4 tests that settle a non-all-in river directly must change how they reach settlement, never weaken what they assert.
+- The pot invariants are unreachable through public operations, so their tests target the internal settlement function; they must not grow into tests of impossible states elsewhere.
 
 ## Open Decisions
 
-None. ADR 0002 is accepted.
+None. ADR 0003 is accepted; the Cycle 3 Brief is next.
