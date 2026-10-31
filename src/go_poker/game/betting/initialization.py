@@ -21,6 +21,16 @@ def _blind_player(hand: PokerHand, blind: Blind) -> HandPlayerState:
     return next(hand_player for hand_player in hand.players if hand_player.blind is blind)
 
 
+def _require_initializable(hand: PokerHand) -> None:
+    """Reject a hand that already has betting or is no longer preflop. Engine-internal: the checks of
+    `initialize_betting` after the settled-hand guard, in their order, shared with `begin_hand`."""
+    if hand.betting is not None:
+        raise BettingAlreadyInitializedError("Betting has already been initialized for this hand")
+
+    if hand.street is not Street.PREFLOP:
+        raise BettingNotPreflopError(f"Betting is initialized preflop, but the hand is on the {hand.street.value}")
+
+
 def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     """Post the blinds and attach the hand's preflop betting state.
 
@@ -39,11 +49,7 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     every blind posts a positive amount.
     """
     _require_unsettled(hand)
-    if hand.betting is not None:
-        raise BettingAlreadyInitializedError("Betting has already been initialized for this hand")
-
-    if hand.street is not Street.PREFLOP:
-        raise BettingNotPreflopError(f"Betting is initialized preflop, but the hand is on the {hand.street.value}")
+    _require_initializable(hand)
 
     small_blind_player = _blind_player(hand, Blind.SMALL)
     big_blind_player = _blind_player(hand, Blind.BIG)

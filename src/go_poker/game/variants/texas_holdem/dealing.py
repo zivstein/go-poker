@@ -26,14 +26,9 @@ class NoNextStreetError(RuntimeError):
     """Raised when moving a hand past the river."""
 
 
-def deal_hole_cards(hand: PokerHand) -> None:
-    """Deal HOLE_CARD_COUNT cards to every participant from the hand's deck, one card per player per round.
-
-    Each round starts with the player clockwise of the button and ends with the button. No card is burned.
-    A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. The hand is validated
-    before any card is drawn, so a failure leaves it unchanged.
-    """
-    _require_unsettled(hand)
+def _require_hole_cards_dealable(hand: PokerHand) -> None:
+    """Reject a hand that cannot be dealt its hole cards. Engine-internal: the checks of `deal_hole_cards` after the
+    settled-hand guard, in their order, shared with `begin_hand`."""
     if hand.street is not Street.PREFLOP:
         raise HandPastPreflopError(f"Hole cards are dealt preflop, but the hand is on the {hand.street.value}")
 
@@ -43,6 +38,17 @@ def deal_hole_cards(hand: PokerHand) -> None:
     cards_needed = HOLE_CARD_COUNT * len(hand.players)
     if len(hand.deck) < cards_needed:
         raise DeckEmptyError(f"The deck has {len(hand.deck)} cards but dealing hole cards needs {cards_needed}")
+
+
+def deal_hole_cards(hand: PokerHand) -> None:
+    """Deal HOLE_CARD_COUNT cards to every participant from the hand's deck, one card per player per round.
+
+    Each round starts with the player clockwise of the button and ends with the button. No card is burned.
+    A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. The hand is validated
+    before any card is drawn, so a failure leaves it unchanged.
+    """
+    _require_unsettled(hand)
+    _require_hole_cards_dealable(hand)
 
     # Players are ordered clockwise from the button, so the deal starts at the next player and ends at the button.
     deal_order = hand.players[1:] + hand.players[:1]

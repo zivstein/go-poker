@@ -13,7 +13,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 2 | Betting engine + legal actions | Complete |
 | 3 | All-ins + main/side pots | Complete |
 | 4 | Showdown + settlement | Complete |
-| 5 | Complete continuous PokerHand/game loop | **Current** (Cycles 1–3 complete; Cycle 4 next) |
+| 5 | Complete continuous PokerHand/game loop | **Current** (Cycles 1–4 complete; Cycle 5 next) |
 | 6 | Structured Hand History / Event Log | Planned |
 | 7 | Bots + simulation / large-scale testing | Planned |
 | 8 | Omaha + Pot-Limit / PLO | Planned |
@@ -50,6 +50,7 @@ Approved for Milestone 5 on 2026-10-31, after Cycle 2: interactive showdown and 
 Deferred beyond Milestone 5:
 
 - voluntary show by a player not asked to decide (an uncontested winner or a last remaining contender), automatic muck, show/muck preferences, and showdown timers;
+- a folded player voluntarily revealing one or both hole cards (a visibility and history feature only; it never changes folded status, pot eligibility, or settlement);
 - reporting the best five cards (derived hand strength, Milestone 6);
 - leaving, sitting out, timeouts, and auto-fold during a hand (Milestones 14–15);
 - busting, rebuys, and top-ups (no milestone assigned yet);

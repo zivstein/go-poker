@@ -9,7 +9,9 @@ here add the end-of-hand and settlement properties: the settlement invariants, t
 that really hold the best hands among the shown contenders, rejection of settling too early or twice, the showdown every
 contested hand ends with (an all-in one is complete at once; an interactive one is started and decided with seeded SHOW
 and MUCK decisions; none for an uncontested hand), and the awarding rules on the same hand's pots under tie-heavy chosen
-ranks and seeded contender subsets. They also check that the seed set keeps reaching the rules it stresses.
+ranks and seeded contender subsets. They also check that the seed set keeps reaching the rules it stresses. Each hand
+is also replayed from its starting state through `hand_flow` alone (`begin_hand` and `act`, with the betting actions and
+SHOW and MUCK decisions the driver made), which must need no extra call and end in the same settlement.
 The seeds are fixed, so every run plays the same hands and a failure names the seed that reproduces it. This is the
 main seeded hand driver in the repository; `test_showdown_stress` is a second one, with deep stacks and passive play,
 for dense non-all-in river showdowns and their decisions.
@@ -27,7 +29,7 @@ import pytest
 from go_poker.core.evaluator import evaluate_best
 from go_poker.core.hand_rank import HandCategory, HandRank
 from go_poker.game.betting.actions import Action, ActionType
-from go_poker.game.betting.legal_actions import LegalActions, legal_actions
+from go_poker.game.betting.legal_actions import NOTHING_LEGAL, LegalActions, legal_actions
 from go_poker.game.betting.no_limit import has_raise_rights
 from go_poker.game.betting.pots import Pot, middle_pot, pots
 from go_poker.game.betting.rounds import is_betting_closed, is_round_complete
@@ -38,6 +40,7 @@ from go_poker.game.settlement import HandAlreadySettledError, PotAward, _award_p
 from go_poker.game.showdown import NotShowdownTurnError, Showdown, ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import deal_next_street
+from go_poker.game.variants.texas_holdem.hand_flow import act, begin_hand, current_actor
 from go_poker.game.variants.texas_holdem.showdown import (
     IncompleteBoardError,
     ShowdownAlreadyStartedError,
@@ -144,8 +147,10 @@ def play_random_hand(seed: int, checked: Callable[[PokerHand], CheckedHand], mak
     rng = random.Random(seed)
     hand = random_hand(rng, make_hand)
     hand.deck.shuffle(_rng=random.Random(f"deck-{seed}"))
+    start = copy.deepcopy(hand)  # the same starting hand and deck, for the `hand_flow` replay
     h = checked(hand)
     exercised = Exercised()
+    taken: list[tuple[int, Action]] = []  # the betting actions the driver played, in order
     blinds = {Blind.SMALL: STAKES.small_blind, Blind.BIG: STAKES.big_blind}
     exercised.short_blinds = sum(
         h.starting_chips[hp.seat_number] < blinds[hp.blind] for hp in h.hand.players if hp.blind in blinds
@@ -178,12 +183,14 @@ def play_random_hand(seed: int, checked: Callable[[PokerHand], CheckedHand], mak
 
         stacks_before = {hp.seat_number: hp.player.stack for hp in h.hand.players}
         h.act((actor, action))
+        taken.append((actor, action))
         exercised.returns += any(hp.player.stack > stacks_before[hp.seat_number] for hp in h.hand.players)
     else:
         pytest.fail(f"Seed {seed}: betting did not end within {MAX_STEPS} steps")
 
     unstarted_rounds = check_end_of_hand(h, exercised)
     check_settlement(h, exercised, seed, unstarted_rounds)
+    check_hand_flow_replay(start, taken, h.hand)
     return exercised
 
 
@@ -440,6 +447,52 @@ def check_contender_subset_awards(h: CheckedHand, exercised: Exercised, seed: in
         > max(ranks[seat] for seat in award.pot.eligible_seats & contenders)
         for award in awards
     )
+
+
+def assert_flow_postcondition(hand: PokerHand) -> None:
+    """After a `hand_flow` call the hand is settled, or a betting actor has something to do, or a showdown decider is
+    waiting: nothing is left for the caller to collect, deal, start or settle."""
+    if hand.settlement is not None:
+        assert current_actor(hand) is None
+        return
+    assert hand.betting is not None
+    if hand.betting.current_actor is not None:
+        assert current_actor(hand) == hand.betting.current_actor
+        assert legal_actions(hand) != NOTHING_LEGAL
+        return
+    assert hand.showdown is not None and not hand.showdown.is_complete
+    assert current_actor(hand) == hand.showdown.current_decider is not None
+
+
+def check_hand_flow_replay(start: PokerHand, taken: list[tuple[int, Action]], finished: PokerHand) -> None:
+    """Replay the driver's decisions on a fresh copy of the starting hand through `begin_hand` and `act` only, never
+    dealing, collecting, starting a round or a showdown, or settling. The postcondition holds after every call, and the
+    hand ends exactly as the driver's: same settlement, showdown, stacks, board and burned cards (the betting state
+    is not compared: the driver starts the rounds of a run-out that `hand_flow` skips)."""
+    hand = start
+    total_chips = sum(hp.player.stack for hp in hand.players)
+    begin_hand(hand, STAKES)
+    assert_flow_postcondition(hand)
+    decisions: list[tuple[int, Action | ShowdownAction]] = list(taken)
+    if finished.showdown is not None:
+        decisions += zip(finished.showdown.order, finished.showdown.decisions, strict=False)
+    for seat, decision in decisions:
+        assert current_actor(hand) == seat
+        act(hand, seat, decision)
+        assert_flow_postcondition(hand)
+
+    assert hand.settlement is not None and hand.settlement == finished.settlement
+    assert hand.showdown == finished.showdown
+    assert [(hp.seat_number, hp.player.stack, hp.all_in) for hp in hand.players] == [
+        (hp.seat_number, hp.player.stack, hp.all_in) for hp in finished.players
+    ]
+    assert hand.board == finished.board
+    assert hand.burned_cards == finished.burned_cards
+    assert (hand.street, len(hand.deck)) == (finished.street, len(finished.deck))
+    assert [(hp.folded, hp.total_contribution, hp.hole_cards) for hp in hand.players] == [
+        (hp.folded, hp.total_contribution, hp.hole_cards) for hp in finished.players
+    ]
+    assert sum(hp.player.stack for hp in hand.players) == total_chips
 
 
 def unchanged_but(state: dict[str, Any], *names: str) -> dict[str, Any]:

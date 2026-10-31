@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 5 — Complete continuous PokerHand/game loop** is in progress. Cycles 1–3 are complete; Cycle 4 is next.
+**Milestone 5 — Complete continuous PokerHand/game loop** is in progress. Cycles 1–4 are complete; Cycle 5 is next.
 
 Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand lifecycle and orchestration contract lives in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md), and the showdown contract in [ADR 0003](adr/0003-interactive-showdown-and-muck.md), which supersedes parts of ADR 0002 and [ADR 0001](adr/0001-showdown-settlement-contract.md). Their numbered decisions are cited below as ADR 0002 §N and ADR 0003 §N. Implemented behavior is recorded in `ARCHITECTURE.md` as each Cycle lands.
 
@@ -24,8 +24,8 @@ Tests drive whole hands through public operations, using the existing `stacked_h
 | 1 | Post-settlement boundary | Complete |
 | 2 | Reveal and show order | Complete |
 | 3 | Interactive showdown and muck | Complete |
-| 4 | Single-hand orchestration | Next (not started) |
-| 5 | Continuous `HoldemGame` and milestone close | Planned |
+| 4 | Single-hand orchestration | Complete |
+| 5 | Continuous `HoldemGame` and milestone close | Next (not started) |
 
 Cycle 3 depends on Cycles 1 and 2; Cycle 4 depends on Cycle 3; Cycle 5 depends on Cycle 4.
 
@@ -45,31 +45,13 @@ Delivered `game/showdown.py` (`Showdown`, `ShowdownKind`, `ShowdownAction`, `Not
 
 ### Cycle 4 — Single-hand orchestration (ADR 0002 §1–2, §8 hand start; ADR 0003 §9)
 
-- `texas_holdem/hand_flow.py`: `begin_hand` (blinds, then hole cards, then advance), `act(hand, seat, action)` taking an `Action` or a `ShowdownAction`, a derived `current_actor(hand)` (the betting actor, else the showdown decider, else `None`), and private `_advance` (below).
-- `act` sends a `ShowdownAction` to `apply_showdown_action` and any other action to `apply_action`, then advances. An action of the wrong kind is rejected by that operation, so `act` stays atomic.
-- Tests, only through `begin_hand` / `act`: fold-out on each street; interactive river showdown with shows, mucks, and an unshown winner; all-in on each street with runout; blinds completing preflop at once; one player with chips against all-ins; multi-way side pots; wrong-kind and out-of-turn actions; atomic rejections. Extend the seeded stress test to drive hands only through `act`.
+Delivered `texas_holdem/hand_flow.py`: `begin_hand(hand, stakes)`, `act(hand, seat, action)` taking an `Action` or a `ShowdownAction` (an explicit `TypeError` for anything else, after the settled guard and before any turn check), the derived `current_actor(hand)`, and private `_advance`. `begin_hand` runs every check of `initialize_betting` and `deal_hole_cards` (shared private validators) before posting blinds; atomicity is limited to expected validation rejections, and an engine defect during advancing propagates without rollback. The orchestration contract is in `ARCHITECTURE.md` ([Hand Flow](ARCHITECTURE.md#hand-flow)). Low-level operations are unchanged. A seeded record-and-replay differential checks that orchestrated hands settle exactly as manually sequenced ones.
 
 ### Cycle 5 — Continuous `HoldemGame` and milestone close (ADR 0002 §2–3, §9)
 
 - `texas_holdem/game.py`: `HoldemGame` with `act(seat, action)` taking either action kind, and `HandInProgressError`. Stakes stay fixed for the game's lifetime as the Milestone 5 contract (see `ROADMAP.md`).
 - Tests: `start` / `next_hand` return a hand awaiting a decision or settled; button movement; busted players skipped; waiting players entering; `next_hand` rejected mid-hand, including during a showdown, without changes; the game cannot continue below two players; seeded multi-hand stress with chip conservation across hands.
 - Close out: `ARCHITECTURE.md` (lifecycle, orchestration, invariants, §9 caller precondition, fixed stakes as a Milestone 5 limitation), README capabilities, `ROADMAP.md` status.
-
-## `_advance` contract
-
-Private to `hand_flow`; runs after `begin_hand` and after every successful `act`. Each pass:
-
-1. hand settled → stop;
-2. one live (non-folded) player → `settle_hand` (it owns the uncontested case) → stop;
-3. a betting actor is to act → stop;
-4. a showdown has started:
-   - not complete → stop (a showdown decision is required);
-   - complete → deal any remaining streets without starting their betting rounds → `settle_hand` → stop;
-5. no showdown yet; ask the shared Hold'em classification rule:
-   - ready (`ALL_IN` or `INTERACTIVE`) → `start_showdown` → next pass;
-   - not ready → `deal_next_street` + `start_betting_round` → next pass (at most once per street).
-
-Postcondition: the hand is settled, has a betting actor, or has a showdown decider. A failure after a valid action is an engine defect and is raised, never swallowed.
 
 ## Invariants to establish
 
@@ -78,7 +60,7 @@ Postcondition: the hand is settled, has a betting actor, or has a showdown decid
 - A settled contested hand has a complete showdown; an uncontested hand has none.
 - `Settlement.showdown_ranks` holds exactly the shown seats.
 - Every pot has at least one final contender among its eligible seats; a pot with more than one has a showdown rank for each; only contenders are paid.
-- Under `hand_flow`, every call ends with a betting actor, a showdown decider, or a settlement.
+- Under `hand_flow`, every successful `begin_hand` or `act` ends with a betting actor, a showdown decider, or a settlement.
 - Across a `HoldemGame`, `sum(player.stack)` is conserved from hand to hand.
 
 ## Risks
@@ -88,4 +70,4 @@ Postcondition: the hand is settled, has a betting actor, or has a showdown decid
 
 ## Open Decisions
 
-None. The Cycle 4 Brief is next.
+None. The Cycle 5 Brief is next.

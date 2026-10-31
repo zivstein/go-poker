@@ -295,6 +295,8 @@ It exposes enough information for a caller to present valid choices without recr
 
 Rejected actions are atomic.
 
+`apply_action` applies one action and collects the round it completes; it never deals, starts the next round or a showdown, or settles. Those steps are the caller's with the low-level operations, and `hand_flow` performs them (see [Hand Flow](#hand-flow)).
+
 ## No-Limit Sizing and All-Ins
 
 The normal minimum opening bet is the big blind.
@@ -473,6 +475,7 @@ Settlement turns the contested pots into stack payouts and records the result. T
 | `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding among the final contenders (winners, ties, odd chips), the internal `_settle` operation and payout, `SettlementInvariantError`; re-exports `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)). It never interprets a showdown action |
 | `game/showdown.py` | variant-agnostic: `Showdown`, `ShowdownKind`, `ShowdownAction`, the derived showdown state, the turn rule `Showdown.decide` and `NotShowdownTurnError`, canonical seat order and the decision-order helper (see [Showdown](#showdown)); imports neither `settlement.py` nor `poker_hand.py` |
 | `game/variants/texas_holdem/showdown.py` | Hold'em: the internal showdown classification and readiness rule, the internal `_showdown_ranks`, the public `start_showdown`, `apply_showdown_action` and `settle_hand`, `IncompleteBoardError`, `ShowdownNotReadyError`, `UncontestedHandError`, `ShowdownAlreadyStartedError`, `ShowdownNotStartedError`, `ShowdownIncompleteError` |
+| `game/variants/texas_holdem/hand_flow.py` | Hold'em: single-hand orchestration over the operations above (see [Hand Flow](#hand-flow)) |
 
 `settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API. Public hand strength is not exposed: `_showdown_ranks(hand, seats)` is internal.
 
@@ -548,6 +551,47 @@ Otherwise it sets only `hand.showdown`. Completing the river round does not star
 
 Otherwise it sets only `hand.showdown`, to the record with the decision added.
 
+### Hand Flow
+
+`game/variants/texas_holdem/hand_flow.py` runs one Hold'em hand so that the caller never collects, deals, starts a betting round or a showdown, or settles. It only coordinates the existing operations: it stores no phase (each next step is derived from the hand) and contains no poker rules. The contract is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md) and [ADR 0003](adr/0003-interactive-showdown-and-muck.md).
+
+The low-level operations stay public with unchanged contracts. Mixing both levels within one hand is not supported.
+
+Entry points:
+
+- `begin_hand(hand, stakes)`: posts the blinds, deals the hole cards, then advances;
+- `act(hand, seat, action)`: applies a betting `Action` or a `ShowdownAction`, then advances; returns `None`;
+- `current_actor(hand)`: a derived, unguarded read of who must act next.
+
+`current_actor(hand)` is `None` for a settled hand; otherwise `hand.betting.current_actor` when betting exists and has an actor; otherwise `hand.showdown.current_decider` when a showdown exists; otherwise `None`, which includes a hand that has not begun.
+
+After a successful `begin_hand` or `act`, `_advance` repeats these steps until one says stop:
+
+1. the hand is settled: stop;
+2. exactly one player has not folded: `settle_hand` (which owns the uncontested path), stop. This precedes the showdown classification, which assumes at least two live players;
+3. a betting actor exists: stop. The operation that completed a betting round has already collected it; `_advance` never collects;
+4. a showdown exists: stop while it is incomplete (only `INTERACTIVE`); once complete, deal the remaining streets up to the river without starting their betting rounds, then `settle_hand`, stop;
+5. the hand's showdown is certain (the classification of [Showdown](#showdown)): `start_showdown`, then the next pass (an `ALL_IN` showdown is complete at once and runs out and settles; an `INTERACTIVE` one stops at its first decider);
+6. otherwise deal the next street and start its betting round, then the next pass.
+
+Every pass stops or makes progress, so `_advance` always ends; it has no iteration cap or fallback.
+
+`act` validates in this order, and a rejection leaves the hand unchanged and does not advance:
+
+1. the hand is already settled: `HandAlreadySettledError`, whatever the action is;
+2. `action` is neither an `Action` nor a `ShowdownAction`: `TypeError`, before any turn check;
+3. the errors of `apply_showdown_action` or `apply_action`, unchanged: a showdown action during betting raises `ShowdownNotStartedError`, a betting action during a showdown `NotPlayersTurnError`, a wrong decider `NotShowdownTurnError`, a wrong betting seat `NotPlayersTurnError`, an illegal action `IllegalActionError`.
+
+`begin_hand` validates in this order, before anything changes:
+
+1. the hand is already settled: `HandAlreadySettledError`;
+2. the checks of `initialize_betting`: `BettingAlreadyInitializedError`, then `BettingNotPreflopError`;
+3. the checks of `deal_hole_cards`: `HandPastPreflopError`, `HoleCardsAlreadyDealtError`, `DeckEmptyError`.
+
+Each low-level operation and `begin_hand` share one private validator per operation, so the checks have one source.
+
+Atomicity is narrow. The expected public precondition and validation rejections of `begin_hand` and `act` leave the hand unchanged. Once valid execution begins, an unexpected internal engine defect raised later, for example while advancing, propagates; there is no rollback or transaction guarantee.
+
 ### Payout
 
 `_settle` derives the pots, awards, and settlement before changing anything. It then adds each seat's payout to its stack, clears `all_in` for every paid seat, and stores the settlement on the hand.
@@ -568,6 +612,8 @@ Otherwise it sets only `hand.showdown`, to the record with the decision added.
 - `start_showdown`
 - `apply_showdown_action`
 - `settle_hand` (the internal `_settle` also keeps its own check)
+- `begin_hand`
+- `act`
 
 A rejection leaves the hand unchanged. The guard comes first because a payout can clear `all_in` and make a settled hand look open to further dealing or betting.
 
@@ -601,6 +647,7 @@ Other invariants:
 
 - a participant is `all_in` exactly when their stack is zero, before and after payout;
 - a settled hand (`hand.settlement is not None`) is rejected first by every public hand-level mutation entry point, leaving it unchanged;
+- under `hand_flow`, every successful `begin_hand` or `act` ends with a betting actor, a showdown decider, or a settlement;
 - `hand.showdown` is `None` or its `order` is exactly the non-folded seats; an `ALL_IN` showdown has its seats in canonical order and no decisions; decisions are only added, one at a time, never once complete; a mucked seat is never folded;
 - a settled contested hand has a complete showdown; an uncontested hand has none;
 - `Settlement.showdown_ranks` holds exactly the shown seats;
