@@ -22,19 +22,23 @@ from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingNotInitializedError
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError, PotAward, Settlement
+from go_poker.game.showdown import Showdown, ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
 from go_poker.game.variants.texas_holdem.showdown import (
     IncompleteBoardError,
     ShowdownNotReadyError,
+    _showdown_ranks,
+    apply_showdown_action,
     settle_hand,
-    showdown_ranks,
+    start_showdown,
 )
 
 STAKES = Stakes(small_blind=5, big_blind=10)
 FOLD = Action(ActionType.FOLD)
 CHECK = Action(ActionType.CHECK)
 CALL = Action(ActionType.CALL)
+SHOW = ShowdownAction.SHOW
 
 HOLES = {1: "Ah Ad", 2: "Kd Kh", 3: "3s 4s"}
 BOARD = "2c 7d 9h Jc Ks"
@@ -81,6 +85,14 @@ def check_to(hand: PokerHand, street: Street) -> None:
     while hand.street is not street:
         next_street(hand)
         check_street(hand)
+
+
+def everyone_shows(hand: PokerHand) -> None:
+    """Start the showdown and let every player decide in turn to show, so all live hands compete."""
+    start_showdown(hand)
+    assert hand.showdown is not None
+    while (decider := hand.showdown.current_decider) is not None:
+        apply_showdown_action(hand, decider, SHOW)
 
 
 def deal_remaining_streets(hand: PokerHand, *, start_rounds: bool) -> None:
@@ -275,13 +287,14 @@ def test_an_all_in_player_whose_opponents_fold_wins_uncontested_and_is_not_all_i
 
 
 def test_showdown_after_a_completed_river_round(new_hand: NewHand) -> None:
-    """The river round was played to its end with a bet and two calls; the best hand wins and ranks are recorded for
-    every live seat in hand order."""
+    """The river round was played to its end with a bet and two calls and everyone showed; the best hand wins and ranks
+    are recorded for every live seat in hand order."""
     hand = new_hand()
     call_preflop(hand)
     check_to(hand, Street.TURN)
     next_street(hand)
     play(hand, (2, bet(20)), (3, CALL), (1, CALL))
+    everyone_shows(hand)
 
     settlement = settle_and_check(hand)
 
@@ -291,7 +304,7 @@ def test_showdown_after_a_completed_river_round(new_hand: NewHand) -> None:
         (2, HandRank(HandCategory.THREE_OF_A_KIND, (13, 11, 9))),
         (3, HandRank(HandCategory.HIGH_CARD, (13, 11, 9, 7, 4))),
     )
-    assert settlement.showdown_ranks == tuple(showdown_ranks(hand).items())
+    assert settlement.showdown_ranks == tuple(_showdown_ranks(hand, {1, 2, 3}).items())
 
 
 @pytest.mark.parametrize("start_rounds", [False, True], ids=["later-rounds-not-started", "later-rounds-started"])
@@ -370,6 +383,7 @@ def test_ties_split_the_pots_and_the_odd_chips_go_clockwise_from_the_button(new_
     hand = new_hand(holes={1: "As Qh", 2: "9c 9d", 3: "Ac Qd"}, board="Kc Kd 7h 4s 2d")
     play(hand, (1, raise_to(25)), (2, FOLD), (3, CALL))
     check_to(hand, Street.RIVER)
+    everyone_shows(hand)
 
     settlement = settle_and_check(hand)
 
@@ -384,10 +398,46 @@ def test_odd_chips_follow_the_hands_clockwise_order_not_ascending_seat_numbers(n
     hand = new_hand(holes={1: "As Qh", 2: "Ac Qd", 3: "9c 9d"}, board="Kc Kd 7h 4s 2d", button=2)
     play(hand, (2, raise_to(25)), (3, FOLD), (1, CALL))
     check_to(hand, Street.RIVER)
+    everyone_shows(hand)
 
     settlement = settle_and_check(hand)
 
     assert [award.shares for award in settlement.pot_awards] == [((1, 8), (2, 7)), ((1, 20), (2, 20))]
+
+
+@pytest.mark.parametrize(
+    ("stacks", "holes", "board"),
+    [
+        ({1: 300, 2: 100, 3: 300}, HOLES, BOARD),
+        ({1: 100, 2: 100, 3: 100}, HOLES, BOARD),
+        ({1: 100, 2: 100, 3: 100}, TYING_HOLES, ROYAL_FLUSH_BOARD),
+        ({1: 1000, 2: 200, 3: 1000}, HOLES, BOARD),
+    ],
+    ids=["side-pots", "one-pot", "three-way-split", "one-short-stack"],
+)
+def test_an_all_in_hand_settles_the_same_directly_and_after_an_explicit_showdown_start(
+    new_hand: NewHand, stacks: dict[int, int], holes: dict[int, str], board: str
+) -> None:
+    """Every live hand is tabled and ranked in an all-in showdown, so starting it explicitly changes nothing about the
+    settlement, the stacks or the all_in flags; either way the recorded showdown is the complete one in canonical live
+    order with no decisions."""
+    direct = new_hand(stacks=stacks, holes=holes, board=board)
+    explicit = new_hand(stacks=stacks, holes=holes, board=board)
+    for hand in (direct, explicit):
+        play(hand, (1, raise_to(max(stacks.values()))), (2, CALL), (3, CALL))
+    start_showdown(explicit)
+    for hand in (direct, explicit):
+        deal_remaining_streets(hand, start_rounds=False)
+
+    direct_settlement = settle_and_check(direct)
+    explicit_settlement = settle_and_check(explicit)
+
+    assert direct_settlement == explicit_settlement
+    assert [(s.player.stack, s.all_in) for s in direct.players] == [
+        (s.player.stack, s.all_in) for s in explicit.players
+    ]
+    assert direct.showdown == explicit.showdown == Showdown(ShowdownKind.ALL_IN, (2, 3, 1), ())
+    assert [seat for seat, _ in direct_settlement.showdown_ranks] == [1, 2, 3]
 
 
 # =============================================================================
@@ -516,6 +566,7 @@ def test_settling_twice_is_rejected_and_changes_nothing(new_hand: NewHand) -> No
     hand = new_hand()
     call_preflop(hand)
     check_to(hand, Street.RIVER)
+    everyone_shows(hand)
     settle_and_check(hand)
     before = hand_snapshot(hand)
 

@@ -4,10 +4,11 @@ import pytest
 
 from go_poker.core.hand_rank import HandCategory, HandRank
 from go_poker.game.betting.pots import Pot
-from go_poker.game.settlement import PotAward, Settlement, _award_pots
+from go_poker.game.settlement import PotAward, Settlement, SettlementInvariantError, _award_pots
 
-# Pots and ranks are built directly: pot awarding is a pure function of the pots, the ranks and the seat order. Seat
-# orders are the hand's seats clockwise with the button first, as in `hand.players`.
+# Pots and ranks are built directly: pot awarding is a pure function of the pots, the ranks, the contenders and the seat
+# order. Seat orders are the hand's seats clockwise with the button first, as in `hand.players`. Unless a test names the
+# contenders, every seat of the order is one, so the pot's eligible seats alone decide who competes.
 
 BEST = HandRank(HandCategory.FLUSH, (14, 10, 8, 5, 3))
 GOOD = HandRank(HandCategory.TWO_PAIR, (9, 4, 14))
@@ -19,8 +20,19 @@ def pot(amount: int, *eligible_seats: int) -> Pot:
     return Pot(amount, frozenset(eligible_seats))
 
 
-def award_one(pot_to_award: Pot, ranks: dict[int, HandRank], seats_from_button: tuple[int, ...]) -> PotAward:
-    (pot_award,) = _award_pots([pot_to_award], ranks, seats_from_button)
+def award_all(pots: list[Pot], ranks: dict[int, HandRank], seats_from_button: tuple[int, ...]) -> tuple[PotAward, ...]:
+    return _award_pots(pots, ranks, set(seats_from_button), seats_from_button)
+
+
+def award_one(
+    pot_to_award: Pot,
+    ranks: dict[int, HandRank],
+    seats_from_button: tuple[int, ...],
+    contenders: set[int] | None = None,
+) -> PotAward:
+    (pot_award,) = _award_pots(
+        [pot_to_award], ranks, set(seats_from_button) if contenders is None else contenders, seats_from_button
+    )
     return pot_award
 
 
@@ -63,7 +75,7 @@ def test_ranks_of_the_same_category_are_compared_by_their_tiebreakers_and_tie_on
 
 
 def test_awards_are_in_pot_order() -> None:
-    awards = _award_pots([pot(30, 1, 2), pot(20, 2), pot(10, 1, 2)], {1: BEST, 2: GOOD}, (1, 2))
+    awards = award_all([pot(30, 1, 2), pot(20, 2), pot(10, 1, 2)], {1: BEST, 2: GOOD}, (1, 2))
 
     assert [(award.pot, award.shares) for award in awards] == [
         (pot(30, 1, 2), ((1, 30),)),
@@ -133,7 +145,7 @@ def test_heads_up_big_blind_gets_the_odd_chip_and_the_button_is_last() -> None:
 
 def test_odd_chips_are_allocated_per_pot() -> None:
     """Each pot is split independently, so each pot's odd chip goes to the first tied winner in order."""
-    awards = _award_pots([pot(61, 1, 2, 3), pot(41, 1, 2, 3)], {1: BEST, 2: BEST, 3: WEAK}, (1, 2, 3))
+    awards = award_all([pot(61, 1, 2, 3), pot(41, 1, 2, 3)], {1: BEST, 2: BEST, 3: WEAK}, (1, 2, 3))
 
     assert [award.shares for award in awards] == [((2, 31), (1, 30)), ((2, 21), (1, 20))]
 
@@ -147,7 +159,7 @@ def test_a_side_pot_can_be_won_by_a_different_player_than_the_main_pot() -> None
     """Seat 2 is all-in short with the best hand: it wins the main pot but is not eligible for the side pot, which
     goes to the best of the others."""
     main_pot, side_pot = pot(400, 1, 2, 3, 4), pot(200, 1, 3, 4)
-    awards = _award_pots([main_pot, side_pot], {1: FAIR, 2: BEST, 3: GOOD, 4: WEAK}, (1, 2, 3, 4))
+    awards = award_all([main_pot, side_pot], {1: FAIR, 2: BEST, 3: GOOD, 4: WEAK}, (1, 2, 3, 4))
 
     assert awards == (PotAward(main_pot, ((2, 400),)), PotAward(side_pot, ((3, 200),)))
 
@@ -156,7 +168,7 @@ def test_a_best_hand_short_stack_wins_only_the_main_pot() -> None:
     """The short stack holds the best hand but is eligible only for the main pot; the better of the others wins the
     side pot, so a better hand that is not eligible never takes a pot."""
     main_pot, side_pot = pot(300, 1, 2, 3), pot(400, 2, 3)
-    awards = _award_pots([main_pot, side_pot], {1: BEST, 2: WEAK, 3: GOOD}, (1, 2, 3))
+    awards = award_all([main_pot, side_pot], {1: BEST, 2: WEAK, 3: GOOD}, (1, 2, 3))
 
     assert awards == (PotAward(main_pot, ((1, 300),)), PotAward(side_pot, ((3, 400),)))
 
@@ -166,6 +178,84 @@ def test_ranks_of_seats_that_are_not_eligible_never_tie_into_a_pot() -> None:
     pot_award = award_one(pot(100, 2, 3), {1: BEST, 2: BEST, 3: GOOD}, (1, 2, 3))
 
     assert pot_award.shares == ((2, 100),)
+
+
+# =============================================================================
+# CONTENDERS
+# =============================================================================
+
+
+def test_a_pot_is_awarded_only_among_its_eligible_seats_that_are_contenders() -> None:
+    """Seat 2 holds the best rank and is eligible but is not a contender (it mucked), so the best of seats 1 and 3 wins
+    and seat 2 takes no share. The awarded pot is still the pot as derived, with seat 2 eligible."""
+    contested = pot(100, 1, 2, 3)
+
+    pot_award = award_one(contested, {1: FAIR, 3: GOOD}, (1, 2, 3), contenders={1, 3})
+
+    assert pot_award == PotAward(contested, ((3, 100),))
+    assert 2 in pot_award.pot.eligible_seats
+
+
+def test_a_sole_final_contender_takes_the_pot_without_consulting_ranks() -> None:
+    """Only seat 1 is both eligible and a contender: it needs no rank, and a better rank elsewhere is irrelevant."""
+    assert award_one(pot(100, 1, 2, 3), {}, (1, 2, 3), contenders={1}).shares == ((1, 100),)
+    assert award_one(pot(100, 1, 2, 3), {2: BEST, 3: GOOD}, (1, 2, 3), contenders={1}).shares == ((1, 100),)
+
+
+def test_a_contender_that_is_not_eligible_for_the_pot_takes_nothing_from_it() -> None:
+    """Seats 1 and 2 are contenders but only seat 2 is eligible: the sole final contender is seat 2."""
+    assert award_one(pot(100, 2, 3), {1: BEST, 2: WEAK}, (1, 2, 3), contenders={1, 2}).shares == ((2, 100),)
+
+
+def test_odd_chips_among_the_final_contenders_follow_the_odd_chip_order() -> None:
+    """Seat 2 is not a contender: seats 1 and 3 tie and the odd chip goes to seat 3, the first left of the button."""
+    pot_award = award_one(pot(101, 1, 2, 3), {1: BEST, 3: BEST}, (1, 2, 3), contenders={1, 3})
+
+    assert pot_award.shares == ((3, 51), (1, 50))
+
+
+def test_the_contenders_decide_each_pot_independently() -> None:
+    """Seat 2 is the only contender for the side pot and the better of two for the main pot."""
+    main_pot, side_pot = pot(300, 1, 2, 3), pot(200, 2)
+
+    awards = _award_pots([main_pot, side_pot], {2: BEST, 3: GOOD}, {2, 3}, (1, 2, 3))
+
+    assert awards == (PotAward(main_pot, ((2, 300),)), PotAward(side_pot, ((2, 200),)))
+
+
+# =============================================================================
+# POT INVARIANTS
+# =============================================================================
+
+
+def test_a_pot_without_a_final_contender_is_an_invariant_violation() -> None:
+    with pytest.raises(SettlementInvariantError):
+        award_one(pot(100, 1, 2), {1: BEST, 2: GOOD}, (1, 2, 3), contenders={3})
+
+
+def test_a_pot_with_no_contenders_at_all_is_an_invariant_violation() -> None:
+    with pytest.raises(SettlementInvariantError):
+        award_one(pot(100, 1, 2), {1: BEST, 2: GOOD}, (1, 2, 3), contenders=set())
+
+
+@pytest.mark.parametrize("ranks", [{1: BEST}, {2: BEST}, {}], ids=["seat-2-unranked", "seat-1-unranked", "no-ranks"])
+def test_a_pot_with_several_final_contenders_needs_a_rank_for_each(ranks: dict[int, HandRank]) -> None:
+    with pytest.raises(SettlementInvariantError):
+        award_one(pot(100, 1, 2), ranks, (1, 2, 3), contenders={1, 2})
+
+
+def test_an_unranked_seat_that_is_not_a_final_contender_is_not_a_violation() -> None:
+    assert award_one(pot(100, 1, 2, 3), {1: BEST, 3: GOOD}, (1, 2, 3), contenders={1, 3}).shares == ((1, 100),)
+
+
+def test_a_violation_in_a_later_pot_raises_for_the_whole_award() -> None:
+    """Every pot is checked, not only the first: no awards are returned when any pot is invalid."""
+    with pytest.raises(SettlementInvariantError):
+        _award_pots([pot(100, 1, 2), pot(50, 3)], {1: BEST, 2: GOOD}, {1, 2}, (1, 2, 3))
+
+
+def test_the_invariant_error_is_a_runtime_error() -> None:
+    assert issubclass(SettlementInvariantError, RuntimeError)
 
 
 # =============================================================================

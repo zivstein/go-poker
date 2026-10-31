@@ -6,12 +6,13 @@ actions: folds, checks, calls, full bets and raises at the minimum, the maximum 
 targets, street by street until betting is closed or the river round is complete. `CheckedHand` asserts the betting and
 accounting invariants after every step. The remaining streets are then dealt and the hand is settled, and the tests
 here add the end-of-hand and settlement properties: the settlement invariants, table-wide chip conservation, winners
-that really hold the best hands, rejection of settling too early or twice, the reveal every contested hand ends with
-(none for an uncontested one), and the awarding rules on the same hand's pots under tie-heavy chosen ranks. They also
-check that the seed set keeps reaching the rules it stresses.
+that really hold the best hands among the shown contenders, rejection of settling too early or twice, the showdown every
+contested hand ends with (an all-in one is complete at once; an interactive one is started and decided with seeded SHOW
+and MUCK decisions; none for an uncontested hand), and the awarding rules on the same hand's pots under tie-heavy chosen
+ranks and seeded contender subsets. They also check that the seed set keeps reaching the rules it stresses.
 The seeds are fixed, so every run plays the same hands and a failure names the seed that reproduces it. This is the
-main seeded hand driver in the repository; `test_reveal_stress` is a second one, with deep stacks and passive play, for
-dense non-all-in river showdowns.
+main seeded hand driver in the repository; `test_showdown_stress` is a second one, with deep stacks and passive play,
+for dense non-all-in river showdowns and their decisions.
 """
 
 import copy
@@ -33,17 +34,20 @@ from go_poker.game.betting.rounds import is_betting_closed, is_round_complete
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.position import Blind
-from go_poker.game.reveal import Reveal, RevealKind
 from go_poker.game.settlement import HandAlreadySettledError, PotAward, _award_pots
+from go_poker.game.showdown import NotShowdownTurnError, Showdown, ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import deal_next_street
 from go_poker.game.variants.texas_holdem.showdown import (
-    HandAlreadyRevealedError,
     IncompleteBoardError,
+    ShowdownAlreadyStartedError,
+    ShowdownIncompleteError,
     ShowdownNotReadyError,
+    ShowdownNotStartedError,
     UncontestedHandError,
-    reveal_hands,
+    apply_showdown_action,
     settle_hand,
+    start_showdown,
 )
 
 # The conftest `CheckedHand`, which test modules cannot import.
@@ -55,7 +59,7 @@ SEEDS = range(200)
 MAX_STEPS = 1_000  # far more steps than any generated hand needs
 MIN_OCCURRENCES = 10  # how often, at least, the seed set must reach each rule it stresses
 # The generator is aggressive, so hands that reach the river with nobody all-in are rare; the seed set has a few.
-RARE_COUNTERS = ("showdown_reveals", "aggressor_showdowns")
+RARE_COUNTERS = ("interactive_showdowns", "aggressor_showdowns", "mucked_showdowns", "unshown_winners")
 
 # Each player's stack comes from one of these ranges, equally likely: around or below the blinds, a few big blinds,
 # medium, and very deep.
@@ -89,9 +93,11 @@ class Exercised:
     deepest_layering: int = 0  # the most pots a hand ended with
     contested_showdowns: int = 0  # settled hands with two or more live players
     uncontested_settlements: int = 0  # settled hands with one live player
-    all_in_reveals: int = 0  # settled hands revealed all-in
-    showdown_reveals: int = 0  # settled hands revealed in the river show order (rare, see RARE_COUNTERS)
-    aggressor_showdowns: int = 0  # river show orders starting with a river bettor or raiser (rare)
+    all_in_showdowns: int = 0  # settled hands whose showdown was ALL_IN
+    interactive_showdowns: int = 0  # settled hands with an INTERACTIVE river showdown (rare, see RARE_COUNTERS)
+    aggressor_showdowns: int = 0  # interactive decision orders starting with a river bettor or raiser (rare)
+    mucked_showdowns: int = 0  # interactive showdowns where somebody mucked (rare)
+    unshown_winners: int = 0  # interactive showdowns won by the last contender without showing (rare)
     different_pot_winners: int = 0  # settled hands with several pots that were not all won by the same winners
     paid_all_ins_cleared: int = 0  # all-in players paid at settlement, who stop being all-in
     unpaid_all_ins_kept: int = 0  # all-in players paid nothing, who keep their zero stack and all_in
@@ -100,6 +106,9 @@ class Exercised:
     tied_pots: int = 0  # pots with several winners
     identical_adjacent_pots: int = 0  # neighbouring pots with the same eligible seats
     multi_odd_chip_pots: int = 0  # pots with several winners and two or more odd chips
+    contender_subsets: int = 0  # chosen-rank awards where some live seat was not a contender
+    sole_contender_side_pots: int = 0  # pots with several eligible seats but one final contender, won unranked
+    best_rank_excluded: int = 0  # pots where a non-contender held the best chosen rank among the eligible seats
 
 
 def random_hand(rng: random.Random, make_hand: HandFactory) -> PokerHand:
@@ -235,7 +244,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "deck": len(hand.deck),
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
-        "reveal": hand.reveal,
+        "showdown": hand.showdown,
         "accounting": [
             (hp.seat_number, hp.folded, hp.street_contribution, hp.total_contribution, tuple(hp.hole_cards))
             for hp in hand.players
@@ -256,48 +265,119 @@ def assert_rejected(hand: PokerHand) -> None:
     assert snapshot(hand) == before
 
 
-def expected_reveal(hand: PokerHand, all_in_seats: set[int]) -> Reveal:
-    """The reveal of a ready contested hand, stated without the implementation: ALL_IN when a live player is all-in
-    (every live seat clockwise from the first seat left of the button), else the river show order."""
+def canonical_live(hand: PokerHand) -> list[int]:
+    """The live seats clockwise from the first seat left of the button, the button last."""
     seats = [hp.seat_number for hp in hand.players]  # clockwise, button first
-    live = [seat for seat in [*seats[1:], seats[0]] if seat in {hp.seat_number for hp in hand.players if not hp.folded}]
+    return [
+        seat for seat in [*seats[1:], seats[0]] if not next(hp for hp in hand.players if hp.seat_number == seat).folded
+    ]
+
+
+def expected_showdown(hand: PokerHand, all_in_seats: set[int]) -> Showdown:
+    """The showdown a ready contested hand starts with, stated without the implementation: ALL_IN when a live player is
+    all-in (every live seat in canonical order), else the INTERACTIVE river decision order. No decisions yet."""
+    live = canonical_live(hand)
     if all_in_seats & set(live):
-        return Reveal(RevealKind.ALL_IN, tuple(live))
+        return Showdown(ShowdownKind.ALL_IN, tuple(live))
     assert hand.betting is not None
     start = live.index(hand.betting.last_aggressor) if hand.betting.last_aggressor is not None else 0
-    return Reveal(RevealKind.SHOWDOWN, tuple(live[start:] + live[:start]))
+    return Showdown(ShowdownKind.INTERACTIVE, tuple(live[start:] + live[:start]))
 
 
-def check_reveal(hand: PokerHand, all_in_seats: set[int], contested: bool) -> None:
-    """After settling directly: a contested hand has a reveal covering exactly its live seats, and an uncontested hand
-    has none. Revealing a settled hand is rejected as settled."""
+def expected_derived(showdown: Showdown) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], int | None, bool]:
+    """Shown, mucked, contenders, current decider and completion of a showdown, recomputed from its order and decisions
+    alone, stated without the implementation."""
+    if showdown.kind is ShowdownKind.ALL_IN:
+        return showdown.order, (), showdown.order, None, True
+    pairs = list(zip(showdown.order, showdown.decisions, strict=False))
+    shown = tuple(seat for seat, action in pairs if action is ShowdownAction.SHOW)
+    mucked = tuple(seat for seat, action in pairs if action is ShowdownAction.MUCK)
+    contenders = tuple(seat for seat in showdown.order if seat not in mucked)
+    complete = len(showdown.decisions) == len(showdown.order) or len(contenders) == 1
+    return shown, mucked, contenders, None if complete else showdown.order[len(showdown.decisions)], complete
+
+
+def decide_seeded(rng: random.Random, hand: PokerHand, show_probability: float) -> None:
+    """Start an interactive showdown and let each decider in turn SHOW or MUCK at random until it is complete, checking
+    each step against the oracle. Out-of-turn decisions and an early settlement are rejected without a change."""
+    start_showdown(hand)
+    expected = expected_showdown(hand, set())
+    assert hand.showdown == expected
+    while True:
+        showdown = hand.showdown
+        assert showdown is not None
+        assert (
+            showdown.shown,
+            showdown.mucked,
+            showdown.contenders,
+            showdown.current_decider,
+            showdown.is_complete,
+        ) == expected_derived(showdown)
+        decider = showdown.current_decider
+        other_seat = next((seat for seat in showdown.order if seat != decider), 99)
+        before = snapshot(hand)
+        with pytest.raises(NotShowdownTurnError):
+            apply_showdown_action(hand, other_seat, ShowdownAction.SHOW)
+        assert snapshot(hand) == before
+        if decider is None:
+            break
+        with pytest.raises(ShowdownIncompleteError):
+            settle_hand(hand)
+        assert snapshot(hand) == before
+        apply_showdown_action(
+            hand, decider, ShowdownAction.SHOW if rng.random() < show_probability else ShowdownAction.MUCK
+        )
+
+
+def check_showdown_record(
+    hand: PokerHand, all_in_seats: set[int], contested: bool, exercised: Exercised, show_probability: float
+) -> None:
+    """After settling: a contested hand has a complete showdown covering exactly its live seats, and an uncontested
+    hand has none. Starting or deciding in a settled hand is rejected as settled."""
     if not contested:
-        assert hand.reveal is None
+        assert hand.showdown is None
         return
-    expected = expected_reveal(hand, all_in_seats)
-    assert hand.reveal == expected
-    assert sorted(expected.seats) == sorted(hp.seat_number for hp in hand.players if not hp.folded)
+    showdown = hand.showdown
+    assert showdown is not None and showdown.is_complete
+    expected = expected_showdown(hand, all_in_seats)
+    assert (showdown.kind, showdown.order) == (expected.kind, expected.order)
+    assert sorted(showdown.order) == sorted(hp.seat_number for hp in hand.players if not hp.folded)
+    assert not any(next(hp for hp in hand.players if hp.seat_number == seat).folded for seat in showdown.mucked)
     with pytest.raises(HandAlreadySettledError):
-        reveal_hands(hand)
+        start_showdown(hand)
+    with pytest.raises(HandAlreadySettledError):
+        apply_showdown_action(hand, showdown.order[0], ShowdownAction.MUCK)
+    assert hand.showdown is showdown
+    interactive = showdown.kind is ShowdownKind.INTERACTIVE
+    exercised.all_in_showdowns = not interactive
+    exercised.interactive_showdowns = interactive
+    exercised.aggressor_showdowns = interactive and hand.betting is not None and hand.betting.last_aggressor is not None
+    exercised.mucked_showdowns = bool(showdown.mucked)
+    exercised.unshown_winners = interactive and len(showdown.contenders) == 1 and not showdown.shown
 
 
 def check_awards(
-    hand: PokerHand, awards: tuple[PotAward, ...], ranks: dict[int, HandRank], layers: tuple[Pot, ...]
+    hand: PokerHand,
+    awards: tuple[PotAward, ...],
+    ranks: dict[int, HandRank],
+    layers: tuple[Pot, ...],
+    contenders: set[int],
 ) -> None:
-    """The awarding rules, stated without the implementation: every pot is won by the best-ranked eligible seats, split
-    in whole chips that differ by at most one, the larger first, in clockwise order from the seat left of the button,
-    and only live seats are paid."""
+    """The awarding rules, stated without the implementation: every pot is won by the best-ranked of its eligible seats
+    that are contenders (a sole such seat takes it unranked), split in whole chips that differ by at most one, the
+    larger first, in clockwise order from the seat left of the button, and only contenders are paid. The award's pot is
+    the pot as derived, whatever the contenders."""
     seats = [hp.seat_number for hp in hand.players]  # clockwise, button first
     clockwise = [*seats[1:], seats[0]]  # first seat left of the button ... the button
     assert [award.pot for award in awards] == list(layers)
     paid: dict[int, int] = {}
     for award in awards:
-        eligible = award.pot.eligible_seats
+        final = award.pot.eligible_seats & contenders
         winners = award.winners
-        assert winners and set(winners) <= eligible
-        if len(eligible) > 1:
-            best = max(ranks[seat] for seat in eligible)
-            assert set(winners) == {seat for seat in eligible if ranks[seat] == best}
+        assert final and winners and set(winners) <= final
+        if len(final) > 1:
+            best = max(ranks[seat] for seat in final)
+            assert set(winners) == {seat for seat in final if ranks[seat] == best}
         positions = [clockwise.index(seat) for seat in winners]
         assert positions == sorted(positions)
         amounts = [chips for _, chips in award.shares]
@@ -309,69 +389,129 @@ def check_awards(
         for seat, chips in award.shares:
             paid[seat] = paid.get(seat, 0) + chips
     assert sum(paid.values()) == middle_pot(hand)
+    assert set(paid) <= contenders
     assert all(not hand.players[seats.index(seat)].folded for seat in paid)
 
 
 def check_chosen_rank_awards(h: CheckedHand, exercised: Exercised, seed: int) -> None:
     """Award the hand's pots with tie-heavy chosen ranks, which real hands rarely produce, and check the awarding
-    rules on the pots this hand really has. An uncontested hand has no ranks."""
+    rules on the pots this hand really has. An uncontested hand has no ranks. It is awarded twice: with every live seat
+    a contender, then with a seeded subset of them (see `check_contender_subset_awards`)."""
     hand = h.hand
     layers = pots(hand)
     live = [hp.seat_number for hp in hand.players if not hp.folded]
     rank_rng = random.Random(f"ranks-{seed}")
     ranks = {} if len(live) == 1 else {seat: rank_rng.choice(RANK_CHOICES) for seat in live}
 
-    awards = _award_pots(layers, ranks, [hp.seat_number for hp in hand.players])
+    awards = _award_pots(layers, ranks, set(live), [hp.seat_number for hp in hand.players])
 
-    check_awards(hand, awards, ranks, layers)
+    check_awards(hand, awards, ranks, layers, set(live))
     exercised.identical_adjacent_pots = sum(a.eligible_seats == b.eligible_seats for a, b in pairwise(layers))
     exercised.tied_pots = sum(len(award.winners) > 1 for award in awards)
     exercised.odd_chip_splits = sum(len({chips for _, chips in award.shares}) > 1 for award in awards)
     exercised.multi_odd_chip_pots = sum(
         award.pot.amount % len(award.winners) >= 2 for award in awards if len(award.winners) > 1
     )
+    check_contender_subset_awards(h, exercised, seed, ranks)
 
 
-def check_early_reveal(hand: PokerHand, contested: bool, all_in_seats: set[int]) -> None:
-    """Revealing a ready hand before settling it, on a copy: an uncontested hand cannot be revealed; a contested hand
-    gets the expected reveal and changes nothing else, cannot be revealed twice, and settling keeps the reveal as it
-    is."""
+def check_contender_subset_awards(h: CheckedHand, exercised: Exercised, seed: int, ranks: dict[int, HandRank]) -> None:
+    """Award the same pots among a seeded subset of the live seats, as a showdown with mucks would, and check the
+    awarding rules. The subset always keeps every pot covered: it holds a seat of the deepest pot, whose eligible seats
+    are inside every other pot's. Seats outside it keep their ranks, sometimes the best, which the awards must ignore,
+    and a pot with a single final contender is won by it whatever the ranks say."""
+    hand = h.hand
+    layers = pots(hand)
+    live = [hp.seat_number for hp in hand.players if not hp.folded]
+    subset_rng = random.Random(f"contenders-{seed}")
+    covering_seat = subset_rng.choice(sorted(layers[-1].eligible_seats))
+    contenders = {seat for seat in live if subset_rng.random() < 0.6} | {covering_seat}
+
+    awards = _award_pots(layers, ranks, contenders, [hp.seat_number for hp in hand.players])
+
+    check_awards(hand, awards, ranks, layers, contenders)
+    exercised.contender_subsets = contenders != set(live)
+    exercised.sole_contender_side_pots = sum(
+        len(award.pot.eligible_seats) > 1 and len(award.pot.eligible_seats & contenders) == 1 for award in awards
+    )
+    exercised.best_rank_excluded = sum(
+        len(award.pot.eligible_seats & contenders) > 1
+        and max(ranks[seat] for seat in award.pot.eligible_seats)
+        > max(ranks[seat] for seat in award.pot.eligible_seats & contenders)
+        for award in awards
+    )
+
+
+def unchanged_but(state: dict[str, Any], *names: str) -> dict[str, Any]:
+    """A snapshot without the named parts, for checking that only they changed."""
+    return {key: value for key, value in state.items() if key not in names}
+
+
+def check_early_showdown(hand: PokerHand, contested: bool, all_in_seats: set[int], seed: int) -> None:
+    """Starting the showdown of a ready hand before settling it, on a copy: an uncontested hand cannot start one; a
+    contested hand gets the expected showdown and changes nothing else, cannot start twice, and settling keeps the
+    showdown as it is (an interactive one after its decisions)."""
     early = copy.deepcopy(hand)
     before = snapshot(early)
     if not contested:
         with pytest.raises(UncontestedHandError):
-            reveal_hands(early)
+            start_showdown(early)
         assert snapshot(early) == before
         return
 
-    reveal_hands(early)
-    after = snapshot(early)
-    reveal = early.reveal
-    assert reveal == expected_reveal(early, all_in_seats)
-    assert {k: v for k, v in after.items() if k != "reveal"} == {k: v for k, v in before.items() if k != "reveal"}
-    with pytest.raises(HandAlreadyRevealedError):
-        reveal_hands(early)
-    assert snapshot(early) == after
+    expected = expected_showdown(early, all_in_seats)
+    if expected.kind is ShowdownKind.INTERACTIVE:
+        decide_seeded(random.Random(f"early-{seed}"), early, 0.5)
+        showdown = early.showdown
+        assert showdown is not None and showdown.is_complete
+    else:
+        start_showdown(early)
+        showdown = early.showdown
+        assert showdown == expected
+        after = snapshot(early)
+        assert unchanged_but(after, "showdown") == unchanged_but(before, "showdown")
+    with pytest.raises(ShowdownAlreadyStartedError):
+        start_showdown(early)
 
     settle_hand(early)
-    assert early.reveal is reveal
+    assert early.showdown is showdown
 
 
 def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_rounds: PokerHand | None) -> None:
     """Settle the finished betting (dealing the rest of the board of a contested hand first, which the run-out already
-    did) and check everything settlement promises."""
+    did) and check everything settlement promises. An all-in hand settles directly; an interactive one needs its
+    showdown started and decided first, with seeded SHOW and MUCK decisions."""
     hand = h.hand
     live = [hp for hp in hand.players if not hp.folded]
     contested = len(live) >= 2
     layers = pots(hand)
     middle = middle_pot(hand)
+    all_in_before = {hp.seat_number for hp in hand.players if hp.all_in}
+    show_probability = random.Random(f"show-{seed}").choice((0.15, 0.5, 0.85))
+    check_early_showdown(hand, contested, all_in_before, seed)
     if contested:
         assert len(hand.board) == 5
-        expected_ranks = {hp.seat_number: evaluate_best([*hp.hole_cards, *hand.board]) for hp in live}
+        if expected_showdown(hand, all_in_before).kind is ShowdownKind.INTERACTIVE:
+            before_start = snapshot(hand)
+            with pytest.raises(ShowdownNotStartedError):
+                settle_hand(hand)
+            assert snapshot(hand) == before_start
+            decide_seeded(random.Random(f"decisions-{seed}"), hand, show_probability)
+    showdown = hand.showdown
+    if contested and showdown is None:
+        # A direct settlement of an ALL_IN hand records the complete showdown: every live hand is shown and competes.
+        assert expected_showdown(hand, all_in_before).kind is ShowdownKind.ALL_IN
+        contenders = shown = set(canonical_live(hand))
+    else:
+        contenders = set(showdown.contenders) if showdown is not None else {hp.seat_number for hp in live}
+        shown = set(showdown.shown) if showdown is not None else set()
+    if contested:
+        # Only shown hands are evaluated: the settlement ranks exactly the shown seats, in hand order.
+        expected_ranks = {
+            hp.seat_number: evaluate_best([*hp.hole_cards, *hand.board]) for hp in live if hp.seat_number in shown
+        }
     else:
         expected_ranks = {}  # an uncontested hand is settled on whatever street it ended, without evaluating anything
-    all_in_before = {hp.seat_number for hp in hand.players if hp.all_in}
-    check_early_reveal(hand, contested, all_in_before)
     before = snapshot(hand)  # taken right before settling: dealing is not part of settlement
 
     settle_hand(hand)
@@ -379,18 +519,21 @@ def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_
     settlement = hand.settlement
     assert settlement is not None
     after = snapshot(hand)
-    # Settlement changes stacks, all_in and the settlement record, and nothing else.
+    # Settlement changes stacks, all_in and the settlement record, and nothing else; the only other change is an ALL_IN
+    # showdown recorded together with it, and an existing showdown is the same object.
     assert before["settlement"] is None and after["settlement"] is settlement
-    assert {k: v for k, v in after.items() if k not in ("chips", "settlement", "reveal")} == {
-        k: v for k, v in before.items() if k not in ("chips", "settlement", "reveal")
-    }
-    check_reveal(hand, all_in_before, contested)
-    exercised.all_in_reveals = hand.reveal is not None and hand.reveal.kind is RevealKind.ALL_IN
-    exercised.showdown_reveals = hand.reveal is not None and hand.reveal.kind is RevealKind.SHOWDOWN
-    exercised.aggressor_showdowns = exercised.showdown_reveals and h.betting.last_aggressor is not None
+    assert unchanged_but(after, "chips", "settlement", "showdown") == unchanged_but(
+        before, "chips", "settlement", "showdown"
+    )
+    if showdown is None and contested:
+        assert hand.showdown == expected_showdown(hand, all_in_before)
+        showdown = hand.showdown
+    assert hand.showdown is showdown
+    check_showdown_record(hand, all_in_before, contested, exercised, show_probability)
 
     assert settlement.showdown_ranks == tuple(expected_ranks.items())
     payouts = settlement.payouts
+    assert set(payouts) <= contenders
     for hp in hand.players:
         assert hp.player.stack == h.starting_chips[hp.seat_number] - hp.total_contribution + payouts.get(
             hp.seat_number, 0
@@ -398,7 +541,7 @@ def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_
         assert hp.all_in == (hp.player.stack == 0)
     assert sum(payouts.values()) == middle == sum(pot.amount for pot in layers)
     assert sum(hp.player.stack for hp in hand.players) == sum(h.starting_chips.values())  # no chip appears or vanishes
-    check_awards(hand, settlement.pot_awards, expected_ranks, layers)
+    check_awards(hand, settlement.pot_awards, expected_ranks, layers, contenders)
 
     with pytest.raises(HandAlreadySettledError):
         settle_hand(hand)
@@ -409,6 +552,7 @@ def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_
         assert unstarted_rounds.board == hand.board
         settle_hand(unstarted_rounds)
         assert unstarted_rounds.settlement == settlement
+        assert unstarted_rounds.showdown == hand.showdown
         assert [(hp.player.stack, hp.all_in) for hp in unstarted_rounds.players] == [
             (hp.player.stack, hp.all_in) for hp in hand.players
         ]
@@ -458,4 +602,6 @@ def test_random_hands_keep_reaching_the_rules_they_stress(
         if counter.name != "deepest_layering" and counter.name not in RARE_COUNTERS
     }
     assert all(count >= MIN_OCCURRENCES for count in counts.values()), counts
-    assert seen.showdown_reveals >= 1 and seen.aggressor_showdowns >= 1
+    assert all(getattr(seen, name) >= 1 for name in RARE_COUNTERS), {
+        name: getattr(seen, name) for name in RARE_COUNTERS
+    }

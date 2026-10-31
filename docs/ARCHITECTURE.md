@@ -22,7 +22,7 @@ Paths are under `src/go_poker/`.
 | Area | Responsibility |
 | --- | --- |
 | `core/` | cards, deck, hand ranks, hand evaluation |
-| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, reveal, settlement |
+| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, showdown, settlement |
 | `game/variants/` | poker-variant-specific rules |
 | `game/betting/` | betting-structure rules, currently No-Limit |
 
@@ -171,13 +171,13 @@ It owns:
 - burned cards;
 - optional `BettingState`;
 - optional immutable `Settlement`, present only once the hand is settled;
-- optional immutable `Reveal`, present only once the hand's live players have been revealed (see [Reveal](#reveal)).
+- optional immutable `Showdown`, present only once the hand's showdown has started (see [Showdown](#showdown)); decisions replace it with a new record, never mutate it.
 
 It is a state container rather than the owner of participation, variant dealing, or betting rules.
 
 The settlement marker's presence makes every public hand-level mutation entry point reject the hand first with `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)).
 
-The reveal is separate from the settlement and is set at most once.
+The showdown record is separate from the settlement, is started at most once, and afterwards changes only by adding one decision at a time, never once complete.
 
 ### HandPlayerState
 
@@ -273,7 +273,7 @@ Invariant:
 
 Posting a blind is not an action.
 
-`last_aggressor` is the seat of the last bet or raise in the current round, including a short all-in bet or raise, or `None`. Checks, calls, and folds never change it. It is `None` when the blinds are posted and whenever a betting round starts, so an earlier street's aggressor never carries into a later round. It exists for the river show order (see [Reveal](#reveal)).
+`last_aggressor` is the seat of the last bet or raise in the current round, including a short all-in bet or raise, or `None`. Checks, calls, and folds never change it. It is `None` when the blinds are posted and whenever a betting round starts, so an earlier street's aggressor never carries into a later round. It exists for the river decision order (see [Showdown](#showdown)).
 
 ## Actions and Legal Actions
 
@@ -466,23 +466,23 @@ Pot depth is generic and does not encode a fixed number of side pots.
 
 ## Showdown and Settlement
 
-Settlement turns the contested pots into stack payouts and records the result. The contract is in [ADR 0001](adr/0001-showdown-settlement-contract.md).
+Settlement turns the contested pots into stack payouts and records the result. The contracts are in [ADR 0001](adr/0001-showdown-settlement-contract.md) and [ADR 0003](adr/0003-interactive-showdown-and-muck.md), which supersedes parts of ADR 0001 and [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md).
 
 | Module | Responsibility |
 | --- | --- |
-| `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding (winners, ties, odd chips), the internal `_settle` operation and payout; re-exports `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)) |
-| `game/reveal.py` | variant-agnostic: `Reveal`, `RevealKind`, canonical seat order and the generic show-order helper (see [Reveal](#reveal)); does not depend on `settlement.py`, and `settlement.py` does not depend on it |
-| `game/variants/texas_holdem/showdown.py` | Hold'em hand strength (`showdown_ranks`), the internal reveal classification and readiness rule, the public `reveal_hands` and `settle_hand`, `ShowdownNotReadyError`, `UncontestedHandError`, `HandAlreadyRevealedError` |
+| `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding among the final contenders (winners, ties, odd chips), the internal `_settle` operation and payout, `SettlementInvariantError`; re-exports `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)). It never interprets a showdown action |
+| `game/showdown.py` | variant-agnostic: `Showdown`, `ShowdownKind`, `ShowdownAction`, the derived showdown state, the turn rule `Showdown.decide` and `NotShowdownTurnError`, canonical seat order and the decision-order helper (see [Showdown](#showdown)); imports neither `settlement.py` nor `poker_hand.py` |
+| `game/variants/texas_holdem/showdown.py` | Hold'em: the internal showdown classification and readiness rule, the internal `_showdown_ranks`, the public `start_showdown`, `apply_showdown_action` and `settle_hand`, `IncompleteBoardError`, `ShowdownNotReadyError`, `UncontestedHandError`, `ShowdownAlreadyStartedError`, `ShowdownNotStartedError`, `ShowdownIncompleteError` |
 
-`settle_hand(hand)` is the only public settle entry; `reveal_hands(hand)` is the only public reveal entry. `_settle(hand, ranks)` is shared engine implementation for variant entry points and is not a client-facing API.
+`settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API. Public hand strength is not exposed: `_showdown_ranks(hand, seats)` is internal.
 
-`PotAward` holds a `Pot` and the exact chips each winning seat receives, ordered clockwise from the button. Odd chips make amounts unequal.
+`PotAward` holds a `Pot` and the exact chips each winning seat receives, ordered clockwise from the button. Odd chips make amounts unequal. The pot is the pot as derived and contested: its eligible seats can include a seat that mucked and won nothing.
 
-`Settlement` holds the pot awards and each live player's showdown `HandRank`, empty when uncontested. Per-seat payouts and winners are derived, never stored.
+`Settlement` holds the pot awards and the showdown `HandRank` of each shown player, in hand order, empty when nobody showed: an uncontested hand, or a contested hand whose last contender won without showing. Per-seat payouts and winners are derived, never stored.
 
-Every non-folded player competes for each pot they are eligible for.
+Each pot is awarded among its final contenders: its eligible seats that are showdown contenders. A pot with one final contender goes wholly to it without consulting ranks. Otherwise the best rank among the final contenders wins and equal ranks split the pot independently of other pots: each tied winner gets `amount // winners`, and the remainder goes one chip at a time to tied winners clockwise from the first seat left of the button.
 
-Each pot is split independently: each tied winner gets `amount // winners`, and the remainder goes one chip at a time to tied winners clockwise from the first seat left of the button.
+Two pot invariants hold for every settlement and are checked for every pot before anything changes: every pot has at least one final contender, and a pot with more than one has a rank for each of them. A violation raises `SettlementInvariantError`, an engine defect with no fallback payout. No public sequence produces one, so it is tested against the internal settlement function.
 
 ### Settling a Hold'em Hand
 
@@ -490,42 +490,63 @@ Each pot is split independently: each tied winner gets `amount // winners`, and 
 
 1. the hand is already settled: `HandAlreadySettledError`; this comes first because a payout can clear `all_in` and make betting look open again;
 2. the hand has no betting state: `BettingNotInitializedError`;
-3. exactly one player has not folded: the hand is settled uncontested on any street, with nothing evaluated;
+3. exactly one player has not folded: the hand is settled uncontested on any street, with nothing evaluated and no showdown recorded;
 4. the board is incomplete: `IncompleteBoardError`;
 5. further betting is possible: `ShowdownNotReadyError`;
-6. otherwise every live hand is evaluated and the hand is settled; a contested hand that has no reveal yet is revealed by the settlement.
+6. the showdown is not complete: an `INTERACTIVE` hand with no started showdown raises `ShowdownNotStartedError`, and a started showdown with pending decisions raises `ShowdownIncompleteError`. A contested `ALL_IN` hand with no showdown yet is not rejected: its complete showdown is built from the hand as it is before the payout;
+7. only the shown hands are evaluated, and only their hole cards are checked (`InvalidHoleCardCountError`);
+8. `_settle` awards each pot among its final contenders, checks the pot invariants and pays;
+9. only after the settlement succeeds is a built `ALL_IN` showdown stored on `hand.showdown`. An existing showdown is kept as the same object.
 
-A contested hand is ready by the reveal classification (see [Reveal](#reveal)), which `reveal_hands` and `settle_hand` share. A river dealt without its round started, while two players can act, is not ready. Remaining streets after an all-in need to be dealt, but their betting rounds need not be started.
+A contested hand is ready by the showdown classification (see [Showdown](#showdown)), which `start_showdown` and `settle_hand` share. A river dealt without its round started, while two players can act, is not ready. Remaining streets after an all-in need to be dealt, but their betting rounds need not be started.
 
-For a contested hand with no reveal, `settle_hand` classifies and builds the candidate `Reveal` before the payout, because the payout clears `all_in`. It completes every rejecting check (board, readiness, hole cards, ranks), calls `_settle`, and only then stores the candidate on `hand.reveal`, so a rejected settlement leaves `hand.reveal` unset. An existing reveal is kept as it is. An uncontested hand records no reveal. `Settlement`, `_settle`, and the settlement's odd-chip order do not depend on the reveal module; the two orders happen to rotate seats the same way but are separate contracts.
+`Settlement`, `_settle`, and the settlement's odd-chip order do not depend on the showdown module; the two orders happen to rotate seats the same way but are separate contracts.
 
-### Reveal
+### Showdown
 
-A reveal records which live seats are revealed and in what order. It records seats, not cards. The contract is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md).
+A showdown records which live seats reach showdown, of which kind, and the SHOW or MUCK decisions made so far. It records seats and decisions, not cards: hole cards, including mucked and unshown ones, stay in engine state, and who may see them is a matter for a future API projection. The contract is in [ADR 0003](adr/0003-interactive-showdown-and-muck.md).
 
-`Reveal(kind, seats)` is immutable. `RevealKind` is `ALL_IN` or `SHOWDOWN`. Folded seats never appear, and the winner of an uncontested hand is not revealed.
+`Showdown(kind, order, decisions)` is immutable. `ShowdownKind` is `ALL_IN` or `INTERACTIVE`; `ShowdownAction` is `SHOW` or `MUCK`. `order` holds the live seats when the showdown starts and never changes; folded seats never appear and the winner of an uncontested hand has no showdown. `decisions[i]` is the decision of `order[i]`, and an `ALL_IN` showdown has none.
 
-`game/reveal.py` provides the canonical seat order (clockwise starting with the first seat left of the button, the button last; heads-up the big blind first) and a show-order helper: the live seats in canonical order, rotated to start at the last aggressor when one is given. The helpers take seat sequences, so they know nothing about streets or kinds of showdown.
+Shown seats, mucked seats, contenders, the current decider and completion are derived from `order` and `decisions`, never stored:
 
-One engine-internal Hold'em rule in `showdown.py` classifies a hand with at least two live players as not ready, `ALL_IN`, or `SHOWDOWN`:
+- `ALL_IN`: every live hand is tabled at once. Every seat is shown and a contender, none is mucked, the showdown is complete from the start and nobody decides. `order` is canonical seat order, which is storage order only and not a sequence.
+- `INTERACTIVE`: `shown` and `mucked` are the seats in `order` whose decision is SHOW or MUCK; `contenders` are the seats in `order` that have not mucked, undecided seats included. The showdown is complete when every seat has decided or only one contender remains; that last contender is not asked to decide and wins without showing. The current decider is `order[len(decisions)]` until complete, then `None`.
+
+`Showdown.decide(seat, action)` is the turn rule: it returns a new record with the decision appended and leaves the old one unchanged, and raises `NotShowdownTurnError` when the showdown is complete (an `ALL_IN` showdown always is) or `seat` is not the current decider, then `TypeError` when `action` is not a `ShowdownAction`, so an unsupported action is never stored. A muck is showdown state only: the seat is not `folded`, and its contributions and the betting state are unchanged. The decider may always SHOW or MUCK; the engine does not judge whether a shown hand already beats theirs.
+
+`Showdown` does no validation when constructed. Engine-owned showdown state produced through the supported operations is well-formed: `start_showdown` creates the initial valid record and `decide` produces each later valid immutable record. Directly constructing a record or manually injecting invalid hand state is outside the supported engine-operation contract; validating externally reconstructed or persisted state belongs at that external boundary when there is one.
+
+`game/showdown.py` provides canonical seat order (clockwise starting with the first seat left of the button, the button last; heads-up the big blind first) and a decision-order helper: the live seats in canonical order, rotated to start at the last aggressor when one is given. The helpers take seat sequences, so they know nothing about streets or kinds of showdown.
+
+One engine-internal Hold'em rule in `showdown.py` classifies a hand with at least two live players as not ready, `ALL_IN`, or `INTERACTIVE`:
 
 - ready: the current betting round is complete and either it is the river round or `is_betting_closed(hand)`;
-- `ALL_IN` when any live player is all-in, else `SHOWDOWN`. A closed round before the river with two or more live players always has a live all-in player.
+- `ALL_IN` when any live player is all-in, else `INTERACTIVE`. A closed round before the river with two or more live players always has a live all-in player.
 
 All-in is read after the river round is collected and before payout.
 
-- `ALL_IN`: every live seat in canonical order. This is storage order only, not a reveal sequence; the last aggressor is ignored, including when a player all-in from an earlier street faces two others who bet the river.
-- `SHOWDOWN`: the river show order. The river round's `last_aggressor` shows first, then clockwise; with no river bet or raise, the first live seat left of the button shows first.
+- `ALL_IN`: every live seat in canonical order, ignoring the last aggressor, including when a player all-in from an earlier street faces two others who bet the river. The remaining board is then run out.
+- `INTERACTIVE`: the river decision order. The river round's `last_aggressor` decides first, then clockwise; with no river bet or raise, the first live seat left of the button decides first.
 
-`reveal_hands(hand)` validates in this order, and a rejection leaves the hand unchanged:
+`start_showdown(hand)` validates in this order, and a rejection leaves the hand unchanged:
 
 1. the hand is already settled: `HandAlreadySettledError`;
 2. the hand has no betting state: `BettingNotInitializedError`;
-3. the hand is already revealed: `HandAlreadyRevealedError`;
+3. the showdown has already started: `ShowdownAlreadyStartedError`;
 4. fewer than two players have not folded: `UncontestedHandError`;
 5. further betting is possible: `ShowdownNotReadyError`.
 
-Otherwise it sets only `hand.reveal`. It checks neither the board nor hole cards, so betting closed before the board is run out is revealed at once.
+Otherwise it sets only `hand.showdown`. Completing the river round does not start the showdown. It checks neither the board nor hole cards, so betting closed before the board is run out starts its showdown at once.
+
+`apply_showdown_action(hand, seat, action)` validates in this order, and a rejection leaves the hand unchanged:
+
+1. the hand is already settled: `HandAlreadySettledError`;
+2. the showdown has not started: `ShowdownNotStartedError`;
+3. the showdown is complete or `seat` is not its current decider, including any decision on an `ALL_IN` showdown: `NotShowdownTurnError`;
+4. `action` is not a `ShowdownAction`: `TypeError`. Only `ShowdownAction` is accepted; the check is made once, in `Showdown.decide`, after the turn.
+
+Otherwise it sets only `hand.showdown`, to the record with the decision added.
 
 ### Payout
 
@@ -544,7 +565,8 @@ Otherwise it sets only `hand.reveal`. It checks neither the board nor hole cards
 - `deal_next_street`
 - `start_betting_round`
 - `apply_action`
-- `reveal_hands`
+- `start_showdown`
+- `apply_showdown_action`
 - `settle_hand` (the internal `_settle` also keeps its own check)
 
 A rejection leaves the hand unchanged. The guard comes first because a payout can clear `all_in` and make a settled hand look open to further dealing or betting.
@@ -563,7 +585,7 @@ After settlement:
 
 `player.stack == starting_chips - total_contribution + payout`
 
-`sum(payouts) == middle_pot == sum(pot.amount)`, each pot's shares add up to its amount, and only eligible, non-folded seats are paid.
+`sum(payouts) == middle_pot == sum(pot.amount)`, each pot's shares add up to its amount, and only eligible showdown contenders are paid (a mucked seat is never paid).
 
 Across the hand:
 
@@ -579,8 +601,10 @@ Other invariants:
 
 - a participant is `all_in` exactly when their stack is zero, before and after payout;
 - a settled hand (`hand.settlement is not None`) is rejected first by every public hand-level mutation entry point, leaving it unchanged;
-- `hand.reveal` is `None` or covers exactly the live seats, is set at most once, and its `ALL_IN` seats are in canonical order;
-- a settled contested hand has a reveal; an uncontested hand has none;
+- `hand.showdown` is `None` or its `order` is exactly the non-folded seats; an `ALL_IN` showdown has its seats in canonical order and no decisions; decisions are only added, one at a time, never once complete; a mucked seat is never folded;
+- a settled contested hand has a complete showdown; an uncontested hand has none;
+- `Settlement.showdown_ranks` holds exactly the shown seats;
+- every pot has at least one final contender among its eligible seats, and a pot with more than one has a showdown rank for each;
 - settlement is stored once; contributions, `folded`, hole cards, board, burned cards, the deck, the betting state, and derived pots are unchanged by it;
 - betting moves chips between stacks and contributions only through `commit_chips` and `return_chips`;
 - no street contribution exceeds `current_bet`;

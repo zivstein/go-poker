@@ -23,14 +23,17 @@ from go_poker.game.betting.rounds import start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError
+from go_poker.game.showdown import ShowdownAction
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
-from go_poker.game.variants.texas_holdem.showdown import reveal_hands, settle_hand
+from go_poker.game.variants.texas_holdem.showdown import apply_showdown_action, settle_hand, start_showdown
 
 STAKES = Stakes(small_blind=5, big_blind=10)
 FOLD = Action(ActionType.FOLD)
 CHECK = Action(ActionType.CHECK)
 CALL = Action(ActionType.CALL)
+SHOW = ShowdownAction.SHOW
+MUCK = ShowdownAction.MUCK
 
 HOLES = {1: "Ah Ad", 2: "Kd Kh", 3: "3s 4s"}
 BOARD = "2c 7d 9h Jc Ks"
@@ -50,7 +53,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "deck": len(hand.deck),
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
-        "reveal": hand.reveal,
+        "showdown": hand.showdown,
         "players": [
             (
                 state.seat_number,
@@ -78,7 +81,7 @@ def assert_rejected(hand: PokerHand, operation: Operation) -> None:
 
     assert snapshot(hand) == before
     assert hand.settlement is before["settlement"]
-    assert hand.reveal is before["reveal"]
+    assert hand.showdown is before["showdown"]
 
 
 def play(hand: PokerHand, *actions: tuple[int, Action]) -> None:
@@ -196,13 +199,46 @@ def heads_up_all_in_runout(stacked_hand: StackedHand) -> PokerHand:
     return hand
 
 
-def river_showdown(stacked_hand: StackedHand) -> PokerHand:
-    """Checked down to the river and settled at showdown; the river round has been started."""
+def river_showdown_with(stacked_hand: StackedHand, *decisions: tuple[int, ShowdownAction]) -> PokerHand:
+    """Checked down to the river, the interactive showdown started and decided in the given order, then settled; the
+    river round has been started. The decision order is seat 2, 3, 1."""
     hand = dealt_hand(stacked_hand)
     play(hand, (1, CALL), (2, CALL), (3, CHECK))
     while hand.street is not Street.RIVER:
         next_street(hand)
         check_street(hand)
+    start_showdown(hand)
+    for seat, action in decisions:
+        apply_showdown_action(hand, seat, action)
+    settle_hand(hand)
+    return hand
+
+
+def river_showdown(stacked_hand: StackedHand) -> PokerHand:
+    """Everyone shows."""
+    return river_showdown_with(stacked_hand, (2, SHOW), (3, SHOW), (1, SHOW))
+
+
+def river_showdown_unshown_winner(stacked_hand: StackedHand) -> PokerHand:
+    """Seats 2 and 3 muck, so seat 1 wins without being asked to decide."""
+    hand = river_showdown_with(stacked_hand, (2, MUCK), (3, MUCK))
+    assert hand.showdown is not None
+    assert hand.showdown.current_decider is None
+    return hand
+
+
+def river_showdown_with_a_muck(stacked_hand: StackedHand) -> PokerHand:
+    """Seat 2 shows, seat 3 mucks and seat 1 shows."""
+    return river_showdown_with(stacked_hand, (2, SHOW), (3, MUCK), (1, SHOW))
+
+
+def all_in_runout_started(stacked_hand: StackedHand) -> PokerHand:
+    """Everyone all-in preflop with the `ALL_IN` showdown started explicitly before the runout, then settled."""
+    hand = dealt_hand(stacked_hand, stacks={1: 100, 2: 100, 3: 100})
+    play(hand, (1, Action(ActionType.RAISE, 100)), (2, CALL), (3, CALL))
+    start_showdown(hand)
+    while hand.street is not Street.RIVER:
+        deal_next_street(hand)
     settle_hand(hand)
     return hand
 
@@ -216,7 +252,10 @@ SETTLED_HANDS: dict[str, Callable[[StackedHand], PokerHand]] = {
     "uncontested_river": lambda stacked: won_uncontested_on(stacked, Street.RIVER),
     "runout": lambda stacked: all_in_runout(stacked, HOLES, BOARD),
     "runout_split": lambda stacked: all_in_runout(stacked, TYING_HOLES, ROYAL_FLUSH_BOARD),
+    "runout_started": all_in_runout_started,
     "river_showdown": river_showdown,
+    "river_showdown_unshown_winner": river_showdown_unshown_winner,
+    "river_showdown_with_a_muck": river_showdown_with_a_muck,
     "side_pot_runout": side_pot_runout,
     "heads_up_uncontested_flop": heads_up_fold_on_flop,
     "heads_up_runout": heads_up_all_in_runout,
@@ -228,7 +267,8 @@ OPERATIONS: dict[str, Operation] = {
     "deal_next_street": deal_next_street,
     "start_betting_round": start_betting_round,
     "apply_action": lambda hand: apply_action(hand, 1, CHECK),
-    "reveal_hands": reveal_hands,
+    "start_showdown": start_showdown,
+    "apply_showdown_action": lambda hand: apply_showdown_action(hand, 2, SHOW),
     "settle_hand": settle_hand,
 }
 
@@ -328,18 +368,77 @@ def test_apply_action_reports_settled_over_not_players_turn(stacked_hand: Stacke
     assert_rejected(hand, lambda settled: apply_action(settled, seat, CHECK))
 
 
-def test_reveal_hands_reports_settled_over_already_revealed(stacked_hand: StackedHand) -> None:
-    """The reveal was recorded before the settlement, so a second reveal would also be a double reveal."""
-    hand = dealt_hand(stacked_hand, stacks={1: 100, 2: 100, 3: 100})
-    play(hand, (1, Action(ActionType.RAISE, 100)), (2, CALL), (3, CALL))
-    reveal_hands(hand)
-    reveal = hand.reveal
-    while hand.street is not Street.RIVER:
-        deal_next_street(hand)
-    settle_hand(hand)
-    assert hand.reveal is reveal
+def test_start_showdown_reports_settled_over_already_started_for_an_all_in_showdown(
+    stacked_hand: StackedHand,
+) -> None:
+    """The showdown was started before the settlement, so a second start would also be a double start."""
+    hand = all_in_runout_started(stacked_hand)
+    assert hand.showdown is not None
 
-    assert_rejected(hand, reveal_hands)
+    assert_rejected(hand, start_showdown)
+
+
+@pytest.mark.parametrize("name", ["river_showdown", "river_showdown_unshown_winner", "river_showdown_with_a_muck"])
+def test_start_showdown_reports_settled_over_already_started_for_an_interactive_showdown(
+    stacked_hand: StackedHand, name: str
+) -> None:
+    hand = SETTLED_HANDS[name](stacked_hand)
+    assert hand.showdown is not None
+
+    assert_rejected(hand, start_showdown)
+
+
+@pytest.mark.parametrize("name", ["uncontested_preflop", "uncontested_river", "heads_up_uncontested_flop"])
+def test_start_showdown_reports_settled_over_uncontested(stacked_hand: StackedHand, name: str) -> None:
+    hand = SETTLED_HANDS[name](stacked_hand)
+    assert hand.showdown is None
+
+    assert_rejected(hand, start_showdown)
+
+
+@pytest.mark.parametrize("name", ["runout_split", "side_pot_runout", "heads_up_runout"])
+def test_start_showdown_reports_settled_over_a_settlement_recorded_all_in_showdown(
+    stacked_hand: StackedHand, name: str
+) -> None:
+    """Paid seats are no longer all-in, so the settled hand would otherwise also look as if it were not ready."""
+    hand = SETTLED_HANDS[name](stacked_hand)
+    assert hand.showdown is not None
+
+    assert_rejected(hand, start_showdown)
+
+
+@pytest.mark.parametrize("name", ["uncontested_preflop", "uncontested_river", "heads_up_uncontested_flop"])
+def test_apply_showdown_action_reports_settled_over_not_started(stacked_hand: StackedHand, name: str) -> None:
+    hand = SETTLED_HANDS[name](stacked_hand)
+    assert hand.showdown is None
+
+    assert_rejected(hand, lambda settled: apply_showdown_action(settled, 2, SHOW))
+
+
+@pytest.mark.parametrize("seat", [1, 2, 3, 9])
+@pytest.mark.parametrize("action", ShowdownAction)
+@pytest.mark.parametrize(
+    "name", ["river_showdown", "river_showdown_unshown_winner", "river_showdown_with_a_muck", "runout_started"]
+)
+def test_apply_showdown_action_reports_settled_over_not_the_deciders_turn(
+    stacked_hand: StackedHand, name: str, seat: int, action: ShowdownAction
+) -> None:
+    """The showdown is complete (or all-in), so no seat can decide: any seat would otherwise be a turn error."""
+    hand = SETTLED_HANDS[name](stacked_hand)
+    assert hand.showdown is not None
+    assert hand.showdown.current_decider is None
+
+    assert_rejected(hand, lambda settled: apply_showdown_action(settled, seat, action))
+
+
+@pytest.mark.parametrize("name", ["runout", "runout_split", "side_pot_runout", "heads_up_runout"])
+def test_apply_showdown_action_reports_settled_over_a_settlement_recorded_all_in_showdown(
+    stacked_hand: StackedHand, name: str
+) -> None:
+    hand = SETTLED_HANDS[name](stacked_hand)
+    assert hand.showdown is not None
+
+    assert_rejected(hand, lambda settled: apply_showdown_action(settled, 2, SHOW))
 
 
 def test_deal_next_street_reports_settled_over_no_next_street(stacked_hand: StackedHand) -> None:

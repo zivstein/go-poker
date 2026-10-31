@@ -9,6 +9,7 @@ from go_poker.game.betting.rounds import is_round_complete, start_betting_round
 from go_poker.game.betting.state import BettingNotInitializedError, BettingState
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.poker_hand import PokerHand
+from go_poker.game.showdown import ShowdownAction
 from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
 
 type HandFactory = Callable[..., PokerHand]
@@ -59,6 +60,36 @@ def test_action_out_of_turn_is_rejected_without_changes(
 
     with pytest.raises(NotPlayersTurnError):
         apply_action(hand, seat_number, CALL)
+
+    assert hand_snapshot(hand) == before
+
+
+@pytest.mark.parametrize("showdown_action", ShowdownAction)
+def test_a_showdown_action_from_the_current_actor_is_rejected_without_changes(
+    showdown_action: ShowdownAction, started_hand: HandFactory, hand_snapshot: HandSnapshotter
+) -> None:
+    """Betting accepts only betting actions. A ShowdownAction is not one: the legality check fails with an
+    AttributeError before anything changes. This is an incidental, existing rejection, kept as a regression guard."""
+    hand = started_hand(FOUR_HANDED, button_seat_number=5)
+    actor = hand.betting.current_actor  # type: ignore[union-attr]
+    assert actor is not None
+    before = hand_snapshot(hand)
+
+    with pytest.raises(AttributeError):
+        apply_action(hand, actor, showdown_action)  # type: ignore[arg-type]
+
+    assert hand_snapshot(hand) == before
+
+
+@pytest.mark.parametrize("showdown_action", ShowdownAction)
+def test_a_showdown_action_from_a_seat_out_of_turn_is_reported_as_out_of_turn_first(
+    showdown_action: ShowdownAction, started_hand: HandFactory, hand_snapshot: HandSnapshotter
+) -> None:
+    hand = started_hand(FOUR_HANDED, button_seat_number=5)
+    before = hand_snapshot(hand)
+
+    with pytest.raises(NotPlayersTurnError):
+        apply_action(hand, 5, showdown_action)  # type: ignore[arg-type]
 
     assert hand_snapshot(hand) == before
 
