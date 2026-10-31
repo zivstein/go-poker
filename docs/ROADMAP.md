@@ -13,7 +13,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 2 | Betting engine + legal actions | Complete |
 | 3 | All-ins + main/side pots | Complete |
 | 4 | Showdown + settlement | Complete |
-| 5 | Complete continuous PokerHand/game loop | **Next** |
+| 5 | Complete continuous PokerHand/game loop | **Current** (planned; Cycle 1 next) |
 | 6 | Structured Hand History / Event Log | Planned |
 | 7 | Bots + simulation / large-scale testing | Planned |
 | 8 | Omaha + Pot-Limit / PLO | Planned |
@@ -43,7 +43,16 @@ Approved for Milestone 4: settling a hand that has reached its end. Each pot is 
 
 Board runout, revealing hands, and full-hand orchestration stay in Milestone 5.
 
-Approved for Milestone 5: being all-in does not by itself reveal hole cards. Once betting is closed with at least two live players, hand orchestration reveals the relevant hands, completes the board runout, then proceeds to showdown.
+Approved for Milestone 5: running a whole Hold'em hand, and one hand after another, with player decisions as the only inputs. Being all-in does not by itself reveal hole cards. Once betting is closed with at least two live players, hand orchestration reveals the relevant hands, completes the board runout, then proceeds to showdown. The hand lifecycle and orchestration contract (the two usage levels, engine-owned sequencing through `hand_flow` and `HoldemGame`, the game lifecycle, all-in and river-showdown reveals, river show order, the reveal record, the settled-hand guard, hand start order, and mid-hand table changes staying outside the engine) is in [ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md).
+
+Deferred beyond Milestone 5:
+
+- voluntary show, automatic muck, and show/muck preferences;
+- reporting the best five cards;
+- leaving, sitting out, timeouts, and auto-fold during a hand (Milestones 14–15);
+- busting, rebuys, and top-ups (no milestone assigned yet);
+- blind levels, antes, straddles, dead-button and missed-blind rules (Milestone 19);
+- run it twice.
 
 ### Build Reconstructable Data
 
