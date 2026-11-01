@@ -14,7 +14,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 3 | All-ins + main/side pots | Complete |
 | 4 | Showdown + settlement | Complete |
 | 5 | Complete continuous PokerHand/game loop | Complete |
-| 6 | Structured Hand History / Event Log | **Next** |
+| 6 | Structured Hand History / Event Log | **Current** (planned; Cycle 1 next) |
 | 7 | Bots + simulation / large-scale testing | Planned |
 | 8 | Omaha + Pot-Limit / PLO | Planned |
 | 9 | Pineapple | Planned |
@@ -69,6 +69,22 @@ Milestone 6 introduces structured raw hand history/events before persistence, an
 
 Raw history/events remain reconstructable source data. Later statistics and analytics are derived from history rather than becoming the only source of truth.
 
+Approved for Milestone 6 on 2026-11-01: a structured, immutable hand history for every hand.
+
+- Each hand gets a number. Numbers are consecutive and scoped to a `HoldemGame`, starting at 1.
+- `Player.player_id` becomes the stable logical identity of an engine participant. It is opaque and distinct from any platform, account or display identity.
+  - The same `player_id` in different hand histories means the same logical participant.
+  - A caller must not reuse an existing `player_id` for a different logical participant in histories intended to be linked.
+  - The engine enforces only that a `player_id` is non-empty when the `Player` is created, immutable afterwards, and unique among the players currently seated at a table (the existing rule).
+  - Milestone 6 adds no registry or historical-identifier tracking. Longer-lived identity consistency is the caller's, and later the platform's, responsibility.
+- The low-level operations record each transition as it happens. It is a record, not event sourcing, and rules never read it.
+- Every history reconstructs the hand's poker and game facts.
+- Only histories produced through `hand_flow` / `HoldemGame` guarantee presentation and runout order. Raw low-level histories are faithful but not normalized.
+- History stores hidden authoritative data. Projection and redaction are later work.
+- `HoldemGame` does not retain past histories.
+
+The hand history and event contract is in [ADR 0004](adr/0004-hand-history-and-event-contract.md).
+
 Approved for Milestone 6: derived player hand strength for client display. From the flop onward, Hold'em derives for a seat its current hand category and rank, the exact best five cards, and a human-readable description (for example "Eights full of Aces" or "Ace-high flush"):
 
 - preflop: no five-card result;
@@ -77,6 +93,43 @@ Approved for Milestone 6: derived player hand strength for client display. From 
 - river: the best five of seven.
 
 It is derived, read-only data. It is not stored on `PokerHand` and is not part of showdown or settlement state. A future API projection exposes anything derived from hidden hole cards only to that seat's player until those cards are shown.
+
+Approved for Milestone 6 on 2026-11-01, extending that decision:
+
+- **Never stored.** Strength is never stored: not on `PokerHand`, the showdown, the settlement, or the hand history.
+- **Who can be evaluated.** It can be computed for any participant who holds hole cards, including a folded, mucked, or settled seat. Who may see it is the projection's concern.
+- **Public surface.**
+  - `BestHand` holds the `HandRank`, the five cards, and the derived description.
+  - `holdem_hand_strength(hole_cards, board)` returns a `BestHand`, or `None` preflop.
+  - `hand_strength(hand, seat)` reads it for a seat of a hand.
+  - `evaluate_best` keeps its current contract and results.
+  - There is no public tie-selection or `prefer=` API.
+- **Exact best five.** When several five-card combinations share the best `HandRank`, the one using the fewest hole cards is chosen. Among those, cards are preferred in deal order: board cards in the order dealt, then hole cards in the order dealt. When the board plays, the board's five cards are returned. This rule changes which cards are reported, never the rank. The selection mechanism is internal to the evaluator and the Hold'em strength code.
+- **Card order.** The five cards are listed by significance, consistent with the rank's tiebreakers. The wheel is 5-4-3-2-A.
+- **Descriptions.** English only, with no kickers:
+
+| Category | Description |
+| --- | --- |
+| High card | "Ace high" |
+| One pair | "Pair of Eights" |
+| Two pair | "Two pair, Kings and Fours" |
+| Three of a kind | "Three of a kind, Sevens" |
+| Straight | "Nine-high straight"; the wheel is "Five-high straight" |
+| Flush | "Ace-high flush" |
+| Full house | "Eights full of Aces" |
+| Four of a kind | "Four of a kind, Queens" |
+| Straight flush | "Nine-high straight flush"; Ace-high is "Royal flush" |
+
+Deferred beyond Milestone 6:
+
+- serialization, wire and storage formats (Milestone 13);
+- the API projection and redaction of hidden data (Milestone 14);
+- global hand, table, and session identifiers; timestamps and clocks;
+- a replay engine, rebuilding a live `PokerHand` from history, and validating externally supplied histories;
+- history query helpers and analytics, including a "board plays" flag (Milestone 12);
+- table- and game-level events (sitting down, standing up, status changes);
+- account and display identity, and participant uniqueness beyond a table (platform milestones);
+- hand strength for other variants, and localized descriptions.
 
 ### Exercise the Engine at Scale
 
