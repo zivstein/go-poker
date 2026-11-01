@@ -1,4 +1,5 @@
 from go_poker.game.betting.state import BettingNotInitializedError, BettingState
+from go_poker.game.hand_history import BettingRoundCompleted, BettingRoundStarted, _appended
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.poker_hand import PokerHand, _require_unsettled
 
@@ -105,6 +106,10 @@ def start_betting_round(hand: PokerHand) -> None:
     front. The current bet is zero, the last full raise size returns to the big blind, and nobody has acted yet, so
     `acted_at_bet` is cleared. Every eligible player is pending, and the first pending player clockwise after the
     button acts first, so heads-up the big blind acts first. A rejection leaves the hand unchanged.
+
+    The operation records `BettingRoundStarted` in the same call, after every mutation. When nobody is pending, the
+    round is complete at its start, and `BettingRoundCompleted` for the same street follows in the same call; there is
+    nothing to collect, so no chips are returned.
     """
     _require_unsettled(hand)
     betting = hand.betting
@@ -123,3 +128,7 @@ def start_betting_round(hand: PokerHand) -> None:
     betting.pending_actors = pending_at_round_start(hand.players, current_bet=0)
     # Players are ordered clockwise from the button, so the button is the first of them.
     betting.current_actor = first_pending_after(hand.players, hand.players[0].seat_number, betting.pending_actors)
+    history = _appended(hand.history, BettingRoundStarted(betting.street))
+    if is_round_complete(betting):
+        history = _appended(history, BettingRoundCompleted(betting.street))
+    hand.history = history

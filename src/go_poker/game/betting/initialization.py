@@ -3,6 +3,13 @@ from go_poker.game.betting.collection import collect_round
 from go_poker.game.betting.rounds import first_pending_after, is_round_complete, pending_at_round_start
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
+from go_poker.game.hand_history import (
+    BettingRoundCompleted,
+    BlindPost,
+    BlindsPosted,
+    ChipsReturned,
+    _appended,
+)
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.poker_hand import PokerHand, _require_unsettled
 from go_poker.game.position import Blind
@@ -47,6 +54,10 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     betting or is no longer preflop is then rejected before anything changes, leaving it unchanged.
     Blind stacks are not checked: hands contain only players who start with chips (the start-of-hand chip rule), so
     every blind posts a positive amount.
+
+    The operation records its events in the same call, after every mutation: `BlindsPosted`, and when the blinds alone
+    complete the round, then any `ChipsReturned` and `BettingRoundCompleted` for the preflop. A rejection records
+    nothing.
     """
     _require_unsettled(hand)
     _require_initializable(hand)
@@ -54,8 +65,11 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
     small_blind_player = _blind_player(hand, Blind.SMALL)
     big_blind_player = _blind_player(hand, Blind.BIG)
     # Not validated: hands contain only players who start with chips, so every blind posts a positive amount.
+    posts = []
     for hand_player, amount in ((small_blind_player, stakes.small_blind), (big_blind_player, stakes.big_blind)):
-        commit_chips(hand_player, min(amount, hand_player.player.stack))
+        posted = min(amount, hand_player.player.stack)
+        commit_chips(hand_player, posted)
+        posts.append(BlindPost(hand_player.seat_number, hand_player.blind, posted, hand_player.all_in))
 
     pending = pending_at_round_start(hand.players, stakes.big_blind)
     hand.betting = BettingState(
@@ -68,5 +82,10 @@ def initialize_betting(hand: PokerHand, stakes: Stakes) -> None:
         acted_at_bet={},
         last_aggressor=None,
     )
+    history = _appended(hand.history, BlindsPosted(stakes, tuple(posts)))
     if is_round_complete(hand.betting):
-        collect_round(hand.players)
+        returned = collect_round(hand.players)
+        if returned is not None:
+            history = _appended(history, ChipsReturned(*returned))
+        history = _appended(history, BettingRoundCompleted(Street.PREFLOP))
+    hand.history = history

@@ -4,6 +4,7 @@ from go_poker.game.betting.collection import collect_round
 from go_poker.game.betting.legal_actions import LegalActions, legal_actions
 from go_poker.game.betting.rounds import first_pending_after, is_eligible, is_round_complete, settle_pending
 from go_poker.game.betting.state import BettingNotInitializedError
+from go_poker.game.hand_history import ActionTaken, BettingRoundCompleted, ChipsReturned, _appended
 from go_poker.game.poker_hand import PokerHand, _require_unsettled
 
 
@@ -60,6 +61,10 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
     folded, or when no opponent can respond and nothing is owed to the call target. Otherwise the next pending player
     clockwise acts. An action that completes the round also collects it (see `collect_round`): unmatched chips go back
     to their player and every player's chips in front move into the middle.
+
+    The operation records its events in the same call, after every mutation: `ActionTaken` with the chips the action
+    committed, and when it completes the round, then any `ChipsReturned` and `BettingRoundCompleted`. A rejection
+    records nothing.
     """
     _require_unsettled(hand)
     betting = hand.betting
@@ -78,7 +83,8 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
     pending.discard(seat_number)
 
     if target is not None:  # a legal bet or raise to this street contribution
-        commit_chips(actor, target - actor.street_contribution)
+        committed = target - actor.street_contribution
+        commit_chips(actor, committed)
         # Only a full bet or raise sets the full-raise context; a short all-in below the full minimum never changes it.
         if legal.min_full_target is not None and target >= legal.min_full_target:
             betting.last_full_raise_size = target - betting.current_bet
@@ -89,15 +95,23 @@ def apply_action(hand: PokerHand, seat_number: int, action: Action) -> None:
             for hand_player in hand.players
             if hand_player is not actor and is_eligible(hand_player)
         }
-    elif action.type is ActionType.FOLD:
-        actor.folded = True
     elif action.type is ActionType.CALL:
-        commit_chips(actor, legal.call_amount)  # a short call commits the whole stack; the current bet stays nominal
-    # A check moves no chips; like every action, it only settles the actor's obligation.
+        committed = legal.call_amount
+        commit_chips(actor, committed)  # a short call commits the whole stack; the current bet stays nominal
+    else:  # a fold or check moves no chips; like every action, it only settles the actor's obligation
+        committed = 0
+        if action.type is ActionType.FOLD:
+            actor.folded = True
+    all_in = actor.all_in  # right after the commit, before the round is collected
 
     # Every action, a check included, records the bet the actor has now acted at; raise rights are derived from it.
     betting.acted_at_bet[seat_number] = betting.current_bet
     betting.pending_actors = settle_pending(hand.players, pending, betting.current_bet)
     betting.current_actor = first_pending_after(hand.players, seat_number, betting.pending_actors)
+    history = _appended(hand.history, ActionTaken(seat_number, action, committed, all_in))
     if is_round_complete(betting):
-        collect_round(hand.players)
+        returned = collect_round(hand.players)
+        if returned is not None:
+            history = _appended(history, ChipsReturned(*returned))
+        history = _appended(history, BettingRoundCompleted(betting.street))
+    hand.history = history

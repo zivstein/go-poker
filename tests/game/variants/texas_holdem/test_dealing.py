@@ -6,6 +6,7 @@ import pytest
 from go_poker.core.card import Card, Rank, Suit
 from go_poker.core.deck import Deck, DeckEmptyError
 from go_poker.game.game_lifecycle import start_game
+from go_poker.game.hand_history import HandHistory
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import PokerHand
@@ -26,7 +27,7 @@ FULL_DECK = {Card(rank, suit) for rank in Rank for suit in Suit}
 
 type Deal = Callable[[PokerHand], None]
 type HandSetup = Callable[[PokerHand], None]
-type Snapshot = tuple[Street, list[Card], list[Card], dict[int, list[Card]], int]
+type Snapshot = tuple[Street, list[Card], list[Card], dict[int, list[Card]], int, HandHistory]
 
 
 def make_hand(seat_numbers: tuple[int, ...], button_seat_number: int) -> PokerHand:
@@ -87,7 +88,14 @@ def one_hole_card_extra(hand: PokerHand) -> None:
 
 
 def snapshot(hand: PokerHand) -> Snapshot:
-    return hand.street, list(hand.board), list(hand.burned_cards), hole_cards_by_seat(hand), len(hand.deck)
+    return (
+        hand.street,
+        list(hand.board),
+        list(hand.burned_cards),
+        hole_cards_by_seat(hand),
+        len(hand.deck),
+        hand.history,
+    )
 
 
 def shuffle_decks_with(monkeypatch: pytest.MonkeyPatch, rng: Random) -> None:

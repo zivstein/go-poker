@@ -3,6 +3,7 @@
 import copy
 from collections.abc import Callable
 from itertools import pairwise
+from typing import Any
 
 import pytest
 
@@ -15,6 +16,7 @@ from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.rounds import is_round_complete, start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
+from go_poker.game.hand_history import HandHistory
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import PokerHand
@@ -26,7 +28,7 @@ STAKES = Stakes(small_blind=5, big_blind=10)
 
 # stack, street contribution, total contribution, folded, all-in
 type PlayerSnapshot = tuple[int, int, int, bool, bool]
-type HandSnapshot = tuple[Street, dict[int, PlayerSnapshot], BettingState | None]
+type HandSnapshot = tuple[Street, dict[int, PlayerSnapshot], BettingState | None, HandHistory]
 
 
 def _make_hand(stacks: dict[int, int], button_seat_number: int) -> PokerHand:
@@ -80,15 +82,20 @@ def _play(hand: PokerHand, *actions: tuple[int, Action]) -> None:
 
 
 def _hand_snapshot(hand: PokerHand) -> HandSnapshot:
-    """Everything betting may change: the street, each player's chips and flags, and a copy of the betting state."""
-    return hand.street, _player_snapshot(hand), copy.deepcopy(hand.betting)
+    """Everything betting may change: the street, each player's chips and flags, a copy of the betting state and the
+    history."""
+    return hand.street, _player_snapshot(hand), copy.deepcopy(hand.betting), hand.history
 
 
 class CheckedHand:
-    """Drives one hand through real betting and dealing operations, asserting the betting invariants after each step."""
+    """Drives one hand through real betting and dealing operations, asserting the betting invariants after each step,
+    and that the facts replayed from the hand's history equal the live hand."""
 
-    def __init__(self, hand: PokerHand) -> None:
+    def __init__(self, hand: PokerHand, replay_facts: Callable[..., Any]) -> None:
         self.hand = hand
+        self.replay_facts = replay_facts
+        # Every action requested so far, in order; the history must replay exactly these.
+        self.actions: list[tuple[int, Action]] = []
         # Recorded before betting starts: every player's chips at the start of the hand.
         self.starting_chips = {hand_player.seat_number: hand_player.player.stack for hand_player in hand.players}
         # The seats that have acted in the current betting round; posting a blind is not an action.
@@ -120,6 +127,7 @@ class CheckedHand:
             full_raise_before = self.betting.last_full_raise_size
             aggressor_before = self.betting.last_aggressor
             apply_action(self.hand, seat_number, action)
+            self.actions.append((seat_number, action))
             self.acted.add(seat_number)
             self._check_betting_context(action, legal, bet_before, full_raise_before)
             # Only a bet or raise, a short all-in one included, makes its actor the round's last aggressor.
@@ -166,6 +174,7 @@ class CheckedHand:
         assert betting.current_actor is None or betting.current_actor in betting.pending_actors
         assert (betting.current_actor is None) == (not betting.pending_actors)
         self._check_accounting()
+        assert self.replay_facts(self.hand).actions == self.actions
 
         before = _hand_snapshot(self.hand)
         legal_actions(self.hand)
@@ -250,5 +259,5 @@ def hand_snapshot() -> Callable[[PokerHand], HandSnapshot]:
 
 
 @pytest.fixture
-def checked() -> Callable[[PokerHand], CheckedHand]:
-    return CheckedHand
+def checked(replay_facts: Callable[..., Any]) -> Callable[[PokerHand], CheckedHand]:
+    return lambda hand: CheckedHand(hand, replay_facts)

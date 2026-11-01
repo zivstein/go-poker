@@ -1,4 +1,5 @@
 from go_poker.core.deck import DeckEmptyError
+from go_poker.game.hand_history import HoleCardsDealt, SeatHoleCards, StreetDealt, _appended
 from go_poker.game.poker_hand import PokerHand, _require_unsettled
 from go_poker.game.street import Street
 
@@ -46,7 +47,7 @@ def deal_hole_cards(hand: PokerHand) -> None:
 
     Each round starts with the player clockwise of the button and ends with the button. No card is burned.
     A settled hand is rejected first (`HandAlreadySettledError`), before any other validation. The hand is validated
-    before any card is drawn, so a failure leaves it unchanged.
+    before any card is drawn, so a failure leaves it unchanged. Records `HoleCardsDealt` in the same call.
     """
     _require_unsettled(hand)
     _require_hole_cards_dealable(hand)
@@ -56,6 +57,8 @@ def deal_hole_cards(hand: PokerHand) -> None:
     for _ in range(HOLE_CARD_COUNT):
         for state in deal_order:
             state.hole_cards.append(hand.deck.draw())
+    dealt = HoleCardsDealt(tuple(SeatHoleCards(state.seat_number, tuple(state.hole_cards)) for state in hand.players))
+    hand.history = _appended(hand.history, dealt)
 
 
 def deal_next_street(hand: PokerHand) -> None:
@@ -64,7 +67,8 @@ def deal_next_street(hand: PokerHand) -> None:
     Streets go preflop, flop, turn, river. Every participant must hold exactly HOLE_CARD_COUNT hole cards first.
     Burned cards go to the hand's burned cards and board cards onto its board, in draw order. The hand is validated
     before any card is drawn, so a failure leaves it unchanged. A settled hand is rejected first
-    (`HandAlreadySettledError`), before any other validation.
+    (`HandAlreadySettledError`), before any other validation. Records `StreetDealt` in the same call, with only the
+    cards this call burned and dealt.
     """
     _require_unsettled(hand)
     next_street = _NEXT_STREET.get(hand.street)
@@ -83,8 +87,9 @@ def deal_next_street(hand: PokerHand) -> None:
             f"The deck has {len(hand.deck)} cards but dealing the {next_street.value} needs {cards_needed}"
         )
 
-    for _ in range(BURN_CARD_COUNT):
-        hand.burned_cards.append(hand.deck.draw())
-    for _ in range(board_card_count):
-        hand.board.append(hand.deck.draw())
+    burned = tuple(hand.deck.draw() for _ in range(BURN_CARD_COUNT))
+    dealt = tuple(hand.deck.draw() for _ in range(board_card_count))
+    hand.burned_cards.extend(burned)
+    hand.board.extend(dealt)
     hand.street = next_street
+    hand.history = _appended(hand.history, StreetDealt(next_street, burned, dealt))

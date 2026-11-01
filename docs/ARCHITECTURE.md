@@ -207,10 +207,24 @@ Persistent stack remains on `Player`.
 
 `game/hand_history.py` holds the variant-agnostic, immutable record of a hand. The contract is in [ADR 0004](adr/0004-hand-history-and-event-contract.md); this section describes only what is implemented.
 
-- `HandHistory(events)` holds only `events`; `number` and `participants` read `events[0]`. It does not validate on construction.
-- `HandStarted(number, participants)` is the only event so far. Later events arrive in later Cycles of Milestone 6.
+- `HandHistory(events)` holds only `events`; `number` and `participants` read `events[0]`, which must be a `HandStarted` (`TypeError` otherwise). It does not validate on construction.
 - `HandParticipant(seat, player_id, position, blind, starting_stack)` takes its values from the hand's players when `PokerHand` is constructed. The participants follow the hand's player order, button first, and `starting_stack` is the stack before any blind is posted.
-- `PokerHand` records `HandStarted` at construction. Recording appends through the private `_appended`, which returns a new history and leaves the old one unchanged; no operation calls it yet.
+- Recording appends through the private `_appended`, which returns a new history and leaves the old one unchanged. Each public low-level operation builds its events from locals and assigns `hand.history` once, after every mutation, so a rejected operation leaves the history equal to its previous value. Derived reads, internal helpers, `hand_flow` and `HoldemGame` record nothing.
+
+The events recorded so far, each by the operation that causes it, in the same call:
+
+| Event | Recorded by | Facts |
+| --- | --- | --- |
+| `HandStarted` | `PokerHand` construction | `number`; `participants` |
+| `BlindsPosted` | `initialize_betting` | `stakes`; `posts`, `BlindPost(seat, blind, chips, all_in)` for the small then the big blind, `chips` the amount actually posted, `all_in` right after that post |
+| `HoleCardsDealt` | `deal_hole_cards` | `hole_cards`, `SeatHoleCards(seat, cards)` in hand order, each seat's cards in the order it received them |
+| `StreetDealt` | `deal_next_street` | `street`; the `burned` cards and board `cards` of this call only |
+| `BettingRoundStarted` | `start_betting_round` | `street`; never recorded for the preflop, whose start is `BlindsPosted` |
+| `ActionTaken` | `apply_action` | `seat`; the `action` as requested (a bet or raise keeps its target); `chips` actually committed (0 for a fold or check); `all_in` right after the commit |
+| `ChipsReturned` | the operation that completes a round | `seat`; the uncalled `chips` returned |
+| `BettingRoundCompleted` | the operation that completes a round | `street` |
+
+Order within one operation: `ActionTaken`, then any `ChipsReturned`, then `BettingRoundCompleted`; when the blinds alone complete the preflop round, `BlindsPosted`, then any `ChipsReturned`, then `BettingRoundCompleted(PREFLOP)`. `start_betting_round` records `BettingRoundStarted`, and when nobody is pending the round is complete as it starts, so it also records `BettingRoundCompleted` for the same street in the same call; it never records `ChipsReturned`, because a new round has nothing in front to collect. Across operations events follow the order of the successful calls: the low-level order is not normalized, so `begin_hand` (blinds, then hole cards) and a caller who deals first produce different, equally valid, histories. Showdown and settlement events are not recorded yet.
 
 It is a record, not event sourcing: no rule reads it. Its fields are immutable values and it is compared by value equality, never by identity, so it does not change when the live `Player` objects do.
 
@@ -455,7 +469,7 @@ When a betting round completes:
 
 This prevents creation of an unmatched one-contributor pot.
 
-Collection happens when the operation completing the round runs.
+Collection happens when the operation completing the round runs. `collect_round` records nothing: it reports the returned excess as the seat and chips to the calling operation (`initialize_betting` or `apply_action`), or nothing when none was returned, and that operation records the `ChipsReturned` event and the `BettingRoundCompleted` event (see [Hand History](#hand-history)).
 
 Starting the next round does not perform collection.
 

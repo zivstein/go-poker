@@ -21,6 +21,7 @@ cannot pass vacuously on hands that never reach those shapes.
 import copy
 import random
 from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -109,6 +110,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 hp.seat_number,
@@ -227,7 +229,15 @@ def canonical_index(hand: PokerHand, seat: int) -> int:
     return clockwise.index(seat)
 
 
-def play_seed(seed: int, counters: Counter[str]) -> None:
+def assert_history_replays(
+    hand: PokerHand, replay_facts: Callable[..., Any], betting_actions: list[tuple[int, Action]]
+) -> None:
+    """The facts replayed from the history equal the live hand (a settled hand's payout is not recorded yet, so its
+    stacks and all-in flags are skipped) and the history holds exactly the betting actions played."""
+    assert replay_facts(hand, settled=hand.settlement is not None).actions == betting_actions
+
+
+def play_seed(seed: int, counters: Counter[str], replay_facts: Callable[..., Any]) -> None:
     rng = random.Random(seed)
     name = PROFILE_NAMES[seed % len(PROFILE_NAMES)]
     stack_range, fold_weight, aggression, show_chance = PROFILES[name]
@@ -236,6 +246,8 @@ def play_seed(seed: int, counters: Counter[str]) -> None:
     assert current_actor(hand) is None  # nothing has begun
 
     begin_hand(hand, STAKES)
+    betting_actions: list[tuple[int, Action]] = []
+    assert_history_replays(hand, replay_facts, betting_actions)
     river_actions: list[tuple[int, Action]] = []
     decisions_made = False
     calls = 0
@@ -254,6 +266,7 @@ def play_seed(seed: int, counters: Counter[str]) -> None:
             decision = ShowdownAction.SHOW if rng.random() < show_chance else ShowdownAction.MUCK
             act(hand, seat, decision)
             decisions_made = True
+            assert_history_replays(hand, replay_facts, betting_actions)
             continue
         assert hand.betting is not None
         legal = legal_actions(hand)
@@ -261,6 +274,8 @@ def play_seed(seed: int, counters: Counter[str]) -> None:
         if hand.betting.street is Street.RIVER:
             river_actions.append((seat, action))
         act(hand, seat, action)
+        betting_actions.append((seat, action))
+        assert_history_replays(hand, replay_facts, betting_actions)
 
     check_settled(hand, total, counters, decisions_made)
     assert_settled_rejects_everything(hand, rng)
@@ -280,14 +295,14 @@ def assert_settled_rejects_everything(hand: PokerHand, rng: random.Random) -> No
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_hand_flow_alone_drives_random_hands_to_settlement(seed: int) -> None:
-    play_seed(seed, Counter())
+def test_hand_flow_alone_drives_random_hands_to_settlement(seed: int, replay_facts: Callable[..., Any]) -> None:
+    play_seed(seed, Counter(), replay_facts)
 
 
-def test_the_seeds_reach_every_shape_the_flow_must_handle() -> None:
+def test_the_seeds_reach_every_shape_the_flow_must_handle(replay_facts: Callable[..., Any]) -> None:
     counters: Counter[str] = Counter()
     for seed in SEEDS:
-        play_seed(seed, counters)
+        play_seed(seed, counters, replay_facts)
     required: dict[str, int] = {
         "interactive": 30,
         "interactive_mucks": 15,

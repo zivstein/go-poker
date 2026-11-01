@@ -6,7 +6,7 @@ import pytest
 from go_poker.core.deck import Deck
 from go_poker.game.betting.initialization import initialize_betting
 from go_poker.game.betting.stakes import Stakes
-from go_poker.game.hand_history import HandHistory, HandParticipant, HandStarted
+from go_poker.game.hand_history import BlindPost, BlindsPosted, HandHistory, HandParticipant, HandStarted
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import InvalidHandNumberError, PokerHand
@@ -148,11 +148,18 @@ def test_starting_stacks_are_the_stacks_before_any_blind_and_do_not_follow_the_p
 
 
 def test_beginning_betting_leaves_the_starting_stacks_in_the_history_unchanged() -> None:
-    """The blinds are taken from the stacks afterwards; the history still records the stacks before them."""
+    """The blinds are taken from the stacks afterwards; the history still records the stacks before them in
+    `HandStarted`, which only the blinds event follows."""
     hand = PokerHand(players=make_players(), deck=Deck(), number=1)
-    initialize_betting(hand, Stakes(small_blind=5, big_blind=10))
+    stakes = Stakes(small_blind=5, big_blind=10)
+    initialize_betting(hand, stakes)
     assert [state.player.stack for state in hand.players] == [1000, 995, 990]
-    assert hand.history == HandHistory((literal_started(),))
+    assert hand.history == HandHistory(
+        (
+            literal_started(),
+            BlindsPosted(stakes, (BlindPost(8, Blind.SMALL, 5, False), BlindPost(2, Blind.BIG, 10, False))),
+        )
+    )
 
 
 def test_hands_do_not_share_a_history() -> None:

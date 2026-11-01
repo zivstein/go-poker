@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 6 — Structured Hand History / Event Log** is in progress. Cycles 1 and 2 are complete; Cycle 3 is next.
+**Milestone 6 — Structured Hand History / Event Log** is in progress. Cycles 1, 2, and 3 are complete; Cycle 4 is next.
 
 Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand history and event contract is in [ADR 0004](adr/0004-hand-history-and-event-contract.md); its numbered decisions are cited below as ADR 0004 §N. Earlier contracts still apply:
 
@@ -44,8 +44,8 @@ Tests drive hands through public operations, using the existing `stacked_hand` f
 | --- | --- | --- |
 | 1 | Derived hand strength | Complete |
 | 2 | Identity and `HandHistory` foundation | Complete |
-| 3 | Betting and dealing transition events | Next (not started) |
-| 4 | Showdown and settlement events, full replay/integration, milestone close | Planned |
+| 3 | Betting and dealing transition events | Complete |
+| 4 | Showdown and settlement events, full replay/integration, milestone close | Next (not started) |
 
 Cycles 1 and 2 are independent. Cycle 3 depends on Cycle 2, and Cycle 4 on Cycle 3. Cycle 1 must be complete before the milestone closes.
 
@@ -84,15 +84,20 @@ The contract is in `ARCHITECTURE.md` ([Hand History](ARCHITECTURE.md#hand-histor
 
 ### Cycle 3 — Betting and dealing transition events (ADR 0004 §1, §3–4, §8)
 
-- **Events:** `BlindsPosted` (with `BlindPost`), `HoleCardsDealt`, `StreetDealt`, `BettingRoundStarted`, `ActionTaken`, `ChipsReturned`, and `BettingRoundCompleted`, each recorded by its operation.
-- **Betting:** `collect_round` reports the excess it returns to the operation that records it.
-- **Ordering within an operation** follows ADR 0004 §4.
-- **Atomicity:** a rejected operation leaves the history equal to its previous value. Derived reads record nothing.
-- **Tests:**
-  - each event's facts, including short blinds, short calls, all-in commitments, and uncalled returns;
-  - the blinds alone completing preflop;
-  - a test-local partial fact-replay fold over the board, burns, hole cards, contributions, folds, and pre-payout all-in, through both low-level calls and `hand_flow`.
-- **`ARCHITECTURE.md`:** recorded events and their owners.
+Delivered:
+
+- `game/hand_history.py`: `BlindsPosted` (with `BlindPost`), `HoleCardsDealt` (with `SeatHoleCards`), `StreetDealt`, `BettingRoundStarted`, `ActionTaken`, `ChipsReturned`, and `BettingRoundCompleted`, all in the closed `HandEvent` union.
+- Recording: `initialize_betting`, `deal_hole_cards`, `deal_next_street`, `start_betting_round`, and `apply_action` each record their own events in the same call, after every mutation. `hand_flow`, `HoldemGame`, helpers, and derived reads record nothing.
+- `collect_round` returns the excess it returned as `(seat, chips)`, or `None`, and imports no history; the calling operation records `ChipsReturned`.
+
+The Brief-level choices:
+
+- Hole cards are a tuple of `SeatHoleCards(seat, cards)` in hand order, since Python 3.14 has no immutable mapping.
+- `BlindsPosted` marks the preflop round start; there is no `BettingRoundStarted(PREFLOP)`.
+- `HandHistory.number` and `participants` read `events[0]` through a private narrowing that raises `TypeError` when it is not a `HandStarted`.
+- A round that `start_betting_round` starts already complete records `BettingRoundStarted` then `BettingRoundCompleted` for the same street (user-approved resolution of the Brief's open issue).
+
+The contract is in `ARCHITECTURE.md` ([Hand History](ARCHITECTURE.md#hand-history)). A test-local `replay_facts` fold (`tests/game/conftest.py`) reconstructs the pre-payout facts and is checked against the live hand after every step of the betting suites and the `hand_flow` and `HoldemGame` stress tests; a seeded event-grammar stress walks 400 orchestrated hands. Cycle 4 extends the replay with showdown, settlement, and payout.
 
 ### Cycle 4 — Showdown and settlement events, full replay/integration, milestone close (ADR 0004 §1, §3–4, §7, §10)
 

@@ -11,13 +11,14 @@ Checked for every hand: `start` and `next_hand` return `game.hand`, settled or w
 next ready player with chips clockwise from the previous button seat (computed here independently); every ready player
 with chips plays, and nobody else but a waiting player who entered outside the button and small blind; busted and
 sitting-out players never play and keep their statuses; the stakes are the game's; the chips of the seated players are
-conserved from hand to hand, adjusted exactly for players who sit down or stand up with chips. Every hand's history is
-`HandStarted` alone (nothing else is recorded yet), numbered 1, 2, 3, ... with no gap (a rejected call consumes no
-number), and its participants are written out here independently from the live players at the start (id, seat, position,
-blind, and the stack before any blind); every earlier history still equals that value after the later hands, churn and
-rejections. A game ends when the
-lifecycle reports fewer than two possible players, or at a hand cap. After an `InvalidPlayerCount` some games seat a new
-player and go on, since there is no game-over state.
+conserved from hand to hand, adjusted exactly for players who sit down or stand up with chips. Every hand's history
+starts with `HandStarted`, numbered 1, 2, 3, ... with no gap (a rejected call consumes no number), and its participants
+are written out here independently from the live players at the start (id, seat, position, blind, and the stack before
+any blind); that first event never changes. After each start and each act, the facts replayed from the history (see
+`replay_facts`) equal the live hand, and the history holds exactly the betting actions played. When a hand settles its
+whole history is captured as an independent copy, and every earlier settled history still equals that value after the
+later hands, churn and rejections. A game ends when the lifecycle reports fewer than two possible players, or at a hand
+cap. After an `InvalidPlayerCount` some games seat a new player and go on, since there is no game-over state.
 
 The seeds are fixed, so a failure names the seed that reproduces it. The counters keep the seed set honest.
 """
@@ -25,6 +26,7 @@ The seeds are fixed, so a failure names the seed that reproduces it. The counter
 import copy
 import random
 from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -125,8 +127,9 @@ def betting_action(rng: random.Random, legal: LegalActions, aggression: int) -> 
 class Driver:
     """One seeded game: the table, the game, the expected chip total and the counters."""
 
-    def __init__(self, seed: int, counters: Counter[str]) -> None:
+    def __init__(self, seed: int, counters: Counter[str], replay_facts: Callable[..., Any]) -> None:
         self.seed = seed
+        self.replay_facts = replay_facts
         self.rng = random.Random(seed)
         self.counters = counters
         self.table = Table(self.rng.randint(3, 9))
@@ -137,7 +140,9 @@ class Driver:
         self.previous: PokerHand | None = None
         self.previous_state: dict[str, Any] = {}
         self.started = 0  # hands returned so far; the next hand must be numbered one more
-        self.recorded: list[tuple[PokerHand, HandHistory]] = []  # each hand with its independently written history
+        # Each hand with its independently written HandStarted, and its whole history copy once it has settled.
+        self.recorded: list[tuple[PokerHand, HandStarted, HandHistory | None]] = []
+        self.betting_actions: list[tuple[int, Action]] = []  # the betting actions played in the current hand
         for seat in self.rng.sample(range(1, self.table.max_seats + 1), self.rng.randint(2, self.table.max_seats)):
             self.sit_down(seat)
 
@@ -212,6 +217,9 @@ class Driver:
     def assert_awaiting_or_settled(self, hand: PokerHand) -> None:
         assert hand is self.game.hand
         self.assert_chips_conserved(hand)
+        # A settled hand's payout is not recorded yet, so its stacks and all-in flags are not replayed.
+        replayed = self.replay_facts(hand, settled=hand.settlement is not None)
+        assert replayed.actions == self.betting_actions, f"seed {self.seed}: the history lost an action"
         if hand.settlement is not None:
             assert current_actor(hand) is None
             return
@@ -225,40 +233,44 @@ class Driver:
             assert hand.showdown is not None and hand.showdown.kind is ShowdownKind.INTERACTIVE
 
     def assert_history_at_start(self, hand: PokerHand, before: dict[int, tuple[PlayerStatus, int]]) -> None:
-        """The new hand's history equals `HandStarted` written from the live players, and earlier ones are intact."""
+        """The first event equals `HandStarted` written from the live players; earlier histories are intact."""
         self.started += 1
         assert hand.number == hand.history.number == self.started, f"seed {self.seed}: wrong hand number"
         players = seated(self.table)
-        expected = HandHistory(
-            (
-                HandStarted(
-                    number=self.started,
-                    participants=tuple(
-                        HandParticipant(
-                            seat=state.seat_number,
-                            player_id=players[state.seat_number].player_id,
-                            position=state.position,
-                            blind=state.blind,
-                            starting_stack=before[state.seat_number][1],
-                        )
-                        for state in hand.players
-                    ),
-                ),
-            )
+        expected = HandStarted(
+            number=self.started,
+            participants=tuple(
+                HandParticipant(
+                    seat=state.seat_number,
+                    player_id=players[state.seat_number].player_id,
+                    position=state.position,
+                    blind=state.blind,
+                    starting_stack=before[state.seat_number][1],
+                )
+                for state in hand.players
+            ),
         )
-        assert hand.history == expected, f"seed {self.seed}: hand {self.started} history is wrong"
-        self.recorded.append((hand, expected))
+        assert hand.history.events[0] == expected, f"seed {self.seed}: hand {self.started} history is wrong"
+        self.recorded.append((hand, expected, None))
         self.assert_recorded_histories_intact()
         self.counters["histories_checked"] += 1
 
+    def record_settled_history(self, hand: PokerHand) -> None:
+        """Capture the settled hand's whole history as an independent copy, to compare after later hands."""
+        index = next(i for i, (recorded, _, _) in enumerate(self.recorded) if recorded is hand)
+        self.recorded[index] = (hand, self.recorded[index][1], copy.deepcopy(hand.history))
+
     def assert_recorded_histories_intact(self) -> None:
-        for number, (hand, expected) in enumerate(self.recorded, start=1):
-            assert hand.history == expected, f"seed {self.seed}: the history of hand {number} changed"
+        for number, (hand, started, settled) in enumerate(self.recorded, start=1):
+            assert hand.history.events[0] == started, f"seed {self.seed}: the history of hand {number} changed"
+            if settled is not None:
+                assert hand.history == settled, f"seed {self.seed}: the settled history of hand {number} changed"
 
     def assert_new_hand(
         self, hand: PokerHand, before: dict[int, tuple[PlayerStatus, int]], button: int | None, started: bool
     ) -> None:
         """What a hand just returned by `start` or `next_hand` must satisfy, given the seats before the call."""
+        self.betting_actions = []
         self.assert_awaiting_or_settled(hand)
         self.assert_history_at_start(hand, before)
         assert hand.betting is not None and hand.betting.stakes == STAKES
@@ -295,7 +307,9 @@ class Driver:
             if hand.showdown is not None:
                 self.game.act(seat, rng.choice(list(ShowdownAction)))
             else:
-                self.game.act(seat, betting_action(rng, legal_actions(hand), self.aggression))
+                action = betting_action(rng, legal_actions(hand), self.aggression)
+                self.game.act(seat, action)
+                self.betting_actions.append((seat, action))
             self.assert_awaiting_or_settled(hand)
         showdown = hand.showdown
         settlement = hand.settlement
@@ -304,6 +318,7 @@ class Driver:
             best = hand_strength(hand, seat)  # the derived river strength must agree with the settled rank
             assert best is not None and best.rank == rank, f"seed {self.seed}: seat {seat} strength disagrees"
             self.counters["strength_parity"] += 1
+        self.record_settled_history(hand)
         self.counters["hands"] += 1
         self.counters["interactive"] += showdown is not None and showdown.kind is ShowdownKind.INTERACTIVE
         self.counters["busts"] += sum(state.player.stack == 0 for state in hand.players)
@@ -378,23 +393,23 @@ class Driver:
         return True
 
 
-def play_seed(seed: int, counters: Counter[str]) -> None:
+def play_seed(seed: int, counters: Counter[str], replay_facts: Callable[..., Any]) -> None:
     with pytest.MonkeyPatch.context() as patch:
         deck_rng = random.Random(f"decks-{seed}")
         original = Deck.shuffle
         patch.setattr(Deck, "shuffle", lambda deck, *, _rng=None: original(deck, _rng=deck_rng))
-        Driver(seed, counters).play()
+        Driver(seed, counters, replay_facts).play()
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_holdem_game_plays_random_games_across_hands(seed: int) -> None:
-    play_seed(seed, Counter())
+def test_holdem_game_plays_random_games_across_hands(seed: int, replay_facts: Callable[..., Any]) -> None:
+    play_seed(seed, Counter(), replay_facts)
 
 
-def test_the_seeds_reach_every_cross_hand_shape() -> None:
+def test_the_seeds_reach_every_cross_hand_shape(replay_facts: Callable[..., Any]) -> None:
     counters: Counter[str] = Counter()
     for seed in SEEDS:
-        play_seed(seed, counters)
+        play_seed(seed, counters, replay_facts)
     required: dict[str, int] = {
         "hands": 500,
         "strength_parity": 300,

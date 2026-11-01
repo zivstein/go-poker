@@ -22,12 +22,24 @@ from go_poker.game.betting.legal_actions import legal_actions
 from go_poker.game.betting.pots import pots
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.game_lifecycle import GameAlreadyStartedError, GameNotStartedError
-from go_poker.game.hand_history import HandHistory, HandParticipant, HandStarted
+from go_poker.game.hand_history import (
+    ActionTaken,
+    BettingRoundCompleted,
+    BlindPost,
+    BlindsPosted,
+    ChipsReturned,
+    HandHistory,
+    HandParticipant,
+    HandStarted,
+    HoleCardsDealt,
+    SeatHoleCards,
+)
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import HandAlreadySettledError, PokerHand
 from go_poker.game.position import Blind, InvalidPlayerCount, Position
 from go_poker.game.position_assignment import ButtonSeatNotInHandError
 from go_poker.game.showdown import ShowdownAction
+from go_poker.game.street import Street
 from go_poker.game.table import Table
 from go_poker.game.variants.texas_holdem import hand_flow
 from go_poker.game.variants.texas_holdem.game import HandInProgressError, HoldemGame
@@ -84,6 +96,7 @@ def hand_state(hand: PokerHand, *, with_stacks: bool = True) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -739,34 +752,52 @@ def test_the_game_keeps_no_counter_and_no_past_histories(queue_decks: QueueDecks
     assert vars(game).keys() == {"_table", "_stakes", "_hand"}
 
 
-def test_histories_survive_later_hands_by_value(queue_decks: QueueDecks, draw_order: DrawOrder) -> None:
+def test_histories_survive_later_hands_by_value(
+    queue_decks: QueueDecks, draw_order: DrawOrder, cards: Callable[[str], list[Card]]
+) -> None:
     """Hand 1's history still equals an independent literal copy after hand 2 changes the same Player objects."""
     game, _, players = make_game({1: 1000, 2: 1000, 3: 1000})
     queue_decks(order(draw_order, (1, 2, 3), button=1), order(draw_order, (1, 2, 3), button=2))
     first = game.start(button_at(1))
     first_history = first.history
-    expected_first = HandHistory(
-        (
-            HandStarted(
-                number=1,
-                participants=(
-                    HandParticipant(1, "P1", Position.BTN, Blind.NONE, 1000),
-                    HandParticipant(2, "P2", Position.SB, Blind.SMALL, 1000),
-                    HandParticipant(3, "P3", Position.BB, Blind.BIG, 1000),
-                ),
-            ),
-        )
+    expected_started = HandStarted(
+        number=1,
+        participants=(
+            HandParticipant(1, "P1", Position.BTN, Blind.NONE, 1000),
+            HandParticipant(2, "P2", Position.SB, Blind.SMALL, 1000),
+            HandParticipant(3, "P3", Position.BB, Blind.BIG, 1000),
+        ),
     )
-    assert first_history == expected_first
+    expected_start = (
+        expected_started,
+        BlindsPosted(STAKES, (BlindPost(2, Blind.SMALL, 5, False), BlindPost(3, Blind.BIG, 10, False))),
+        HoleCardsDealt(
+            (
+                SeatHoleCards(1, tuple(cards("Ah Ad"))),
+                SeatHoleCards(2, tuple(cards("Kd Kh"))),
+                SeatHoleCards(3, tuple(cards("3s 4s"))),
+            )
+        ),
+    )
+    assert first_history == HandHistory(expected_start)
 
     fold_out(game)
+    expected_first = HandHistory(
+        (
+            *expected_start,
+            ActionTaken(1, FOLD, 0, False),
+            ActionTaken(2, FOLD, 0, False),
+            ChipsReturned(3, 5),
+            BettingRoundCompleted(Street.PREFLOP),
+        )
+    )
     assert first.history == expected_first
     second = game.next_hand()
     game.act(2, FOLD)
     players[3].status = SITTING_OUT
 
     assert first.history == expected_first
-    assert first_history == expected_first
+    assert first_history == HandHistory(expected_start)
     assert second.history.events == (
         HandStarted(
             number=2,
@@ -776,6 +807,15 @@ def test_histories_survive_later_hands_by_value(queue_decks: QueueDecks, draw_or
                 HandParticipant(1, "P1", Position.BB, Blind.BIG, 1000),
             ),
         ),
+        BlindsPosted(STAKES, (BlindPost(3, Blind.SMALL, 5, False), BlindPost(1, Blind.BIG, 10, False))),
+        HoleCardsDealt(
+            (
+                SeatHoleCards(2, tuple(cards("Kd Kh"))),
+                SeatHoleCards(3, tuple(cards("3s 4s"))),
+                SeatHoleCards(1, tuple(cards("Ah Ad"))),
+            )
+        ),
+        ActionTaken(2, FOLD, 0, False),
     )
 
 

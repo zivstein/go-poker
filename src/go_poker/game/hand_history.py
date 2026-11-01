@@ -6,7 +6,11 @@ Every field is an immutable value, and histories are compared by value equality,
 
 from dataclasses import dataclass
 
+from go_poker.core.card import Card
+from go_poker.game.betting.actions import Action
+from go_poker.game.betting.stakes import Stakes
 from go_poker.game.position import Blind, Position
+from go_poker.game.street import Street
 
 
 @dataclass(frozen=True)
@@ -29,7 +33,92 @@ class HandStarted:
     participants: tuple[HandParticipant, ...]
 
 
-type HandEvent = HandStarted
+@dataclass(frozen=True)
+class BlindPost:
+    """One posted blind: the seat, which blind, the chips actually posted (the whole stack for a short blind), and
+    whether the seat was all-in right after posting."""
+
+    seat: int
+    blind: Blind
+    chips: int
+    all_in: bool
+
+
+@dataclass(frozen=True)
+class BlindsPosted:
+    """The blinds of the hand: its stakes and the posts in posting order, small blind then big blind."""
+
+    stakes: Stakes
+    posts: tuple[BlindPost, ...]
+
+
+@dataclass(frozen=True)
+class SeatHoleCards:
+    """One seat's hole cards, in the order the seat received them."""
+
+    seat: int
+    cards: tuple[Card, ...]
+
+
+@dataclass(frozen=True)
+class HoleCardsDealt:
+    """The hole cards dealt to every participant, in hand order, button first."""
+
+    hole_cards: tuple[SeatHoleCards, ...]
+
+
+@dataclass(frozen=True)
+class StreetDealt:
+    """A street dealt: the cards burned and the board cards dealt by this deal alone, in draw order."""
+
+    street: Street
+    burned: tuple[Card, ...]
+    cards: tuple[Card, ...]
+
+
+@dataclass(frozen=True)
+class BettingRoundStarted:
+    """A betting round started on a street after the preflop; the preflop round starts with `BlindsPosted`."""
+
+    street: Street
+
+
+@dataclass(frozen=True)
+class ActionTaken:
+    """A betting action as requested (a bet or raise keeps its target), the chips it actually committed (0 for a fold
+    or check), and whether the seat was all-in right after committing them."""
+
+    seat: int
+    action: Action
+    chips: int
+    all_in: bool
+
+
+@dataclass(frozen=True)
+class ChipsReturned:
+    """The uncalled chips returned to a seat's stack when a betting round was collected."""
+
+    seat: int
+    chips: int
+
+
+@dataclass(frozen=True)
+class BettingRoundCompleted:
+    """A betting round on this street completed; any chips in front were collected."""
+
+    street: Street
+
+
+type HandEvent = (
+    HandStarted
+    | BlindsPosted
+    | HoleCardsDealt
+    | StreetDealt
+    | BettingRoundStarted
+    | ActionTaken
+    | ChipsReturned
+    | BettingRoundCompleted
+)
 
 
 @dataclass(frozen=True)
@@ -44,12 +133,19 @@ class HandHistory:
     events: tuple[HandEvent, ...]
 
     @property
+    def _started(self) -> HandStarted:
+        first = self.events[0]
+        if not isinstance(first, HandStarted):
+            raise TypeError("A hand history starts with HandStarted")
+        return first
+
+    @property
     def number(self) -> int:
-        return self.events[0].number
+        return self._started.number
 
     @property
     def participants(self) -> tuple[HandParticipant, ...]:
-        return self.events[0].participants
+        return self._started.participants
 
 
 def _appended(history: HandHistory, event: HandEvent) -> HandHistory:
