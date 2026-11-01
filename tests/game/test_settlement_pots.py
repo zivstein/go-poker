@@ -60,7 +60,7 @@ def start_hand(stacks: dict[int, int], button_seat: int) -> PokerHand:
         )
         for seat, assignment in assignments.items()
     )
-    hand = PokerHand(players=players, deck=Deck())
+    hand = PokerHand(players=players, deck=Deck(), number=1)
     initialize_betting(hand, STAKES)
     deal_hole_cards(hand)
     return hand

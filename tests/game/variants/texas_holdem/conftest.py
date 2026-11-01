@@ -92,7 +92,7 @@ def _stacked_hand(
         )
         for seat, assignment in assignments.items()
     )
-    return PokerHand(players=players, deck=deck)
+    return PokerHand(players=players, deck=deck, number=1)
 
 
 class DeckQueue(Random):

@@ -194,3 +194,52 @@ def test_different_player_objects_with_same_id_cannot_sit_twice() -> None:
     assert table.get_seat(2).player is player
     assert table.get_seat(3).player is None
     assert table.player_count == 1
+
+
+# =============================================================================
+# PLAYER ID UNIQUENESS (current table only)
+# =============================================================================
+
+
+def test_player_can_sit_again_after_standing_up() -> None:
+    """Uniqueness covers only the players currently seated, so a player who stood up may sit again."""
+    table = Table(9)
+    player = Player("Ziv", stack=1000)
+    table.sit_in(player, 2)
+    table.stand_up(2)
+    table.sit_in(player, 5)
+    assert table.get_seat(5).player is player
+    assert table.player_count == 1
+
+
+def test_a_player_with_the_id_of_a_player_who_stood_up_can_sit() -> None:
+    """The table keeps no record of past ids, so a new player may take the id of one who left."""
+    table = Table(9)
+    table.sit_in(Player("Ziv", stack=1000), 2)
+    table.stand_up(2)
+    newcomer = Player("Ziv", stack=500)
+    table.sit_in(newcomer, 3)
+    assert table.get_seat(3).player is newcomer
+
+
+def test_duplicate_ids_are_compared_by_equality_not_identity() -> None:
+    """Two distinct but equal id strings are the same id for the duplicate-seating rule."""
+    first_id = "".join(["Z", "iv"])
+    second_id = "".join(["Z", "iv"])
+    assert first_id is not second_id
+    assert first_id == second_id
+
+    table = Table(9)
+    table.sit_in(Player(first_id, stack=1000), 2)
+    with pytest.raises(PlayerAlreadySeatedError):
+        table.sit_in(Player(second_id, stack=500), 3)
+    assert table.player_count == 1
+
+
+@pytest.mark.parametrize("other_id", ["ziv", "Ziv ", " Ziv", "Ziv\n"])
+def test_ids_differing_only_by_case_or_whitespace_are_different_ids(other_id: str) -> None:
+    """Ids are opaque strings compared exactly: no case folding or trimming makes two ids the same."""
+    table = Table(9)
+    table.sit_in(Player("Ziv", stack=1000), 2)
+    table.sit_in(Player(other_id, stack=1000), 3)
+    assert table.player_count == 2

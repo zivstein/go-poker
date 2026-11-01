@@ -11,7 +11,11 @@ Checked for every hand: `start` and `next_hand` return `game.hand`, settled or w
 next ready player with chips clockwise from the previous button seat (computed here independently); every ready player
 with chips plays, and nobody else but a waiting player who entered outside the button and small blind; busted and
 sitting-out players never play and keep their statuses; the stakes are the game's; the chips of the seated players are
-conserved from hand to hand, adjusted exactly for players who sit down or stand up with chips. A game ends when the
+conserved from hand to hand, adjusted exactly for players who sit down or stand up with chips. Every hand's history is
+`HandStarted` alone (nothing else is recorded yet), numbered 1, 2, 3, ... with no gap (a rejected call consumes no
+number), and its participants are written out here independently from the live players at the start (id, seat, position,
+blind, and the stack before any blind); every earlier history still equals that value after the later hands, churn and
+rejections. A game ends when the
 lifecycle reports fewer than two possible players, or at a hand cap. After an `InvalidPlayerCount` some games seat a new
 player and go on, since there is no game-over state.
 
@@ -31,6 +35,7 @@ from go_poker.game.betting.legal_actions import NOTHING_LEGAL, LegalActions, leg
 from go_poker.game.betting.pots import middle_pot
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.game_lifecycle import GameAlreadyStartedError
+from go_poker.game.hand_history import HandHistory, HandParticipant, HandStarted
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import HandAlreadySettledError, PokerHand
 from go_poker.game.position import InvalidPlayerCount, Position
@@ -80,6 +85,8 @@ def hand_state(hand: PokerHand, *, with_stacks: bool = True) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "number": hand.number,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -129,6 +136,8 @@ class Driver:
         self.total = 0
         self.previous: PokerHand | None = None
         self.previous_state: dict[str, Any] = {}
+        self.started = 0  # hands returned so far; the next hand must be numbered one more
+        self.recorded: list[tuple[PokerHand, HandHistory]] = []  # each hand with its independently written history
         for seat in self.rng.sample(range(1, self.table.max_seats + 1), self.rng.randint(2, self.table.max_seats)):
             self.sit_down(seat)
 
@@ -215,11 +224,43 @@ class Driver:
         else:
             assert hand.showdown is not None and hand.showdown.kind is ShowdownKind.INTERACTIVE
 
+    def assert_history_at_start(self, hand: PokerHand, before: dict[int, tuple[PlayerStatus, int]]) -> None:
+        """The new hand's history equals `HandStarted` written from the live players, and earlier ones are intact."""
+        self.started += 1
+        assert hand.number == hand.history.number == self.started, f"seed {self.seed}: wrong hand number"
+        players = seated(self.table)
+        expected = HandHistory(
+            (
+                HandStarted(
+                    number=self.started,
+                    participants=tuple(
+                        HandParticipant(
+                            seat=state.seat_number,
+                            player_id=players[state.seat_number].player_id,
+                            position=state.position,
+                            blind=state.blind,
+                            starting_stack=before[state.seat_number][1],
+                        )
+                        for state in hand.players
+                    ),
+                ),
+            )
+        )
+        assert hand.history == expected, f"seed {self.seed}: hand {self.started} history is wrong"
+        self.recorded.append((hand, expected))
+        self.assert_recorded_histories_intact()
+        self.counters["histories_checked"] += 1
+
+    def assert_recorded_histories_intact(self) -> None:
+        for number, (hand, expected) in enumerate(self.recorded, start=1):
+            assert hand.history == expected, f"seed {self.seed}: the history of hand {number} changed"
+
     def assert_new_hand(
         self, hand: PokerHand, before: dict[int, tuple[PlayerStatus, int]], button: int | None, started: bool
     ) -> None:
         """What a hand just returned by `start` or `next_hand` must satisfy, given the seats before the call."""
         self.assert_awaiting_or_settled(hand)
+        self.assert_history_at_start(hand, before)
         assert hand.betting is not None and hand.betting.stakes == STAKES
         in_hand = {state.seat_number: state for state in hand.players}
         assert self.table.button_seat_number == next(iter(in_hand)) == button
@@ -309,12 +350,14 @@ class Driver:
         for _ in range(MAX_HANDS):
             assert hand is not None
             self.play_hand(hand)
+            self.assert_recorded_histories_intact()
             assert total_stacks(self.table) == self.total
             before = world(self.game, self.table)
             with pytest.raises(GameAlreadyStartedError):
                 self.game.start(self.forbidden_chooser)  # never a restart, even after settlement
             assert world(self.game, self.table) == before
             self.churn()
+            self.assert_recorded_histories_intact()
             hand = self.next_hand()
             if hand is None:
                 if recoveries == 2 or self.rng.random() < 0.5 or not self.reseat():
@@ -324,6 +367,7 @@ class Driver:
                 hand = self.next_hand()
                 assert hand is not None, f"seed {self.seed}: a newcomer with chips did not make the hand playable"
         self.counters["hand_cap"] += 1
+        self.assert_recorded_histories_intact()
 
     def reseat(self) -> bool:
         """Seat one more player after a below-two ending; False when the table is full."""
@@ -369,6 +413,7 @@ def test_the_seeds_reach_every_cross_hand_shape() -> None:
         "hand_cap": 3,
         "rejections_mid_hand": 100,
         "rejections_previous_hand": 100,
+        "histories_checked": 500,
     }
     missing = {key: (counters[key], need) for key, need in required.items() if counters[key] < need}
     assert not missing, f"the seed set no longer reaches enough of: {missing} (got {dict(counters)})"

@@ -4,7 +4,7 @@ from go_poker.core.deck import Deck
 
 from .hand_setup import has_chips_for_hand, setup_hand
 from .player import Player, PlayerStatus
-from .poker_hand import PokerHand
+from .poker_hand import PokerHand, _require_valid_hand_number
 from .position import validate_player_count
 from .position_assignment import ButtonSeatNotInHandError, order_seats_from_button
 from .table import ButtonUndefinedError, Table
@@ -40,15 +40,15 @@ def _next_ready_seat(ready_seats: tuple[int, ...], anchor: int) -> int:
     return seats_from_anchor[1] if len(seats_from_anchor) > 1 else seats_from_anchor[0]
 
 
-def _new_hand(table: Table) -> PokerHand:
+def _new_hand(table: Table, number: int) -> PokerHand:
     # Shuffle before setup_hand, which promotes entering players, so a shuffle failure happens before that change.
     deck = Deck()
     deck.shuffle()
-    return PokerHand(players=setup_hand(table), deck=deck)
+    return PokerHand(players=setup_hand(table), deck=deck, number=number)
 
 
 def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
-    """Start a game with every waiting player who has chips, place the chosen button and return the first hand."""
+    """Start a game with every waiting player who has chips, place the chosen button and return hand number 1."""
     if _seated_players_with_status(table, PlayerStatus.READY):
         raise GameAlreadyStartedError("The game has already started")
 
@@ -65,7 +65,7 @@ def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
         for player in starters.values():
             player.status = PlayerStatus.READY
         table.set_button(button_seat_number)
-        return _new_hand(table)
+        return _new_hand(table, 1)
     except Exception:
         for player in starters.values():
             player.status = PlayerStatus.WAITING
@@ -73,8 +73,13 @@ def start_game(table: Table, choose_button: ButtonChooser) -> PokerHand:
         raise
 
 
-def start_next_hand(table: Table) -> PokerHand:
-    """Move the button to the next ready player who has chips and return the next hand."""
+def start_next_hand(table: Table, hand_number: int) -> PokerHand:
+    """Move the button to the next ready player who has chips and return the next hand, numbered `hand_number`.
+
+    The caller supplies the number (any positive integer; the lifecycle keeps no counter). It is validated first,
+    before any other check or change, so a bad number never leaves a promoted entrant behind.
+    """
+    _require_valid_hand_number(hand_number)
     ready_seats = tuple(_players_with_chips_for_hand(table, PlayerStatus.READY))
     if not ready_seats:
         raise GameNotStartedError("No ready players with chips are seated")
@@ -85,7 +90,7 @@ def start_next_hand(table: Table) -> PokerHand:
 
     try:
         table.set_button(_next_ready_seat(ready_seats, previous_button_seat_number))
-        return _new_hand(table)
+        return _new_hand(table, hand_number)
     except Exception:
         table.button_seat_number = previous_button_seat_number
         raise

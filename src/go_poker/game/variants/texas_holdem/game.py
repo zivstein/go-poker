@@ -28,6 +28,10 @@ class HoldemGame:
     Callers must not stand up a hand participant or directly change a participant's stack during a hand. This is not
     enforced. Mixing this level with low-level calls on `hand` is not supported.
 
+    Hands are numbered 1, 2, 3, ... consecutively: the next number is the current hand's number plus one. The game keeps
+    no counter and no past histories (a caller who wants them keeps the `hand.history` values). A rejected `next_hand`
+    consumes no number, because `hand` is replaced only on success.
+
     Every rejection leaves the table, the players, `hand` and the hand unchanged; `hand` is replaced only after both
     the lifecycle call and `begin_hand` succeed. Atomicity is narrow: an unexpected engine defect raised after the
     lifecycle returned propagates, and there is no rollback.
@@ -67,7 +71,7 @@ class HoldemGame:
             raise GameNotStartedError("The game has not started")
         if self._hand.settlement is None:
             raise HandInProgressError("The current hand is not settled")
-        hand = start_next_hand(self._table)
+        hand = start_next_hand(self._table, self._hand.number + 1)
         hand_flow.begin_hand(hand, self._stakes)
         self._hand = hand
         return hand

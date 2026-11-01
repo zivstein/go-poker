@@ -12,9 +12,10 @@ from go_poker.game.game_lifecycle import (
     start_game,
     start_next_hand,
 )
+from go_poker.game.hand_history import HandParticipant, HandStarted
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
-from go_poker.game.poker_hand import PokerHand
+from go_poker.game.poker_hand import InvalidHandNumberError, PokerHand
 from go_poker.game.position import Blind, InvalidPlayerCount, Position
 from go_poker.game.position_assignment import ButtonSeatNotInHandError
 from go_poker.game.street import Street
@@ -383,7 +384,7 @@ def test_button_moves_to_next_ready_player(
     table = Table(9)
     seat_players(table, statuses)
     table.set_button(previous_button)
-    assert summarize(start_next_hand(table)) == expected
+    assert summarize(start_next_hand(table, 2)) == expected
     assert table.button_seat_number == expected[0][0]
 
 
@@ -392,7 +393,7 @@ def test_button_skips_waiting_player() -> None:
     table = Table(9)
     players = seat_players(table, {1: READY, 2: WAITING, 3: READY, 4: READY})
     table.set_button(1)
-    assert summarize(start_next_hand(table)) == [
+    assert summarize(start_next_hand(table, 2)) == [
         (3, Position.BTN, Blind.NONE),
         (4, Position.SB, Blind.SMALL),
         (1, Position.BB, Blind.BIG),
@@ -408,7 +409,7 @@ def test_button_moves_on_from_seat_of_player_who_stood_up() -> None:
     seat_players(table, dict.fromkeys((1, 3, 5, 7), READY))
     table.set_button(5)
     table.stand_up(5)
-    assert summarize(start_next_hand(table)) == [
+    assert summarize(start_next_hand(table, 2)) == [
         (7, Position.BTN, Blind.NONE),
         (1, Position.SB, Blind.SMALL),
         (3, Position.BB, Blind.BIG),
@@ -448,7 +449,7 @@ def test_button_moves_on_from_player_who_is_no_longer_ready(
     players = seat_players(table, dict.fromkeys((1, 3, 5, 7), READY))
     table.set_button(5)
     players[5].status = new_status
-    assert summarize(start_next_hand(table)) == expected
+    assert summarize(start_next_hand(table, 2)) == expected
     assert table.button_seat_number == 7
 
 
@@ -460,7 +461,7 @@ def test_button_and_hand_skip_ready_players_without_chips() -> None:
     table.set_button(5)
     players[5].stack = 0
     players[7].stack = 0
-    assert summarize(start_next_hand(table)) == [
+    assert summarize(start_next_hand(table, 2)) == [
         (8, Position.BTN, Blind.NONE),
         (1, Position.SB, Blind.SMALL),
         (3, Position.BB, Blind.BIG),
@@ -474,7 +475,7 @@ def test_single_ready_player_keeps_button_and_plays_heads_up_with_waiting_player
     table = Table(9)
     players = seat_players(table, {1: READY, 2: WAITING})
     table.set_button(1)
-    assert summarize(start_next_hand(table)) == [
+    assert summarize(start_next_hand(table, 2)) == [
         (1, Position.BTN, Blind.SMALL),
         (2, Position.BB, Blind.BIG),
     ]
@@ -488,7 +489,7 @@ def test_single_ready_player_without_opponent_raises_error_and_restores_button()
     players = seat_players(table, {1: READY, 2: SITTING_OUT, 3: SITTING_OUT})
     table.set_button(3)
     with pytest.raises(InvalidPlayerCount):
-        start_next_hand(table)
+        start_next_hand(table, 2)
     assert table.button_seat_number == 3
     assert statuses_of(players) == {1: READY, 2: SITTING_OUT, 3: SITTING_OUT}
 
@@ -507,7 +508,7 @@ def test_next_hand_without_ready_players_requires_restart(statuses: dict[int, Pl
     players = seat_players(table, statuses)
     table.set_button(1)
     with pytest.raises(GameNotStartedError):
-        start_next_hand(table)
+        start_next_hand(table, 2)
     assert statuses_of(players) == statuses
     assert table.button_seat_number == 1
 
@@ -517,7 +518,7 @@ def test_missing_ready_players_is_reported_before_missing_button() -> None:
     table = Table(9)
     seat_players(table, {1: WAITING, 2: WAITING})
     with pytest.raises(GameNotStartedError):
-        start_next_hand(table)
+        start_next_hand(table, 2)
     assert table.button_seat_number is None
 
 
@@ -526,7 +527,7 @@ def test_next_hand_without_button_raises_error() -> None:
     table = Table(9)
     players = seat_players(table, {1: READY, 2: READY})
     with pytest.raises(ButtonUndefinedError):
-        start_next_hand(table)
+        start_next_hand(table, 2)
     assert table.button_seat_number is None
     assert statuses_of(players) == {1: READY, 2: READY}
 
@@ -536,7 +537,7 @@ def test_button_rotates_across_hands() -> None:
     table = Table(9)
     seat_players(table, dict.fromkeys((2, 4, 7), WAITING))
     first_hand = start_game(table, RecordingChooser(4))
-    later_hands = [start_next_hand(table) for _ in range(3)]
+    later_hands = [start_next_hand(table, number) for number in (2, 3, 4)]
     hands = [first_hand, *later_hands]
     assert [hand.players[0].seat_number for hand in hands] == [4, 7, 2, 4]
     assert all(hand.players[0].position is Position.BTN for hand in hands)
@@ -555,7 +556,7 @@ def test_player_who_entered_a_later_hand_can_receive_the_button() -> None:
     start_game(table, RecordingChooser(1))
     newcomer = seat_players(table, {4: WAITING})[4]
 
-    entry_hand = start_next_hand(table)
+    entry_hand = start_next_hand(table, 2)
     assert summarize(entry_hand) == [
         (2, Position.BTN, Blind.NONE),
         (3, Position.SB, Blind.SMALL),
@@ -564,10 +565,10 @@ def test_player_who_entered_a_later_hand_can_receive_the_button() -> None:
     ]
     assert newcomer.status == READY
 
-    start_next_hand(table)
+    start_next_hand(table, 3)
     assert table.button_seat_number == 3
 
-    assert summarize(start_next_hand(table)) == [
+    assert summarize(start_next_hand(table, 4)) == [
         (4, Position.BTN, Blind.NONE),
         (1, Position.SB, Blind.SMALL),
         (2, Position.BB, Blind.BIG),
@@ -590,7 +591,7 @@ def test_next_hand_failure_restores_button(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(SETUP_HAND_PATH, failing_setup_hand)
     with pytest.raises(SetupFailure) as excinfo:
-        start_next_hand(table)
+        start_next_hand(table, 2)
     assert excinfo.value is error
     assert observed_buttons == [2]
     assert table.button_seat_number == 1
@@ -607,7 +608,7 @@ def test_each_new_hand_gets_its_own_fresh_deck_with_nothing_dealt() -> None:
     table = Table(9)
     seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
     first_hand = start_game(table, RecordingChooser(1))
-    second_hand = start_next_hand(table)
+    second_hand = start_next_hand(table, 2)
     assert second_hand.deck is not first_hand.deck
     assert second_hand.board is not first_hand.board
     assert_fresh_hand(first_hand)
@@ -626,7 +627,7 @@ def test_every_new_hand_shuffles_its_full_deck_once_without_a_test_rng(monkeypat
     monkeypatch.setattr(Deck, "shuffle", recording_shuffle)
     table = Table(9)
     seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
-    hands = [start_game(table, RecordingChooser(1)), start_next_hand(table), start_next_hand(table)]
+    hands = [start_game(table, RecordingChooser(1)), start_next_hand(table, 2), start_next_hand(table, 3)]
     assert [(len_, rng) for _, len_, rng in shuffles] == [(52, None)] * 3
     assert all(deck is hand.deck for (deck, _, _), hand in zip(shuffles, hands, strict=True))
 
@@ -651,6 +652,183 @@ def test_start_next_hand_shuffle_failure_restores_button_and_keeps_entrant_waiti
     players = seat_players(table, {1: READY, 2: READY, 3: READY, 4: WAITING})
     table.set_button(1)
     with pytest.raises(ShuffleFailure):
-        start_next_hand(table)
+        start_next_hand(table, 2)
     assert table.button_seat_number == 1
     assert statuses_of(players) == {1: READY, 2: READY, 3: READY, 4: WAITING}
+
+
+# =============================================================================
+# HAND NUMBERS AND HISTORY
+# =============================================================================
+
+
+def participants_of(hand: PokerHand) -> list[tuple[int, str, Position, Blind, int]]:
+    return [(p.seat, p.player_id, p.position, p.blind, p.starting_stack) for p in hand.history.participants]
+
+
+def test_start_game_creates_hand_number_one() -> None:
+    """The first hand of a game is hand 1, recorded in its history."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
+    hand = start_game(table, RecordingChooser(1))
+    assert hand.number == 1
+    assert hand.history.number == 1
+    assert len(hand.history.events) == 1
+
+
+def test_start_next_hand_numbers_the_hand_as_given_and_keeps_no_counter() -> None:
+    """Any positive number is accepted, in any order or repeated: the lifecycle stores no counter."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2, 3), READY))
+    table.set_button(1)
+    assert [start_next_hand(table, number).number for number in (7, 3, 3)] == [7, 3, 3]
+
+
+def test_hand_history_participants_are_in_hand_order_with_the_button_first() -> None:
+    """Seats 2, 4 and 7 with the button on 7 give the participants 7, 2, 4, with the ids and pre-blind stacks."""
+    table = Table(9)
+    seat_players(table, dict.fromkeys((2, 4, 7), WAITING))
+    hand = start_game(table, RecordingChooser(7))
+    assert hand.history.events[0] == HandStarted(
+        number=1,
+        participants=(
+            HandParticipant(7, "P7", Position.BTN, Blind.NONE, 1000),
+            HandParticipant(2, "P2", Position.SB, Blind.SMALL, 1000),
+            HandParticipant(4, "P4", Position.BB, Blind.BIG, 1000),
+        ),
+    )
+    assert [p.seat for p in hand.history.participants] == [state.seat_number for state in hand.players]
+
+
+def test_hand_history_in_a_heads_up_hand_gives_the_button_the_small_blind() -> None:
+    table = Table(9)
+    seat_players(table, dict.fromkeys((3, 8), WAITING))
+    hand = start_game(table, RecordingChooser(8))
+    assert participants_of(hand) == [
+        (8, "P8", Position.BTN, Blind.SMALL, 1000),
+        (3, "P3", Position.BB, Blind.BIG, 1000),
+    ]
+
+
+def test_hand_history_omits_a_waiting_player_blocked_from_the_hand() -> None:
+    """A waiting entrant who would sit in the small blind is not dealt in, so the history does not list them."""
+    table = Table(9)
+    players = seat_players(table, {1: READY, 2: READY, 3: WAITING})
+    table.set_button(1)
+    hand = start_next_hand(table, 2)
+    assert players[3].status == WAITING
+    assert [p.seat for p in hand.history.participants] == [2, 1]
+    assert "P3" not in [p.player_id for p in hand.history.participants]
+
+
+def test_hand_history_records_each_players_stack_at_the_start() -> None:
+    table = Table(9)
+    players = seat_players(table, dict.fromkeys((1, 2, 3), WAITING))
+    players[1].stack, players[2].stack, players[3].stack = 10, 20, 30
+    hand = start_game(table, RecordingChooser(2))
+    assert [(p.seat, p.starting_stack) for p in hand.history.participants] == [(2, 20), (3, 30), (1, 10)]
+
+
+@pytest.mark.parametrize("number", [0, -1, True, 1.0, "1", None], ids=repr)
+def test_start_next_hand_rejects_an_invalid_number_before_anything_else(
+    monkeypatch: pytest.MonkeyPatch, number: Any
+) -> None:
+    """The number is checked first: no not-started error, no button move, no promotion, and no setup at all."""
+    setup_calls: list[Table] = []
+
+    def spying_setup_hand(table: Table) -> tuple[HandPlayerState, ...]:
+        setup_calls.append(table)
+        raise AssertionError("setup_hand must not run")
+
+    monkeypatch.setattr(SETUP_HAND_PATH, spying_setup_hand)
+    table = Table(9)
+    statuses = {1: READY, 2: READY, 3: READY, 4: WAITING}
+    players = seat_players(table, statuses)
+    table.set_button(1)
+
+    with pytest.raises(InvalidHandNumberError):
+        start_next_hand(table, number)
+
+    assert setup_calls == []
+    assert table.button_seat_number == 1
+    assert statuses_of(players) == statuses
+
+
+def test_start_next_hand_reports_an_invalid_number_before_a_game_that_is_not_started() -> None:
+    table = Table(9)
+    players = seat_players(table, {1: WAITING, 2: WAITING})
+    with pytest.raises(InvalidHandNumberError):
+        start_next_hand(table, 0)
+    assert table.button_seat_number is None
+    assert statuses_of(players) == {1: WAITING, 2: WAITING}
+
+
+@pytest.mark.parametrize("number", [0, -3, True, 2.0, None], ids=repr)
+def test_an_invalid_number_is_reported_before_every_other_start_next_hand_error(number: Any) -> None:
+    """The number is checked before the missing button and before too few players, each of which also rejects."""
+    no_button = Table(9)
+    seat_players(no_button, {1: READY, 2: READY})
+    with pytest.raises(InvalidHandNumberError):
+        start_next_hand(no_button, number)
+    assert no_button.button_seat_number is None
+
+    lone_ready = Table(9)
+    players = seat_players(lone_ready, {1: READY, 2: SITTING_OUT})
+    lone_ready.set_button(1)
+    with pytest.raises(InvalidHandNumberError):
+        start_next_hand(lone_ready, number)
+    assert lone_ready.button_seat_number == 1
+    assert statuses_of(players) == {1: READY, 2: SITTING_OUT}
+
+    # With a valid number the same tables report their own errors, so the number check hid nothing.
+    with pytest.raises(ButtonUndefinedError):
+        start_next_hand(no_button, 2)
+    with pytest.raises(InvalidPlayerCount):
+        start_next_hand(lone_ready, 2)
+
+
+def test_a_valid_number_that_the_lifecycle_rejects_leaves_no_trace_and_the_same_number_works_later() -> None:
+    """The number is not consumed by a rejection: the lifecycle keeps nothing, so the retry is plain."""
+    table = Table(9)
+    players = seat_players(table, {1: READY, 2: SITTING_OUT})
+    table.set_button(1)
+    with pytest.raises(InvalidPlayerCount):
+        start_next_hand(table, 5)
+    assert table.button_seat_number == 1
+    assert statuses_of(players) == {1: READY, 2: SITTING_OUT}
+
+    players[2].status = READY
+    assert start_next_hand(table, 5).number == 5
+
+
+def test_a_failed_start_game_does_not_affect_the_number_of_the_hand_that_starts_later() -> None:
+    table = Table(9)
+    seat_players(table, dict.fromkeys((1, 2), WAITING))
+
+    def failing_chooser(_seats: tuple[int, ...]) -> int:
+        raise ShuffleFailure
+
+    with pytest.raises(ShuffleFailure):
+        start_game(table, failing_chooser)
+    assert start_game(table, RecordingChooser(2)).number == 1
+
+
+def test_an_entering_player_is_recorded_in_the_history_with_the_stack_it_entered_with() -> None:
+    """A waiting player promoted by the next hand appears as a participant with their own id and stack."""
+    table = Table(9)
+    players = seat_players(table, {1: READY, 2: READY, 3: READY, 4: WAITING})
+    players[4].stack = 321
+    table.set_button(3)
+    hand = start_next_hand(table, 2)
+    assert players[4].status is READY
+    assert hand.history.events == (
+        HandStarted(
+            number=2,
+            participants=(
+                HandParticipant(1, "P1", Position.BTN, Blind.NONE, 1000),
+                HandParticipant(2, "P2", Position.SB, Blind.SMALL, 1000),
+                HandParticipant(3, "P3", Position.BB, Blind.BIG, 1000),
+                HandParticipant(4, "P4", Position.UTG, Blind.NONE, 321),
+            ),
+        ),
+    )

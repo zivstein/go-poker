@@ -77,7 +77,7 @@ def random_hand(rng: random.Random, stack_range: tuple[int, int]) -> PokerHand:
     )
     deck = Deck()
     deck.shuffle(_rng=random.Random(f"deck-{rng.random()}"))
-    return PokerHand(players=players, deck=deck)
+    return PokerHand(players=players, deck=deck, number=1)
 
 
 def betting_action(rng: random.Random, legal: LegalActions, fold_weight: int, aggression: int) -> Action:

@@ -22,7 +22,7 @@ Paths are under `src/go_poker/`.
 | Area | Responsibility |
 | --- | --- |
 | `core/` | cards, deck, hand ranks, hand evaluation |
-| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, showdown, settlement |
+| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, hand history, showdown, settlement |
 | `game/variants/` | poker-variant-specific rules |
 | `game/betting/` | betting-structure rules, currently No-Limit |
 
@@ -74,11 +74,13 @@ Validation of future externally loaded or reconstructed state belongs at that ex
 
 `Player` owns:
 
-- player id;
+- `player_id`, the participant's stable logical identity (see below);
 - stack;
 - participation status: `WAITING`, `READY`, or `SITTING_OUT`.
 
 `Player` is a poker participant, not an account or user identity. Accounts and authentication stay outside the engine, and bots and guests must be able to participate without an account.
+
+`player_id` is an opaque, caller-assigned string ([ADR 0004](adr/0004-hand-history-and-event-contract.md) §6). It must be a non-empty `str` (whitespace is allowed and kept as given), is read-only after creation, and is validated before the stack (`InvalidPlayerIdError`). The engine enforces only the existing `Table.sit_in` rule that it is unique among the players currently seated, by equality. `Table` and `HoldemGame` keep no registry of past ids, so keeping an id consistent beyond the current table is the caller's duty. It is not a display name or an account or platform identity.
 
 Running out of chips does not automatically change participation status.
 
@@ -157,6 +159,8 @@ The old button seat remains the traversal anchor even if its player can no longe
 
 The lifecycle returns a new `PokerHand`.
 
+Hand numbers come from the caller: `start_game` creates hand 1, and `start_next_hand(table, hand_number)` numbers the hand as given and keeps no counter. A number that is not a positive integer raises `InvalidHandNumberError` before any other check or change, so a rejected number never leaves a promoted entrant behind.
+
 ## Per-Hand State
 
 ### PokerHand
@@ -172,7 +176,10 @@ It owns:
 - burned cards;
 - optional `BettingState`;
 - optional immutable `Settlement`, present only once the hand is settled;
-- optional immutable `Showdown`, present only once the hand's showdown has started (see [Showdown](#showdown)); decisions replace it with a new record, never mutate it.
+- optional immutable `Showdown`, present only once the hand's showdown has started (see [Showdown](#showdown)); decisions replace it with a new record, never mutate it;
+- its immutable `history` (see [Hand History](#hand-history)).
+
+It is created as `PokerHand(players, deck, number)`. The number must be a positive integer (`InvalidHandNumberError`), the hand starts preflop with an empty board, and `history` is not a constructor argument. `number` is a read-only property that reads the history.
 
 It is a state container rather than the owner of participation, variant dealing, or betting rules.
 
@@ -195,6 +202,17 @@ Per-hand player state owns:
 - `total_contribution`.
 
 Persistent stack remains on `Player`.
+
+### Hand History
+
+`game/hand_history.py` holds the variant-agnostic, immutable record of a hand. The contract is in [ADR 0004](adr/0004-hand-history-and-event-contract.md); this section describes only what is implemented.
+
+- `HandHistory(events)` holds only `events`; `number` and `participants` read `events[0]`. It does not validate on construction.
+- `HandStarted(number, participants)` is the only event so far. Later events arrive in later Cycles of Milestone 6.
+- `HandParticipant(seat, player_id, position, blind, starting_stack)` takes its values from the hand's players when `PokerHand` is constructed. The participants follow the hand's player order, button first, and `starting_stack` is the stack before any blind is posted.
+- `PokerHand` records `HandStarted` at construction. Recording appends through the private `_appended`, which returns a new history and leaves the old one unchanged; no operation calls it yet.
+
+It is a record, not event sourcing: no rule reads it. Its fields are immutable values and it is compared by value equality, never by identity, so it does not change when the live `Player` objects do.
 
 ## Texas Hold'em Dealing
 
@@ -604,9 +622,11 @@ It owns no button, participation, turn, legal-action or settlement rule, and sto
 Public surface:
 
 - `start(choose_button)`: `start_game`, then `begin_hand`; sets and returns the first hand;
-- `next_hand()`: `start_next_hand`, then `begin_hand`; sets and returns the next hand;
+- `next_hand()`: `start_next_hand` with the current hand's number plus one, then `begin_hand`; sets and returns the next hand;
 - `act(seat, action)`: `hand_flow.act` on the current hand, unchanged; returns `None`;
 - `hand`: the current `PokerHand`, read-only, `None` before `start`.
+
+Hands are numbered 1, 2, 3, … consecutively. The next number is derived from the current hand; the game keeps no counter and no past histories (a caller who wants them keeps the `hand.history` values). A rejected `next_hand` consumes no number, because `hand` is replaced only on success.
 
 A returned hand is settled (the blinds alone can end it) or waits for a betting actor or showdown decider (see `current_actor` under [Hand Flow](#hand-flow)).
 

@@ -22,9 +22,10 @@ from go_poker.game.betting.legal_actions import legal_actions
 from go_poker.game.betting.pots import pots
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.game_lifecycle import GameAlreadyStartedError, GameNotStartedError
+from go_poker.game.hand_history import HandHistory, HandParticipant, HandStarted
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import HandAlreadySettledError, PokerHand
-from go_poker.game.position import InvalidPlayerCount
+from go_poker.game.position import Blind, InvalidPlayerCount, Position
 from go_poker.game.position_assignment import ButtonSeatNotInHandError
 from go_poker.game.showdown import ShowdownAction
 from go_poker.game.table import Table
@@ -679,3 +680,201 @@ def test_the_public_surface_is_exactly_start_next_hand_act_and_a_read_only_hand(
     assert {name for name in dir(HoldemGame) if not name.startswith("_")} == {"start", "next_hand", "act", "hand"}
     with pytest.raises(AttributeError):
         setattr(game, "hand", None)  # noqa: B010
+
+
+# =============================================================================
+# HAND NUMBERS AND HISTORY
+# =============================================================================
+
+
+def test_hands_are_numbered_consecutively_from_one(queue_decks: QueueDecks, draw_order: DrawOrder) -> None:
+    game, _, _ = make_game({1: 1000, 2: 1000, 3: 1000})
+    queue_decks(*[order(draw_order, (1, 2, 3), button=button) for button in (1, 2, 3, 1, 2)])
+    numbers = [game.start(button_at(1)).number]
+    for _ in range(4):
+        fold_out(game)
+        numbers.append(game.next_hand().number)
+    assert numbers == [1, 2, 3, 4, 5]
+    assert game.hand is not None and game.hand.history.number == 5
+
+
+def test_a_hand_rejected_for_being_in_progress_consumes_no_number(
+    queue_decks: QueueDecks, draw_order: DrawOrder
+) -> None:
+    game, _, _ = make_game({1: 1000, 2: 1000, 3: 1000})
+    queue_decks(order(draw_order, (1, 2, 3), button=1), order(draw_order, (1, 2, 3), button=2))
+    game.start(button_at(1))
+    for _ in range(2):
+        with pytest.raises(HandInProgressError):
+            game.next_hand()
+    fold_out(game)
+    assert game.next_hand().number == 2
+
+
+def test_a_hand_rejected_by_the_lifecycle_consumes_no_number(queue_decks: QueueDecks, draw_order: DrawOrder) -> None:
+    game, table, players = make_game({1: 1000, 2: 10})
+    # As in the bust test above, the rejected call still shuffles a deck.
+    queue_decks(
+        order(draw_order, (1, 2), button=1), order(draw_order, (1, 2), button=1), order(draw_order, (1, 3), button=1)
+    )
+    game.start(button_at(1))
+    game.act(1, CALL)
+    assert players[2].stack == 0 and game.hand is not None and game.hand.settlement is not None
+
+    with pytest.raises(InvalidPlayerCount):
+        game.next_hand()
+    assert game.hand.number == 1
+
+    table.sit_in(Player("P3", stack=1000), 3)
+    assert game.next_hand().number == 2
+
+
+def test_the_game_keeps_no_counter_and_no_past_histories(queue_decks: QueueDecks, draw_order: DrawOrder) -> None:
+    game, _, _ = make_game({1: 1000, 2: 1000, 3: 1000})
+    queue_decks(order(draw_order, (1, 2, 3), button=1), order(draw_order, (1, 2, 3), button=2))
+    assert vars(game).keys() == {"_table", "_stakes", "_hand"}
+    game.start(button_at(1))
+    fold_out(game)
+    game.next_hand()
+    assert vars(game).keys() == {"_table", "_stakes", "_hand"}
+
+
+def test_histories_survive_later_hands_by_value(queue_decks: QueueDecks, draw_order: DrawOrder) -> None:
+    """Hand 1's history still equals an independent literal copy after hand 2 changes the same Player objects."""
+    game, _, players = make_game({1: 1000, 2: 1000, 3: 1000})
+    queue_decks(order(draw_order, (1, 2, 3), button=1), order(draw_order, (1, 2, 3), button=2))
+    first = game.start(button_at(1))
+    first_history = first.history
+    expected_first = HandHistory(
+        (
+            HandStarted(
+                number=1,
+                participants=(
+                    HandParticipant(1, "P1", Position.BTN, Blind.NONE, 1000),
+                    HandParticipant(2, "P2", Position.SB, Blind.SMALL, 1000),
+                    HandParticipant(3, "P3", Position.BB, Blind.BIG, 1000),
+                ),
+            ),
+        )
+    )
+    assert first_history == expected_first
+
+    fold_out(game)
+    assert first.history == expected_first
+    second = game.next_hand()
+    game.act(2, FOLD)
+    players[3].status = SITTING_OUT
+
+    assert first.history == expected_first
+    assert first_history == expected_first
+    assert second.history.events == (
+        HandStarted(
+            number=2,
+            participants=(
+                HandParticipant(2, "P2", Position.BTN, Blind.NONE, 995),
+                HandParticipant(3, "P3", Position.SB, Blind.SMALL, 1005),
+                HandParticipant(1, "P1", Position.BB, Blind.BIG, 1000),
+            ),
+        ),
+    )
+
+
+def test_rejected_starts_leave_no_hand_and_the_game_that_does_start_is_hand_one() -> None:
+    """Every `start` rejection path (too few players, a bad button, a failing chooser) creates no hand and no number."""
+    game, table, _ = make_game({1: 1000})
+    with pytest.raises(InvalidPlayerCount):
+        game.start(button_at(1))
+    assert game.hand is None
+
+    table.sit_in(Player("P2", stack=1000), 2)
+    with pytest.raises(ButtonSeatNotInHandError):
+        game.start(button_at(9))
+    assert game.hand is None
+
+    def failing_chooser(_seats: tuple[int, ...]) -> int:
+        raise RuntimeError("chooser failed")
+
+    with pytest.raises(RuntimeError):
+        game.start(failing_chooser)
+    assert game.hand is None
+
+    hand = game.start(button_at(2))
+    assert hand.number == hand.history.number == 1
+    with pytest.raises(GameAlreadyStartedError):
+        game.start(button_at(1))
+    assert game.hand is hand and hand.number == 1
+
+
+def test_next_hand_before_start_and_every_rejection_leave_the_current_number_alone() -> None:
+    """A mix of rejected `next_hand` calls between two successful ones never skips or repeats a number."""
+    game, _, _ = make_game({1: 1000, 2: 1000, 3: 1000})
+    with pytest.raises(GameNotStartedError):
+        game.next_hand()
+    first = game.start(button_at(1))
+    for _ in range(3):
+        with pytest.raises(HandInProgressError):
+            game.next_hand()
+        with pytest.raises(GameAlreadyStartedError):
+            game.start(button_at(1))
+        assert game.hand is first and first.number == 1
+    fold_out(game)
+    second = game.next_hand()
+    with pytest.raises(HandInProgressError):
+        game.next_hand()
+    fold_out(game)
+    third = game.next_hand()
+    assert [first.number, second.number, third.number] == [1, 2, 3]
+    assert [first.history.number, second.history.number, third.history.number] == [1, 2, 3]
+
+
+def test_a_next_hand_that_fails_after_the_lifecycle_does_not_replace_the_hand_or_consume_a_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If beginning the new hand fails, `game.hand` stays the settled hand, and the retry gets the very next number."""
+    game, _, _ = make_game({1: 1000, 2: 1000, 3: 1000})
+    first = game.start(button_at(1))
+    fold_out(game)
+    first_history = first.history
+    original_begin = hand_flow.begin_hand
+
+    def failing_begin(_hand: PokerHand, _stakes: Stakes) -> None:
+        raise RuntimeError("begin failed")
+
+    monkeypatch.setattr(hand_flow, "begin_hand", failing_begin)
+    with pytest.raises(RuntimeError):
+        game.next_hand()
+    assert game.hand is first and first.number == 1 and first.history == first_history
+
+    monkeypatch.setattr(hand_flow, "begin_hand", original_begin)
+    second = game.next_hand()
+    assert second.number == 2 and second.history.number == 2
+    assert first.history == first_history
+
+
+def test_every_hand_of_a_long_game_carries_its_own_history(queue_decks: QueueDecks, draw_order: DrawOrder) -> None:
+    """Hand objects kept by the caller each hold their own number and participants after the game has moved on."""
+    game, _, players = make_game({1: 1000, 2: 1000, 3: 1000, 4: 1000})
+    queue_decks(*[order(draw_order, (1, 2, 3, 4), button=button) for button in (1, 2, 3, 4, 1, 2)])
+    hands = [game.start(button_at(1))]
+    for _ in range(5):
+        fold_out(game)
+        hands.append(game.next_hand())
+    assert [hand.number for hand in hands] == [1, 2, 3, 4, 5, 6]
+    assert [hand.history.participants[0].seat for hand in hands] == [1, 2, 3, 4, 1, 2]  # the button moved each time
+    assert len({id(hand.history) for hand in hands}) == 6
+    assert [p.starting_stack for p in hands[0].history.participants] == [1000, 1000, 1000, 1000]
+    assert sum(p.starting_stack for p in hands[-1].history.participants) == 4000  # chips are only moved around
+    # Hand 1: seat 2 posted the small blind and folded, seat 3 won it from the big blind; hand 2 starts from there.
+    assert [(p.seat, p.starting_stack) for p in hands[1].history.participants] == [
+        (2, 995),
+        (3, 1005),
+        (4, 1000),
+        (1, 1000),
+    ]
+    for hand in hands:
+        assert [p.player_id for p in hand.history.participants] == [
+            players[state.seat_number].player_id for state in hand.players
+        ]
+    players[1].stack = 1
+    players[1].status = SITTING_OUT
+    assert [p.starting_stack for p in hands[0].history.participants] == [1000, 1000, 1000, 1000]

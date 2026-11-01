@@ -41,7 +41,7 @@ def make_hand(seat_numbers: tuple[int, ...], button_seat_number: int) -> PokerHa
         )
         for seat_number, assignment in assignments.items()
     )
-    return PokerHand(players=players, deck=Deck())
+    return PokerHand(players=players, deck=Deck(), number=1)
 
 
 def make_three_handed() -> PokerHand:

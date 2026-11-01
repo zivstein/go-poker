@@ -41,7 +41,7 @@ def _make_hand(stacks: dict[int, int], button_seat_number: int) -> PokerHand:
         )
         for seat_number, assignment in assignments.items()
     )
-    return PokerHand(players=players, deck=Deck())
+    return PokerHand(players=players, deck=Deck(), number=1)
 
 
 def _started_hand(stacks: dict[int, int], button_seat_number: int) -> PokerHand:
