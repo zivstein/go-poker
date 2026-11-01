@@ -39,6 +39,7 @@ from go_poker.game.table import Table
 from go_poker.game.variants.texas_holdem import hand_flow
 from go_poker.game.variants.texas_holdem.game import HandInProgressError, HoldemGame
 from go_poker.game.variants.texas_holdem.hand_flow import current_actor
+from go_poker.game.variants.texas_holdem.hand_strength import hand_strength
 
 STAKES = Stakes(small_blind=5, big_blind=10)
 SEEDS = range(80)
@@ -256,6 +257,12 @@ class Driver:
                 self.game.act(seat, betting_action(rng, legal_actions(hand), self.aggression))
             self.assert_awaiting_or_settled(hand)
         showdown = hand.showdown
+        settlement = hand.settlement
+        assert settlement is not None
+        for seat, rank in settlement.showdown_ranks:
+            best = hand_strength(hand, seat)  # the derived river strength must agree with the settled rank
+            assert best is not None and best.rank == rank, f"seed {self.seed}: seat {seat} strength disagrees"
+            self.counters["strength_parity"] += 1
         self.counters["hands"] += 1
         self.counters["interactive"] += showdown is not None and showdown.kind is ShowdownKind.INTERACTIVE
         self.counters["busts"] += sum(state.player.stack == 0 for state in hand.players)
@@ -346,6 +353,7 @@ def test_the_seeds_reach_every_cross_hand_shape() -> None:
         play_seed(seed, counters)
     required: dict[str, int] = {
         "hands": 500,
+        "strength_parity": 300,
         "busts": 30,
         "busted_skipped": 30,
         "waiting_entered": 20,

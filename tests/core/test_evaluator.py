@@ -1,7 +1,16 @@
+import random
+from itertools import combinations
+
 import pytest
 
 from go_poker.core.card import Card, Rank, Suit
-from go_poker.core.evaluator import DuplicateCardsError, WrongCardAmountError, evaluate_best, evaluate_five
+from go_poker.core.evaluator import (
+    DuplicateCardsError,
+    WrongCardAmountError,
+    _best_fives,
+    evaluate_best,
+    evaluate_five,
+)
 from go_poker.core.hand_rank import HandCategory, HandRank
 
 
@@ -379,3 +388,99 @@ def test_evaluate_best_rejects_duplicate_cards(card_count: int) -> None:
     cards += (Card(Rank.TWO, Suit.CLUBS),)
     with pytest.raises(DuplicateCardsError):
         evaluate_best(cards)
+
+
+def _random_cards(rng: random.Random, count: int) -> tuple[Card, ...]:
+    deck = [Card(rank, suit) for rank in Rank for suit in Suit]
+    return tuple(rng.sample(deck, count))
+
+
+@pytest.mark.parametrize("card_count", [5, 6, 7])
+def test_best_fives_rank_equals_evaluate_best_and_lists_every_best_combination(card_count: int) -> None:
+    """The internal selection helper agrees with evaluate_best and returns exactly the maximal combinations."""
+    rng = random.Random(card_count)
+    for _ in range(300):
+        cards = _random_cards(rng, card_count)
+        rank, best_fives = _best_fives(cards)
+        everything = {combo: evaluate_five(combo) for combo in combinations(cards, 5)}
+        assert rank == evaluate_best(cards) == max(everything.values())
+        assert set(best_fives) == {combo for combo, value in everything.items() if value == rank}
+        assert len(best_fives) == len(set(best_fives))
+
+
+def test_best_fives_finds_every_equal_rank_combination() -> None:
+    """Four sevens with two kings and a deuce: the king kicker can be either king, so two combinations tie for best."""
+    cards = (
+        Card(Rank.SEVEN, Suit.CLUBS),
+        Card(Rank.SEVEN, Suit.DIAMONDS),
+        Card(Rank.SEVEN, Suit.HEARTS),
+        Card(Rank.SEVEN, Suit.SPADES),
+        Card(Rank.KING, Suit.CLUBS),
+        Card(Rank.KING, Suit.DIAMONDS),
+        Card(Rank.TWO, Suit.CLUBS),
+    )
+    rank, best_fives = _best_fives(cards)
+    assert rank == HandRank(HandCategory.FOUR_OF_A_KIND, (7, 13))
+    assert {frozenset(combo) for combo in best_fives} == {
+        frozenset((*cards[:4], cards[4])),
+        frozenset((*cards[:4], cards[5])),
+    }
+
+
+def test_best_fives_five_cards_is_the_only_combination() -> None:
+    cards = _random_cards(random.Random(1), 5)
+    assert _best_fives(cards) == (evaluate_five(cards), (cards,))
+
+
+@pytest.mark.parametrize("card_count", [4, 8])
+def test_best_fives_validates_like_evaluate_best_card_amount(card_count: int) -> None:
+    cards = tuple(Card(Rank(rank), Suit.CLUBS) for rank in range(2, 2 + card_count))
+    with pytest.raises(WrongCardAmountError) as best_error:
+        evaluate_best(cards)
+    with pytest.raises(WrongCardAmountError) as fives_error:
+        _best_fives(cards)
+    assert str(fives_error.value) == str(best_error.value)
+
+
+def test_best_fives_checks_the_amount_before_duplicates() -> None:
+    """Too many cards that also contain a duplicate is a card amount error, as for evaluate_best."""
+    cards = (Card(Rank.TWO, Suit.CLUBS),) * 8
+    with pytest.raises(WrongCardAmountError):
+        _best_fives(cards)
+    with pytest.raises(WrongCardAmountError):
+        evaluate_best(cards)
+
+
+@pytest.mark.parametrize("card_count", [5, 6, 7])
+def test_best_fives_rejects_duplicates_like_evaluate_best(card_count: int) -> None:
+    cards = tuple(Card(Rank(rank), Suit.CLUBS) for rank in range(2, card_count + 1)) + (Card(Rank.TWO, Suit.CLUBS),)
+    with pytest.raises(DuplicateCardsError) as best_error:
+        evaluate_best(cards)
+    with pytest.raises(DuplicateCardsError) as fives_error:
+        _best_fives(cards)
+    assert str(fives_error.value) == str(best_error.value)
+
+
+def _reference_evaluate_best(cards: tuple[Card, ...]) -> HandRank:
+    """The pre-refactor definition: a five-card hand is evaluated directly, else the maximum over its combinations."""
+    if len(cards) == 5:
+        return evaluate_five(cards)
+    return max(evaluate_five(combo) for combo in combinations(cards, 5))
+
+
+@pytest.mark.parametrize("card_count", [5, 6, 7])
+def test_evaluate_best_matches_its_reference_definition_for_any_iterable(card_count: int) -> None:
+    rng = random.Random(f"evaluate-best-{card_count}")
+    small_deck = [Card(rank, suit) for rank in (Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX) for suit in Suit]
+    for _ in range(200):
+        cards = tuple(rng.sample(small_deck, card_count))
+        expected = _reference_evaluate_best(cards)
+        assert evaluate_best(cards) == evaluate_best(list(cards)) == evaluate_best(iter(cards)) == expected  # type: ignore[arg-type]
+
+
+def test_evaluate_best_error_messages_and_order_are_unchanged() -> None:
+    too_many_with_duplicate = (Card(Rank.TWO, Suit.CLUBS),) * 8
+    with pytest.raises(WrongCardAmountError, match=r"^Best-hand evaluation requires between 5 and 7 cards$"):
+        evaluate_best(too_many_with_duplicate)
+    with pytest.raises(DuplicateCardsError, match=r"^Hand contains duplicate cards$"):
+        evaluate_best((Card(Rank.TWO, Suit.CLUBS),) * 5)

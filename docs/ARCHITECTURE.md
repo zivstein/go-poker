@@ -40,7 +40,8 @@ The engine never depends on persistence, accounts, networking, API, or UI layers
 - `Deck`;
 - comparable `HandRank`;
 - five-card evaluation;
-- best-of-5–7 evaluation.
+- best-of-5–7 evaluation;
+- `BestHand` (see [Hand Strength](#hand-strength)).
 
 ### Randomness
 
@@ -475,10 +476,11 @@ Settlement turns the contested pots into stack payouts and records the result. T
 | `game/settlement.py` | variant- and betting-structure-agnostic: `PotAward`, `Settlement`, pot awarding among the final contenders (winners, ties, odd chips), the internal `_settle` operation and payout, `SettlementInvariantError`; re-exports `HandAlreadySettledError` (see [Settled-Hand Guard](#settled-hand-guard)). It never interprets a showdown action |
 | `game/showdown.py` | variant-agnostic: `Showdown`, `ShowdownKind`, `ShowdownAction`, the derived showdown state, the turn rule `Showdown.decide` and `NotShowdownTurnError`, canonical seat order and the decision-order helper (see [Showdown](#showdown)); imports neither `settlement.py` nor `poker_hand.py` |
 | `game/variants/texas_holdem/showdown.py` | Hold'em: the internal showdown classification and readiness rule, the internal `_showdown_ranks`, the public `start_showdown`, `apply_showdown_action` and `settle_hand`, `IncompleteBoardError`, `ShowdownNotReadyError`, `UncontestedHandError`, `ShowdownAlreadyStartedError`, `ShowdownNotStartedError`, `ShowdownIncompleteError` |
+| `game/variants/texas_holdem/hand_strength.py` | Hold'em: the public derived reads `holdem_hand_strength` and `hand_strength`, and `SeatNotInHandError` (see [Hand Strength](#hand-strength)) |
 | `game/variants/texas_holdem/hand_flow.py` | Hold'em: single-hand orchestration over the operations above (see [Hand Flow](#hand-flow)) |
 | `game/variants/texas_holdem/game.py` | Hold'em: `HoldemGame`, the continuous game over the lifecycle and `hand_flow`, and `HandInProgressError` (see [Hold'em Game](#holdem-game)) |
 
-`settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API. Public hand strength is not exposed: `_showdown_ranks(hand, seats)` is internal.
+`settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API. `_showdown_ranks(hand, seats)` is internal; the public derived read is [Hand Strength](#hand-strength).
 
 `PotAward` holds a `Pot` and the exact chips each winning seat receives, ordered clockwise from the button. Odd chips make amounts unequal. The pot is the pot as derived and contested: its eligible seats can include a seat that mucked and won nothing.
 
@@ -649,7 +651,41 @@ A `Table` is not locked to one `HoldemGame`. Driving the same table through mult
 
 A rejection leaves the hand unchanged. The guard comes first because a payout can clear `all_in` and make a settled hand look open to further dealing or betting.
 
-Internal helpers (`commit_chips`, `return_chips`, `collect_round`, payout) and derived reads (`legal_actions`, `is_betting_closed`, `pots`, `middle_pot`) are not guarded. This is a guard, not immutability: the `Player` objects are shared with the table, so their stacks still change in later hands.
+Internal helpers (`commit_chips`, `return_chips`, `collect_round`, payout) and derived reads (`legal_actions`, `is_betting_closed`, `pots`, `middle_pot`, `hand_strength`) are not guarded. This is a guard, not immutability: the `Player` objects are shared with the table, so their stacks still change in later hands.
+
+## Hand Strength
+
+A seat's current hand strength is derived on demand and never stored: not on `PokerHand`, the showdown, or the settlement. `core/best_hand.py` owns `BestHand`; `game/variants/texas_holdem/hand_strength.py` owns the Hold'em reads. The product decisions are in [ROADMAP.md](ROADMAP.md).
+
+`BestHand` is a frozen dataclass of `rank: HandRank` (not a `Card.rank`) and `cards`, exactly five. Its `description` is a read-only property derived from `rank`, so the two cannot disagree. It has no ordering: compare strengths through `rank`. It is built by the engine and not validated on construction.
+
+- `holdem_hand_strength(hole_cards, board)` returns a `BestHand`, or `None` for an empty board.
+- `hand_strength(hand, seat)` reads it for a seat of a hand: `holdem_hand_strength` of the seat's hole cards and the hand's board.
+
+### Evaluation and Selection
+
+There is one evaluation path. The private `_best_fives` in `core/evaluator.py` validates 5–7 cards as `evaluate_best` does, evaluates each five-card combination once, and returns the best `HandRank` with every combination that achieves it; `evaluate_best` is its rank. `holdem_hand_strength` evaluates the same hole-then-board cards `_showdown_ranks` gives `evaluate_best`, so a river strength always equals the seat's settlement rank. Core knows nothing of hole cards and the board, and there is no public tie-selection parameter.
+
+When several combinations share the best rank, the one using the fewest hole cards is chosen, then the one whose deal positions are earliest, comparing the sorted positions lexicographically. A card's position is its index in the board in dealt order followed by the hole cards in dealt order. A board that plays on the river is therefore returned as it is. The choice changes which cards are reported, never the rank.
+
+The five cards are ordered by significance: those whose rank occurs more often in the five first, then by rank high to low, with the Ace low in the wheel. This gives quads then kicker, trips then pair, trips then kickers, two pair high then low then kicker, a pair then kickers, straights high to low (the wheel is 5-4-3-2-A), and flush and high-card hands high to low. Cards of equal rank keep deal order, board cards first.
+
+### Descriptions
+
+English only, derived from the category and tiebreakers, with no kickers. The wording is in [ROADMAP.md](ROADMAP.md); the rank names are Two to Ten, Jack, Queen, King and Ace, with an explicit plural table ("Sixes"), and `Rank.__str__` is unchanged. A wheel straight or straight flush is "Five-high", and an Ace-high straight flush is "Royal flush".
+
+### Inputs and Errors
+
+`holdem_hand_strength` validates in this order, before evaluating anything:
+
+1. not exactly two hole cards: `InvalidHoleCardCountError`, even preflop;
+2. a board of other than 0, 3, 4 or 5 cards: `WrongCardAmountError`;
+3. a duplicate card among the hole cards and the board: `DuplicateCardsError`, even preflop;
+4. an empty board: `None`.
+
+`None` therefore means a valid hand with two hole cards and no board. `hand_strength` first rejects a seat that does not play in the hand with `SeatNotInHandError`; a seat whose hole cards are not yet dealt then raises `InvalidHoleCardCountError`.
+
+`hand_strength` is a read and not guarded against a settled hand. It consults neither the betting, the showdown, the street, the deck, nor the settlement, so it works for folded, mucked and settled seats. It never changes the hand, and a `BestHand` holds fresh tuples, never the hand's lists. Who may see a seat's strength is the concern of a future API projection.
 
 ## Durable Invariants
 

@@ -12,7 +12,13 @@ class WrongCardAmountError(ValueError): ...
 class DuplicateCardsError(ValueError): ...
 
 
-def evaluate_best(cards: Sequence[Card]) -> HandRank:
+def _best_fives(cards: Sequence[Card]) -> tuple[HandRank, tuple[tuple[Card, ...], ...]]:
+    """The best `HandRank` of 5 to 7 cards and every five-card combination that achieves it, each in input order.
+
+    Engine-internal: the one evaluation path under `evaluate_best` and the best-five selection of hand strength.
+    Validated like `evaluate_best`: `WrongCardAmountError` for a card count outside 5 to 7, then `DuplicateCardsError`.
+    Every combination is evaluated once. Choosing among the equal-rank combinations is the caller's business.
+    """
     cards_tuple = tuple(cards)
 
     if not 5 <= len(cards_tuple) <= 7:
@@ -21,10 +27,13 @@ def evaluate_best(cards: Sequence[Card]) -> HandRank:
     if len(cards_tuple) != len(set(cards_tuple)):
         raise DuplicateCardsError("Hand contains duplicate cards")
 
-    if len(cards_tuple) == 5:
-        return evaluate_five(cards_tuple)
+    ranked = [(evaluate_five(combo), combo) for combo in combinations(cards_tuple, 5)]
+    best = max(rank for rank, _ in ranked)
+    return best, tuple(combo for rank, combo in ranked if rank == best)
 
-    return max(evaluate_five(combo) for combo in combinations(cards_tuple, 5))
+
+def evaluate_best(cards: Sequence[Card]) -> HandRank:
+    return _best_fives(cards)[0]
 
 
 def evaluate_five(cards: tuple[Card, ...]) -> HandRank:

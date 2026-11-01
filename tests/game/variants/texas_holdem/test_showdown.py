@@ -20,7 +20,7 @@ from go_poker.game.variants.texas_holdem.dealing import (
 )
 from go_poker.game.variants.texas_holdem.showdown import IncompleteBoardError, _showdown_ranks
 
-# `_showdown_ranks` is the internal helper settle_hand uses to rank the shown seats; public hand strength is later work.
+# `_showdown_ranks` is the internal helper settle_hand uses to rank the shown seats; the public read is `hand_strength`.
 # Hands are dealt through the real dealing operations from a deck stacked by the shared `stacked_hand` fixture.
 
 ALL_SEATS = {1, 2, 3}

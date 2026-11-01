@@ -53,7 +53,7 @@ def _require_complete_board(hand: PokerHand) -> None:
 
 def _showdown_ranks(hand: PokerHand, seats: Collection[int]) -> dict[int, HandRank]:
     """The HandRank of exactly the given seats: the best five of their hole cards and the board, keyed by seat in hand
-    order. Engine-internal; public hand strength is later work.
+    order. Engine-internal; the public derived read is `hand_strength` (see `hand_strength.py`).
 
     The board must be complete and each of the given seats must hold exactly HOLE_CARD_COUNT hole cards; both are
     checked before anything is evaluated. No other player's hole cards are checked or evaluated, so a mucked or

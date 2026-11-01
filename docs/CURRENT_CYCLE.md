@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 6 — Structured Hand History / Event Log** is planned. Cycle 1 is next; no Cycle has started.
+**Milestone 6 — Structured Hand History / Event Log** is in progress. Cycle 1 is complete; Cycle 2 is next.
 
 Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand history and event contract is in [ADR 0004](adr/0004-hand-history-and-event-contract.md); its numbered decisions are cited below as ADR 0004 §N. Earlier contracts still apply:
 
@@ -12,7 +12,7 @@ Implemented behavior is recorded in `ARCHITECTURE.md` as each Cycle lands.
 
 ## Planning Gate
 
-Satisfied. ADR 0004 was accepted on 2026-11-01, and Cycle 1 is ready to begin with its Cycle Brief.
+Satisfied. ADR 0004 was accepted on 2026-11-01.
 
 No milestone-level product or architecture decisions remain open.
 
@@ -42,8 +42,8 @@ Tests drive hands through public operations, using the existing `stacked_hand` f
 
 | Cycle | Title | Status |
 | --- | --- | --- |
-| 1 | Derived hand strength | Next (not started) |
-| 2 | Identity and `HandHistory` foundation | Planned |
+| 1 | Derived hand strength | Complete |
+| 2 | Identity and `HandHistory` foundation | Next (not started) |
 | 3 | Betting and dealing transition events | Planned |
 | 4 | Showdown and settlement events, full replay/integration, milestone close | Planned |
 
@@ -51,29 +51,19 @@ Cycles 1 and 2 are independent. Cycle 3 depends on Cycle 2, and Cycle 4 on Cycle
 
 ### Cycle 1 — Derived hand strength (ROADMAP Milestone 6 strength decisions)
 
-- **Public:**
-  - `BestHand` (the `HandRank`, the five cards, and the derived description);
-  - `holdem_hand_strength(hole_cards, board)`, which returns `None` preflop;
-  - `hand_strength(hand, seat)`.
-- **Unchanged:** `evaluate_best` keeps its contract and results. Strength and `evaluate_best` share one internal evaluation path, so ranks never disagree.
-- **Exact best five.** Among equal-rank combinations, prefer the one using the fewest hole cards. Then prefer deal order: board cards in deal order, then hole cards in deal order. When the board plays, return the board.
-  - The selection mechanism is internal. There is no public `prefer=` or tie-selection API.
-  - The Cycle 1 Brief settles the helper's shape, and whether the description formatter is a separate function.
-- **Five-card order** follows significance, consistent with the tiebreakers. The wheel is 5-4-3-2-A.
-- **Descriptions** for every category, worded as in `ROADMAP.md`.
-- **Inputs.** Requires exactly two hole cards and a board of 0, 3, 4, or 5 cards.
-- **`hand_strength`:**
-  - works for any participant holding cards, including folded, mucked, and settled seats;
-  - rejects an unknown seat (the Brief names the error);
-  - never mutates and never stores anything.
-- **Tests:**
-  - `None` exactly preflop; 5-, 6-, and 7-card evaluation;
-  - the equal-rank edge cases: board straight, board two pair, a hole card strictly better, two equal hole cards, equal board cards, swaps in both directions;
-  - five-card order and the description for every category, including the wheel and the royal flush;
-  - on a complete board, the rank equals every shown seat's settlement rank;
-  - no mutation;
-  - existing evaluator tests unchanged.
-- **`ARCHITECTURE.md`:** a hand-strength section.
+Delivered:
+
+- `core/best_hand.py`: `BestHand`;
+- `texas_holdem/hand_strength.py`: `holdem_hand_strength`, `hand_strength`, and `SeatNotInHandError` (a `ValueError`) for an unknown seat;
+- the private `_best_fives` in `core/evaluator.py`, now under `evaluate_best`, whose contract and results are unchanged.
+
+The Brief-level choices:
+
+- Core returns every maximal combination, and the Hold'em reads apply the tie preference.
+- The description formatter is a private function beside `BestHand`.
+- Two hole cards are required before the preflop `None`, so an undealt hand raises `InvalidHoleCardCountError`.
+
+The contract is in `ARCHITECTURE.md` ([Hand Strength](ARCHITECTURE.md#hand-strength)). Showdown and settlement logic is unchanged. The seeded `HoldemGame` stress test checks that river strength agrees with every shown seat's settlement rank.
 
 ### Cycle 2 — Identity and `HandHistory` foundation (ADR 0004 §2, §5–7, §10)
 
@@ -143,7 +133,4 @@ All of these use value equality, never object identity (ADR 0004 §2).
 
 Each Cycle Brief settles these within the approved contracts:
 
-- the error type for an unknown seat in `hand_strength`;
-- the name of the invalid hand number error;
-- the shape of the internal tie-selection helper;
-- whether the description formatter is a separate function.
+- the name of the invalid hand number error.
