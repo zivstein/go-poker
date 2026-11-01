@@ -211,7 +211,9 @@ Persistent stack remains on `Player`.
 - `HandParticipant(seat, player_id, position, blind, starting_stack)` takes its values from the hand's players when `PokerHand` is constructed. The participants follow the hand's player order, button first, and `starting_stack` is the stack before any blind is posted.
 - Recording appends through the private `_appended`, which returns a new history and leaves the old one unchanged. Each public low-level operation builds its events from locals and assigns `hand.history` once, after every mutation, so a rejected operation leaves the history equal to its previous value. Derived reads, internal helpers, `hand_flow` and `HoldemGame` record nothing.
 
-The events recorded so far, each by the operation that causes it, in the same call:
+`HandEvent` is the closed union of the eleven event types below: no base class, protocol, or registry. `PokerHand` owns its history, and a hand's completed history, not the settled hand, is the durable snapshot of it. It is immutable, compares by value, and does not change when the live `Player` objects or later hands do.
+
+The events, each recorded by the operation that causes it, in the same call:
 
 | Event | Recorded by | Facts |
 | --- | --- | --- |
@@ -223,8 +225,21 @@ The events recorded so far, each by the operation that causes it, in the same ca
 | `ActionTaken` | `apply_action` | `seat`; the `action` as requested (a bet or raise keeps its target); `chips` actually committed (0 for a fold or check); `all_in` right after the commit |
 | `ChipsReturned` | the operation that completes a round | `seat`; the uncalled `chips` returned |
 | `BettingRoundCompleted` | the operation that completes a round | `street` |
+| `ShowdownStarted` | `start_showdown`; `settle_hand` when it builds the `ALL_IN` showdown itself | `kind`; `order`, equal to `hand.showdown.order` at the start: the decision order for `INTERACTIVE`, the canonical storage order (not a sequence) for `ALL_IN` |
+| `ShowdownDecided` | `apply_showdown_action` | `seat`; `action`, SHOW or MUCK |
+| `HandSettled` | `settle_hand` | `settlement`, equal to `hand.settlement`; always the last event |
 
-Order within one operation: `ActionTaken`, then any `ChipsReturned`, then `BettingRoundCompleted`; when the blinds alone complete the preflop round, `BlindsPosted`, then any `ChipsReturned`, then `BettingRoundCompleted(PREFLOP)`. `start_betting_round` records `BettingRoundStarted`, and when nobody is pending the round is complete as it starts, so it also records `BettingRoundCompleted` for the same street in the same call; it never records `ChipsReturned`, because a new round has nothing in front to collect. Across operations events follow the order of the successful calls: the low-level order is not normalized, so `begin_hand` (blinds, then hole cards) and a caller who deals first produce different, equally valid, histories. Showdown and settlement events are not recorded yet.
+Order within one operation: `ActionTaken`, then any `ChipsReturned`, then `BettingRoundCompleted`; when the blinds alone complete the preflop round, `BlindsPosted`, then any `ChipsReturned`, then `BettingRoundCompleted(PREFLOP)`. `start_betting_round` records `BettingRoundStarted`, and when nobody is pending the round is complete as it starts, so it also records `BettingRoundCompleted` for the same street in the same call; it never records `ChipsReturned`, because a new round has nothing in front to collect. `settle_hand` records `HandSettled` once, after the payout, in a single history assignment. An uncontested hand records `HandSettled` alone, with no showdown event. A contested hand with a started showdown (complete, by decisions or because it is `ALL_IN`) records `HandSettled` alone, so its start is never recorded twice. A contested `ALL_IN` hand with no started showdown records `ShowdownStarted` and then `HandSettled` in that one assignment, made only after the settlement succeeded, so a rejected settlement never leaves a lone `ShowdownStarted`; every contested hand's history therefore holds its showdown start even when no showdown action ever happens.
+
+Two levels of order guarantee. Across low-level operations events follow the order of the successful calls and are not normalized: `begin_hand` (blinds, then hole cards) and a caller who deals first produce different, equally valid, histories, and a caller who deals the whole board and then settles an `ALL_IN` hand directly has `StreetDealt` ×3, then `ShowdownStarted`, then `HandSettled`, which makes no runout claim. Through `begin_hand` and `act` the presentation order is guaranteed:
+
+- an `INTERACTIVE` showdown starts right after the river round completes, then come the decisions in decision order (the last contender is never asked, so it has no `ShowdownDecided`), then `HandSettled`;
+- an `ALL_IN` showdown starts right after the betting that decided the hand (after the hole cards when the blinds alone decide it), before any runout street; then come the remaining streets with no `BettingRoundStarted`, then `HandSettled`. No `ShowdownDecided` is ever recorded for it;
+- a hand decided by the river round has no runout streets; an uncontested hand has neither showdown event.
+
+`HandHistory.is_complete` is true exactly when the last event is `HandSettled`, and `HandHistory.settlement` is that event's settlement, or `None` while the history is incomplete. A history taken mid-hand stays incomplete after the hand completes. Both are derived reads: nothing is stored or validated.
+
+The history alone replays every M6 fact: the participants and starting stacks, the board and burned cards, every betting action, the showdown kind, order and decisions, the settlement, and the final stacks, per seat, as `starting_stack − blind chips − action chips + returned chips + the shares in the settlement's pot awards`. A paid seat is no longer all-in; an unpaid all-in seat keeps a zero stack. Reading a history, never the live hand, is how a client sees the hand once later hands have moved the stacks.
 
 It is a record, not event sourcing: no rule reads it. Its fields are immutable values and it is compared by value equality, never by identity, so it does not change when the live `Player` objects do.
 
@@ -512,7 +527,7 @@ Settlement turns the contested pots into stack payouts and records the result. T
 | `game/variants/texas_holdem/hand_flow.py` | Hold'em: single-hand orchestration over the operations above (see [Hand Flow](#hand-flow)) |
 | `game/variants/texas_holdem/game.py` | Hold'em: `HoldemGame`, the continuous game over the lifecycle and `hand_flow`, and `HandInProgressError` (see [Hold'em Game](#holdem-game)) |
 
-`settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API. `_showdown_ranks(hand, seats)` is internal; the public derived read is [Hand Strength](#hand-strength).
+`settle_hand(hand)` is the only public settle entry; `start_showdown(hand)` and `apply_showdown_action(hand, seat, action)` are the only public showdown entries. `_settle(hand, ranks, contenders)` is shared engine implementation for variant entry points and is not a client-facing API; it returns the `Settlement` it stored and records no history, which `settle_hand` does. `_showdown_ranks(hand, seats)` is internal; the public derived read is [Hand Strength](#hand-strength).
 
 `PotAward` holds a `Pot` and the exact chips each winning seat receives, ordered clockwise from the button. Odd chips make amounts unequal. The pot is the pot as derived and contested: its eligible seats can include a seat that mucked and won nothing.
 
@@ -534,7 +549,7 @@ Two pot invariants hold for every settlement and are checked for every pot befor
 6. the showdown is not complete: an `INTERACTIVE` hand with no started showdown raises `ShowdownNotStartedError`, and a started showdown with pending decisions raises `ShowdownIncompleteError`. A contested `ALL_IN` hand with no showdown yet is not rejected: its complete showdown is built from the hand as it is before the payout;
 7. only the shown hands are evaluated, and only their hole cards are checked (`InvalidHoleCardCountError`);
 8. `_settle` awards each pot among its final contenders, checks the pot invariants and pays;
-9. only after the settlement succeeds is a built `ALL_IN` showdown stored on `hand.showdown`. An existing showdown is kept as the same object.
+9. only after the settlement succeeds is a built `ALL_IN` showdown stored on `hand.showdown`, and the history is extended in one assignment: `HandSettled`, preceded by `ShowdownStarted` only when settlement built the showdown. An existing showdown is kept as the same object, and its start was already recorded.
 
 A contested hand is ready by the showdown classification (see [Showdown](#showdown)), which `start_showdown` and `settle_hand` share. A river dealt without its round started, while two players can act, is not ready. Remaining streets after an all-in need to be dealt, but their betting rounds need not be started.
 
@@ -575,7 +590,7 @@ All-in is read after the river round is collected and before payout.
 4. fewer than two players have not folded: `UncontestedHandError`;
 5. further betting is possible: `ShowdownNotReadyError`.
 
-Otherwise it sets only `hand.showdown`. Completing the river round does not start the showdown. It checks neither the board nor hole cards, so betting closed before the board is run out starts its showdown at once.
+Otherwise it sets only `hand.showdown` and records `ShowdownStarted` (the showdown's kind and order) after it, for both kinds. Completing the river round does not start the showdown. It checks neither the board nor hole cards, so betting closed before the board is run out starts its showdown at once.
 
 `apply_showdown_action(hand, seat, action)` validates in this order, and a rejection leaves the hand unchanged:
 
@@ -584,7 +599,7 @@ Otherwise it sets only `hand.showdown`. Completing the river round does not star
 3. the showdown is complete or `seat` is not its current decider, including any decision on an `ALL_IN` showdown: `NotShowdownTurnError`;
 4. `action` is not a `ShowdownAction`: `TypeError`. Only `ShowdownAction` is accepted; the check is made once, in `Showdown.decide`, after the turn.
 
-Otherwise it sets only `hand.showdown`, to the record with the decision added.
+Otherwise it sets only `hand.showdown`, to the record with the decision added, and records one `ShowdownDecided` after it.
 
 ### Hand Flow
 
@@ -755,6 +770,8 @@ Other invariants:
 - a settled contested hand has a complete showdown; an uncontested hand has none;
 - `Settlement.showdown_ranks` holds exactly the shown seats;
 - every pot has at least one final contender among its eligible seats, and a pot with more than one has a showdown rank for each;
+- every completed hand has a complete history: `hand.history.is_complete` holds exactly when `hand.settlement is not None`, and `hand.history.settlement == hand.settlement`; a history starts with exactly one `HandStarted`, ends with exactly one `HandSettled` when complete, and holds a `ShowdownStarted` exactly when the hand was contested, whose `ShowdownDecided` events are the showdown's decisions in order;
+- the final stacks folded from a completed history alone equal the live stacks at settlement, and they conserve chips; its pot awards are the pots layered from the replayed contributions;
 - settlement is stored once; contributions, `folded`, hole cards, board, burned cards, the deck, the betting state, and derived pots are unchanged by it;
 - betting moves chips between stacks and contributions only through `commit_chips` and `return_chips`;
 - no street contribution exceeds `current_bet`;

@@ -20,6 +20,7 @@ from go_poker.game.betting.legal_actions import legal_actions
 from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.rounds import start_betting_round
 from go_poker.game.betting.stakes import Stakes
+from go_poker.game.hand_history import HandSettled, ShowdownDecided
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError
 from go_poker.game.showdown import NotShowdownTurnError, Showdown, ShowdownAction, ShowdownKind
@@ -90,6 +91,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -114,14 +116,18 @@ def showdown_of(hand: PokerHand) -> Showdown:
 
 
 def decide_and_check(hand: PokerHand, seat: int, action: ShowdownAction) -> Showdown:
-    """Apply the decision and check that only `hand.showdown` changed, by exactly that decision; return it."""
+    """Apply the decision and check that only `hand.showdown` and the history changed, by exactly that decision and
+    exactly one `ShowdownDecided` for it; return the showdown."""
     before = snapshot(hand)
     before_showdown = showdown_of(hand)
 
     apply_showdown_action(hand, seat, action)
 
     after = snapshot(hand)
-    assert {k: v for k, v in after.items() if k != "showdown"} == {k: v for k, v in before.items() if k != "showdown"}
+    changed = ("showdown", "history")
+    assert {k: v for k, v in after.items() if k not in changed} == {k: v for k, v in before.items() if k not in changed}
+    assert after["history"].events == (*before["history"].events, ShowdownDecided(seat, action))
+    assert not after["history"].is_complete  # deciding does not settle the hand
     assert showdown_of(hand) == Showdown(
         before_showdown.kind, before_showdown.order, (*before_showdown.decisions, action)
     )
@@ -283,6 +289,13 @@ def test_a_muck_by_all_but_one_completes_the_showdown_and_the_last_seat_is_never
     )
     assert_rejected(hand, 1, SHOW, NotShowdownTurnError)
     assert_rejected(hand, 1, MUCK, NotShowdownTurnError)
+    assert [event for event in hand.history.events if isinstance(event, ShowdownDecided)] == [
+        ShowdownDecided(2, MUCK),
+        ShowdownDecided(3, MUCK),
+    ]  # the last contender is never asked, so it has no decision
+    settle_hand(hand)
+    assert hand.settlement is not None and hand.settlement.showdown_ranks == ()
+    assert hand.history.events[-2:] == (ShowdownDecided(3, MUCK), HandSettled(hand.settlement))
 
 
 def test_a_last_decider_may_muck_after_everyone_else_showed(new_hand: NewHand) -> None:
@@ -300,10 +313,12 @@ def test_deciding_does_not_settle_the_hand_and_the_decided_hand_then_settles(new
     for seat in (2, 3, 1):
         decide_and_check(hand, seat, SHOW)
     assert hand.settlement is None
+    before = hand.history
 
     settle_hand(hand)
 
     assert hand.settlement is not None
+    assert hand.history.events == (*before.events, HandSettled(hand.settlement))
 
 
 # =============================================================================

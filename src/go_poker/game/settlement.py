@@ -106,7 +106,7 @@ def _award_pots(
     return tuple(_award_pot(pot, ranks, contenders, seat_order) for pot in pots)
 
 
-def _settle(hand: PokerHand, ranks: Mapping[int, HandRank], contenders: Collection[int]) -> None:
+def _settle(hand: PokerHand, ranks: Mapping[int, HandRank], contenders: Collection[int]) -> Settlement:
     """Settle the hand: award its pots, pay each winning seat and store the settlement. Internal; settle_hand is the
     public entry.
 
@@ -117,7 +117,8 @@ def _settle(hand: PokerHand, ranks: Mapping[int, HandRank], contenders: Collecti
     rejected. The pots, the awards and the settlement are all derived before anything changes, so a rejection,
     including a pot invariant violation, leaves the hand unchanged. Each winning seat's total payout is then added to
     its stack and its `all_in` is cleared, since the stack is positive again. Contributions, `folded` and the betting
-    state are left as the hand's accounting history.
+    state are left as the hand's accounting history. It returns the settlement it stored; it records no history event,
+    which is the caller's to do (see `settle_hand`).
 
     It relies on engine invariants and does not validate the rest: the betting round is complete (nothing in front).
     """
@@ -131,3 +132,4 @@ def _settle(hand: PokerHand, ranks: Mapping[int, HandRank], contenders: Collecti
             hand_player.player.stack += payouts[hand_player.seat_number]
             hand_player.all_in = False
     hand.settlement = settlement
+    return settlement

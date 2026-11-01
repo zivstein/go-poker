@@ -50,6 +50,10 @@ The engine is intentionally independent from persistence, networking, and presen
 - Chip payout and an immutable stored settlement
 - Interactive SHOW / MUCK showdown on the river, with automatic all-in showdowns
 
+### Hand History
+
+- Structured, immutable hand history with full fact replay: participants, blinds, deals, betting, showdown decisions, and the settlement, with the final stacks derivable from the history alone
+
 ### Hand and Game Orchestration
 
 - Automatic hand orchestration: after each action the engine collects betting rounds, deals streets, runs out the board, starts the showdown, and settles
@@ -70,7 +74,7 @@ The engine is intentionally independent from persistence, networking, and presen
     └── game/
         ├── player / seat / table
         ├── hand setup + lifecycle
-        ├── PokerHand state
+        ├── PokerHand state + immutable hand history
         ├── betting/           No-Limit betting + pots
         ├── settlement         pot awards + payout
         └── variants/
@@ -121,7 +125,7 @@ Coverage:
 
 ## Project Status
 
-The Current Capabilities above describe what the engine supports today. Structured hand history, persistence, API, networking, and clients are not implemented yet.
+The Current Capabilities above describe what the engine supports today. Persistence, API, networking, and clients are not implemented yet.
 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — authoritative milestone status
 - [`docs/CURRENT_CYCLE.md`](docs/CURRENT_CYCLE.md) — active work

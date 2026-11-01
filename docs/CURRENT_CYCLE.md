@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 6 — Structured Hand History / Event Log** is in progress. Cycles 1, 2, and 3 are complete; Cycle 4 is next.
+**Milestone 6 — Structured Hand History / Event Log** is complete. All four Cycles are complete. The next milestone (Milestone 7) has not been planned yet.
 
 Milestone status, approved product decisions, and deferred work live in `ROADMAP.md`. The hand history and event contract is in [ADR 0004](adr/0004-hand-history-and-event-contract.md); its numbered decisions are cited below as ADR 0004 §N. Earlier contracts still apply:
 
@@ -45,7 +45,7 @@ Tests drive hands through public operations, using the existing `stacked_hand` f
 | 1 | Derived hand strength | Complete |
 | 2 | Identity and `HandHistory` foundation | Complete |
 | 3 | Betting and dealing transition events | Complete |
-| 4 | Showdown and settlement events, full replay/integration, milestone close | Next (not started) |
+| 4 | Showdown and settlement events, full replay/integration, milestone close | Complete |
 
 Cycles 1 and 2 are independent. Cycle 3 depends on Cycle 2, and Cycle 4 on Cycle 3. Cycle 1 must be complete before the milestone closes.
 
@@ -101,20 +101,25 @@ The contract is in `ARCHITECTURE.md` ([Hand History](ARCHITECTURE.md#hand-histor
 
 ### Cycle 4 — Showdown and settlement events, full replay/integration, milestone close (ADR 0004 §1, §3–4, §7, §10)
 
-- **Events:** `ShowdownStarted`, `ShowdownDecided`, and `HandSettled`, including the direct contested `ALL_IN` settlement, which records `ShowdownStarted` then `HandSettled` only after every rejectable check.
-- **Reads:** `HandHistory.settlement` and `is_complete`, derived from the last event.
-- **Tests:**
-  - a full fact-replay fold on every history: showdown, settlement, final stacks as starting − committed + returned + payout, and chip conservation;
-  - the runout and ordering invariants, asserted only on orchestrated histories;
-  - a low-level test that records the direct-settle order faithfully, with no presentation assertion;
-  - durability across hands;
-  - seeded `HoldemGame` stress asserting replay for every hand.
-- **Close out:**
-  - `ARCHITECTURE.md`: the history contract, invariants, and `PokerHand` described as owning its history;
-  - README capabilities;
-  - `ROADMAP.md` status.
+Delivered:
 
-A history is deliberately incomplete between Cycles 3 and 4: it has no showdown or settlement events yet. `is_complete` arrives with `HandSettled`, so it is never wrong in between.
+- `game/hand_history.py`: `ShowdownStarted(kind, order)`, `ShowdownDecided(seat, action)` and `HandSettled(settlement)`, completing the closed `HandEvent` union; `HandHistory.is_complete` and `HandHistory.settlement`, derived from the last event.
+- Recording: `start_showdown` records `ShowdownStarted` for both kinds, `apply_showdown_action` one `ShowdownDecided` per decision, and `settle_hand` `HandSettled` once, last. A direct contested `ALL_IN` settlement records `ShowdownStarted` then `HandSettled` in one assignment after the settlement succeeds. `hand_flow`, `HoldemGame`, helpers, and derived reads still record nothing, and no rule reads history.
+
+The Brief-level choices:
+
+- `Settlement` is imported under `TYPE_CHECKING` in `hand_history.py`, avoiding the runtime cycle through `poker_hand.py`.
+- `_settle` returns the `Settlement` it stores, and still records nothing.
+- `HandHistory.settlement` is `None` while the history is incomplete.
+- The decision field is `ShowdownDecided.action`.
+
+The contract is in `ARCHITECTURE.md` ([Hand History](ARCHITECTURE.md#hand-history)).
+
+Tests:
+
+- The test-local replay (`tests/game/conftest.py`) folds every history to its full facts, final stacks and settlement included. It checks the pot layering and awards independently, and runs after every step of the betting, `hand_flow`, and `HoldemGame` suites.
+- `assert_orchestrated_order` checks the kind-specific presentation order on orchestrated histories only. Low-level tests check the faithful direct-settle order, which is not normalized.
+- The seeded `HoldemGame` stress retains every completed history and re-folds each one after later hands that reuse the same `Player` objects.
 
 ## Invariants
 

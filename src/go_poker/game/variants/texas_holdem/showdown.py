@@ -4,6 +4,7 @@ from go_poker.core.evaluator import evaluate_best
 from go_poker.core.hand_rank import HandRank
 from go_poker.game.betting.rounds import is_betting_closed, is_round_complete
 from go_poker.game.betting.state import BettingNotInitializedError, BettingState
+from go_poker.game.hand_history import HandSettled, ShowdownDecided, ShowdownStarted, _appended
 from go_poker.game.poker_hand import PokerHand, _require_unsettled
 from go_poker.game.settlement import _settle
 from go_poker.game.showdown import Showdown, ShowdownAction, ShowdownKind, decision_order
@@ -118,12 +119,13 @@ def start_showdown(hand: PokerHand) -> None:
     3. a hand whose showdown has already started: `ShowdownAlreadyStartedError`;
     4. fewer than two live players: `UncontestedHandError`, since an uncontested hand has no showdown;
     5. further betting must no longer be possible: `ShowdownNotReadyError` otherwise (see `settle_hand`).
-    Only `hand.showdown` is set. It records seats, not cards, and neither the board nor any hole cards are checked, so
-    a closed hand starts its showdown before its board is run out. Folded players never appear. An `ALL_IN` showdown
-    lists every live seat clockwise from the first seat left of the button, the button last, and is complete from the
-    start. An `INTERACTIVE` showdown, for a river round that completed with nobody all-in, starts with the river's last
-    bettor or raiser, or with the first live seat left of the button when nobody bet, and goes clockwise; every live
-    player then decides to show or muck (see `apply_showdown_action`).
+    Only `hand.showdown` is set, and `ShowdownStarted` (its kind and order) is recorded after it, for both kinds. It
+    records seats, not cards, and neither the board nor any hole cards are checked, so a closed hand starts its showdown
+    before its board is run out. Folded players never appear. An `ALL_IN` showdown lists every live seat clockwise from
+    the first seat left of the button, the button last, and is complete from the start. An `INTERACTIVE` showdown, for a
+    river round that completed with nobody all-in, starts with the river's last bettor or raiser, or with the first live
+    seat left of the button when nobody bet, and goes clockwise; every live player then decides to show or muck (see
+    `apply_showdown_action`).
     """
     _require_unsettled(hand)
     betting = hand.betting
@@ -138,6 +140,7 @@ def start_showdown(hand: PokerHand) -> None:
     if showdown is None:
         raise ShowdownNotReadyError("Further betting is still possible, so the showdown cannot start yet")
     hand.showdown = showdown
+    hand.history = _appended(hand.history, ShowdownStarted(showdown.kind, showdown.order))
 
 
 def apply_showdown_action(hand: PokerHand, seat: int, action: ShowdownAction) -> None:
@@ -149,13 +152,14 @@ def apply_showdown_action(hand: PokerHand, seat: int, action: ShowdownAction) ->
     3. the showdown must be incomplete and `seat` its current decider: `NotShowdownTurnError` otherwise, which also
        covers every decision on an `ALL_IN` showdown;
     4. `action` must be a `ShowdownAction`: `TypeError` otherwise (checked by `Showdown.decide`, after the turn).
-    Only `hand.showdown` changes, by one decision. A muck is showdown state only: the seat is not folded and its
-    contributions and the betting state are unchanged.
+    Only `hand.showdown` changes, by one decision, and one `ShowdownDecided` is recorded after it. A muck is showdown
+    state only: the seat is not folded and its contributions and the betting state are unchanged.
     """
     _require_unsettled(hand)
     if hand.showdown is None:
         raise ShowdownNotStartedError("The showdown of this hand has not started")
     hand.showdown = hand.showdown.decide(seat, action)
+    hand.history = _appended(hand.history, ShowdownDecided(seat, action))
 
 
 def settle_hand(hand: PokerHand) -> None:
@@ -181,6 +185,11 @@ def settle_hand(hand: PokerHand) -> None:
 
     The built `ALL_IN` showdown is stored only after the settlement succeeds, so a rejection leaves `hand.showdown`
     unset. An existing showdown is kept as it is. An uncontested hand never records a showdown.
+
+    `HandSettled` is recorded once, after every mutation, in a single history assignment. A contested `ALL_IN` hand
+    with no showdown yet also records `ShowdownStarted` (its built showdown) just before it, since every contested
+    hand's history holds its showdown start. An existing showdown has already recorded its start, so no second one is
+    recorded; an uncontested hand records `HandSettled` alone. A rejection records nothing.
     """
     _require_unsettled(hand)
     betting = hand.betting
@@ -189,7 +198,8 @@ def settle_hand(hand: PokerHand) -> None:
 
     live = {hand_player.seat_number for hand_player in hand.players if not hand_player.folded}
     if len(live) == 1:
-        _settle(hand, {}, live)
+        settlement = _settle(hand, {}, live)
+        hand.history = _appended(hand.history, HandSettled(settlement))
         return
 
     _require_complete_board(hand)
@@ -198,6 +208,7 @@ def settle_hand(hand: PokerHand) -> None:
         raise ShowdownNotReadyError("Further betting is still possible, so the hand cannot be settled yet")
 
     showdown = hand.showdown
+    started = showdown is not None
     if showdown is None:
         if candidate.kind is ShowdownKind.INTERACTIVE:
             raise ShowdownNotStartedError(
@@ -207,5 +218,9 @@ def settle_hand(hand: PokerHand) -> None:
     elif not showdown.is_complete:
         raise ShowdownIncompleteError("The showdown has pending decisions, so the hand cannot be settled yet")
 
-    _settle(hand, _showdown_ranks(hand, showdown.shown), showdown.contenders)
+    settlement = _settle(hand, _showdown_ranks(hand, showdown.shown), showdown.contenders)
     hand.showdown = showdown
+    history = hand.history
+    if not started:
+        history = _appended(history, ShowdownStarted(showdown.kind, showdown.order))
+    hand.history = _appended(history, HandSettled(settlement))

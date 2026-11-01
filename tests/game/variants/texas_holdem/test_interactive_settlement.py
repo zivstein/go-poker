@@ -24,6 +24,7 @@ from go_poker.game.betting.initialization import initialize_betting
 from go_poker.game.betting.pots import Pot, middle_pot, pots
 from go_poker.game.betting.rounds import start_betting_round
 from go_poker.game.betting.stakes import Stakes
+from go_poker.game.hand_history import HandSettled
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import Settlement
 from go_poker.game.showdown import Showdown, ShowdownAction, ShowdownKind
@@ -96,6 +97,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -139,7 +141,8 @@ def settle_and_check(hand: PokerHand) -> Settlement:
 
     Chips are conserved, every pot's shares add up to its amount, each award's pot is the pot as derived, only
     contenders are paid, the settlement ranks exactly the shown seats in hand order, and the showdown is the same
-    object, unchanged, as before.
+    object, unchanged, as before. The history gains exactly `HandSettled` of the settlement (the showdown has already
+    recorded its start and decisions) and is then complete.
     """
     starting_chips = {state.seat_number: state.player.stack + state.total_contribution for state in hand.players}
     showdown = showdown_of(hand)
@@ -152,6 +155,8 @@ def settle_and_check(hand: PokerHand) -> Settlement:
 
     settlement = settled(hand)
     assert hand.showdown is showdown
+    assert hand.history.events == (*before["history"].events, HandSettled(settlement))
+    assert hand.history.is_complete and hand.history.settlement == settlement
     assert (showdown.kind, showdown.order, showdown.decisions) == showdown_before
     assert [award.pot for award in settlement.pot_awards] == list(pots_before) == list(pots(hand))
     assert middle_pot(hand) == middle_before == sum(settlement.payouts.values())

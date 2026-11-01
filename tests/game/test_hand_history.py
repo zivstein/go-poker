@@ -5,7 +5,9 @@ import dataclasses
 import pytest
 
 from go_poker.core.card import Card, Rank, Suit
+from go_poker.core.hand_rank import HandCategory, HandRank
 from go_poker.game.betting.actions import Action, ActionType
+from go_poker.game.betting.pots import Pot
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.hand_history import (
     ActionTaken,
@@ -16,13 +18,18 @@ from go_poker.game.hand_history import (
     ChipsReturned,
     HandHistory,
     HandParticipant,
+    HandSettled,
     HandStarted,
     HoleCardsDealt,
     SeatHoleCards,
+    ShowdownDecided,
+    ShowdownStarted,
     StreetDealt,
     _appended,
 )
 from go_poker.game.position import Blind, Position
+from go_poker.game.settlement import PotAward, Settlement
+from go_poker.game.showdown import ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
 
 
@@ -130,6 +137,12 @@ THREE = Card(Rank.THREE, Suit.CLUBS)
 STAKES = Stakes(5, 10)
 
 
+def settlement(amount: int = 30, shares: tuple[tuple[int, int], ...] = ((2, 30),)) -> Settlement:
+    """A settlement built fresh on every call, so equal settlements are distinct objects."""
+    pair = HandRank(HandCategory.ONE_PAIR, (14, 13, 11, 9))
+    return Settlement((PotAward(Pot(amount, frozenset({2, 3})), shares),), ((2, pair),))
+
+
 def all_events() -> list[object]:
     """One of every transition event, each built fresh so that equal events are distinct objects."""
     return [
@@ -142,6 +155,9 @@ def all_events() -> list[object]:
         ActionTaken(2, Action(ActionType.RAISE, 30), 25, False),
         ChipsReturned(2, 10),
         BettingRoundCompleted(Street.FLOP),
+        ShowdownStarted(ShowdownKind.INTERACTIVE, (3, 2)),
+        ShowdownDecided(3, ShowdownAction.SHOW),
+        HandSettled(settlement()),
     ]
 
 
@@ -185,6 +201,17 @@ def test_every_fact_of_a_transition_event_takes_part_in_equality() -> None:
     assert ChipsReturned(2, 10) != ChipsReturned(2, 11)
     assert BettingRoundCompleted(Street.FLOP) != BettingRoundCompleted(Street.RIVER)
     assert BettingRoundStarted(Street.FLOP) != BettingRoundCompleted(Street.FLOP)
+    started_showdown = ShowdownStarted(ShowdownKind.INTERACTIVE, (3, 2))
+    assert started_showdown != ShowdownStarted(ShowdownKind.ALL_IN, (3, 2))
+    assert started_showdown != ShowdownStarted(ShowdownKind.INTERACTIVE, (2, 3))  # the order is a fact
+    assert started_showdown != ShowdownStarted(ShowdownKind.INTERACTIVE, (3,))
+    decided = ShowdownDecided(3, ShowdownAction.SHOW)
+    assert decided != ShowdownDecided(2, ShowdownAction.SHOW)
+    assert decided != ShowdownDecided(3, ShowdownAction.MUCK)
+    assert HandSettled(settlement()) != HandSettled(settlement(amount=40))
+    assert HandSettled(settlement()) != HandSettled(settlement(shares=((3, 30),)))
+    assert HandSettled(settlement()) != HandSettled(Settlement(settlement().pot_awards, ()))
+    assert started_showdown != decided
 
 
 def test_events_hold_only_immutable_values() -> None:
@@ -192,6 +219,8 @@ def test_events_hold_only_immutable_values() -> None:
     blinds = BlindsPosted(STAKES, (BlindPost(2, Blind.SMALL, 5, False),))
     dealt = HoleCardsDealt((SeatHoleCards(2, (ACE, KING)),))
     street = StreetDealt(Street.FLOP, (TWO,), (ACE, KING, THREE))
+    assert isinstance(ShowdownStarted(ShowdownKind.ALL_IN, (2, 3)).order, tuple)
+    assert isinstance(HandSettled(settlement()).settlement.pot_awards, tuple)
     assert isinstance(blinds.posts, tuple)
     assert isinstance(dealt.hole_cards, tuple) and isinstance(dealt.hole_cards[0].cards, tuple)
     assert isinstance(street.burned, tuple) and isinstance(street.cards, tuple)
@@ -213,3 +242,29 @@ def test_a_history_that_does_not_start_with_hand_started_raises_type_error_when_
         _ = history.number
     with pytest.raises(TypeError, match="starts with HandStarted"):
         _ = history.participants
+
+
+def test_a_history_is_complete_only_once_it_ends_with_hand_settled() -> None:
+    """`is_complete` reads the last event: it is False through every event but `HandSettled`, and a history taken
+    earlier stays incomplete after the hand completes."""
+    mid_hand = HandHistory((started(), BettingRoundStarted(Street.FLOP), ShowdownStarted(ShowdownKind.ALL_IN, (2, 3))))
+    assert not HandHistory((started(),)).is_complete
+    assert not mid_hand.is_complete
+
+    done = _appended(mid_hand, HandSettled(settlement()))
+
+    assert done.is_complete
+    assert not mid_hand.is_complete
+
+
+def test_a_history_reads_its_settlement_from_hand_settled_and_none_while_incomplete() -> None:
+    """`settlement` is the `HandSettled` value, equal by value to an independently built one, and None before it."""
+    mid_hand = HandHistory((started(), ShowdownStarted(ShowdownKind.INTERACTIVE, (3, 2))))
+    assert mid_hand.settlement is None
+    assert HandHistory((started(),)).settlement is None
+
+    done = _appended(mid_hand, HandSettled(settlement()))
+
+    assert done.settlement == settlement()
+    assert done.settlement is not settlement()
+    assert mid_hand.settlement is None

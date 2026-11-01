@@ -98,6 +98,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,

@@ -34,6 +34,7 @@ from go_poker.game.betting.no_limit import has_raise_rights
 from go_poker.game.betting.pots import Pot, middle_pot, pots
 from go_poker.game.betting.rounds import is_betting_closed, is_round_complete
 from go_poker.game.betting.stakes import Stakes
+from go_poker.game.hand_history import HandSettled, ShowdownDecided, ShowdownStarted
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.position import Blind
 from go_poker.game.settlement import HandAlreadySettledError, PotAward, _award_pots
@@ -252,6 +253,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "accounting": [
             (hp.seat_number, hp.folded, hp.street_contribution, hp.total_contribution, tuple(hp.hole_cards))
             for hp in hand.players
@@ -307,9 +309,11 @@ def expected_derived(showdown: Showdown) -> tuple[tuple[int, ...], tuple[int, ..
 def decide_seeded(rng: random.Random, hand: PokerHand, show_probability: float) -> None:
     """Start an interactive showdown and let each decider in turn SHOW or MUCK at random until it is complete, checking
     each step against the oracle. Out-of-turn decisions and an early settlement are rejected without a change."""
+    started_from = hand.history
     start_showdown(hand)
     expected = expected_showdown(hand, set())
     assert hand.showdown == expected
+    assert hand.history.events == (*started_from.events, ShowdownStarted(expected.kind, expected.order))
     while True:
         showdown = hand.showdown
         assert showdown is not None
@@ -331,9 +335,9 @@ def decide_seeded(rng: random.Random, hand: PokerHand, show_probability: float) 
         with pytest.raises(ShowdownIncompleteError):
             settle_hand(hand)
         assert snapshot(hand) == before
-        apply_showdown_action(
-            hand, decider, ShowdownAction.SHOW if rng.random() < show_probability else ShowdownAction.MUCK
-        )
+        decision = ShowdownAction.SHOW if rng.random() < show_probability else ShowdownAction.MUCK
+        apply_showdown_action(hand, decider, decision)
+        assert hand.history.events == (*before["history"].events, ShowdownDecided(decider, decision))
 
 
 def check_showdown_record(
@@ -522,7 +526,8 @@ def check_early_showdown(hand: PokerHand, contested: bool, all_in_seats: set[int
         showdown = early.showdown
         assert showdown == expected
         after = snapshot(early)
-        assert unchanged_but(after, "showdown") == unchanged_but(before, "showdown")
+        assert unchanged_but(after, "showdown", "history") == unchanged_but(before, "showdown", "history")
+        assert after["history"].events == (*before["history"].events, ShowdownStarted(expected.kind, expected.order))
     with pytest.raises(ShowdownAlreadyStartedError):
         start_showdown(early)
 
@@ -566,6 +571,7 @@ def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_
     else:
         expected_ranks = {}  # an uncontested hand is settled on whatever street it ended, without evaluating anything
     before = snapshot(hand)  # taken right before settling: dealing is not part of settlement
+    direct_all_in = contested and showdown is None
 
     settle_hand(hand)
 
@@ -575,9 +581,15 @@ def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_
     # Settlement changes stacks, all_in and the settlement record, and nothing else; the only other change is an ALL_IN
     # showdown recorded together with it, and an existing showdown is the same object.
     assert before["settlement"] is None and after["settlement"] is settlement
-    assert unchanged_but(after, "chips", "settlement", "showdown") == unchanged_but(
-        before, "chips", "settlement", "showdown"
+    assert unchanged_but(after, "chips", "settlement", "showdown", "history") == unchanged_but(
+        before, "chips", "settlement", "showdown", "history"
     )
+    # The history gains exactly `HandSettled`, preceded by the all-in showdown's start only when settling built it.
+    appended: tuple[object, ...] = (HandSettled(settlement),)
+    if direct_all_in:
+        appended = (ShowdownStarted(ShowdownKind.ALL_IN, tuple(canonical_live(hand))), *appended)
+    assert hand.history.events == (*before["history"].events, *appended)
+    assert hand.history.is_complete and hand.history.settlement == settlement
     if showdown is None and contested:
         assert hand.showdown == expected_showdown(hand, all_in_before)
         showdown = hand.showdown
@@ -605,6 +617,7 @@ def check_settlement(h: CheckedHand, exercised: Exercised, seed: int, unstarted_
         assert unstarted_rounds.board == hand.board
         settle_hand(unstarted_rounds)
         assert unstarted_rounds.settlement == settlement
+        assert unstarted_rounds.history.settlement == settlement
         assert unstarted_rounds.showdown == hand.showdown
         assert [(hp.player.stack, hp.all_in) for hp in unstarted_rounds.players] == [
             (hp.player.stack, hp.all_in) for hp in hand.players

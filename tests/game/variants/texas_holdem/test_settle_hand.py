@@ -20,6 +20,7 @@ from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.rounds import is_betting_closed, start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingNotInitializedError
+from go_poker.game.hand_history import HandSettled, ShowdownStarted
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError, PotAward, Settlement
 from go_poker.game.showdown import Showdown, ShowdownAction, ShowdownKind
@@ -145,6 +146,7 @@ def hand_snapshot(hand: PokerHand) -> dict[str, Any]:
         "deck": len(hand.deck),
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -173,15 +175,31 @@ def settled(hand: PokerHand) -> Settlement:
 
 
 def settle_and_check(hand: PokerHand) -> Settlement:
-    """Settle the hand and check the invariants every successful settlement keeps; return the settlement."""
+    """Settle the hand and check the invariants every successful settlement keeps; return the settlement.
+
+    The history gains `HandSettled` of the settlement and nothing else, except that a contested all-in hand with no
+    showdown yet first gains the `ShowdownStarted` of the all-in showdown settling built (the live seats in canonical
+    order, the button last).
+    """
     starting_chips = {state.seat_number: state.player.stack + state.total_contribution for state in hand.players}
     before = hand_snapshot(hand)
     middle_before = middle_pot(hand)
     pots_before = pots(hand)
+    seats = [state.seat_number for state in hand.players]
+    live = tuple(
+        seat for seat in (*seats[1:], seats[0]) if not next(s for s in hand.players if s.seat_number == seat).folded
+    )
+    showdown_before = hand.showdown
 
     settle_hand(hand)
 
     settlement = settled(hand)
+    appended: tuple[object, ...] = (HandSettled(settlement),)
+    if len(live) > 1 and showdown_before is None:
+        appended = (ShowdownStarted(ShowdownKind.ALL_IN, live), *appended)
+        assert hand.showdown == Showdown(ShowdownKind.ALL_IN, live, ())
+    assert hand.history.events == (*before["history"].events, *appended)
+    assert hand.history.is_complete and hand.history.settlement == settlement
     payouts = settlement.payouts
     for state in hand.players:
         assert state.player.stack == starting_chips[state.seat_number] - state.total_contribution + payouts.get(

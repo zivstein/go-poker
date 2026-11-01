@@ -22,6 +22,7 @@ from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.rounds import start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingNotInitializedError
+from go_poker.game.hand_history import HandSettled, ShowdownStarted
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError
 from go_poker.game.showdown import Showdown, ShowdownAction, ShowdownKind
@@ -109,6 +110,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -132,15 +134,20 @@ def started(hand: PokerHand) -> Showdown:
 
 
 def start_and_check(hand: PokerHand) -> Showdown:
-    """Start the showdown and check that only `hand.showdown` changed; return it."""
+    """Start the showdown and check that only `hand.showdown` and the history changed, the history by exactly one
+    `ShowdownStarted` equal to the showdown; return the showdown."""
     before = snapshot(hand)
 
     start_showdown(hand)
 
     after = snapshot(hand)
+    showdown = started(hand)
     assert before["showdown"] is None
-    assert {k: v for k, v in after.items() if k != "showdown"} == {k: v for k, v in before.items() if k != "showdown"}
-    return started(hand)
+    changed = ("showdown", "history")
+    assert {k: v for k, v in after.items() if k not in changed} == {k: v for k, v in before.items() if k not in changed}
+    assert after["history"].events == (*before["history"].events, ShowdownStarted(showdown.kind, showdown.order))
+    assert not after["history"].is_complete
+    return showdown
 
 
 def assert_start_rejected(hand: PokerHand, error: type[Exception]) -> None:
@@ -597,10 +604,16 @@ def test_settlement_keeps_an_existing_all_in_showdown_as_it_is(new_hand: NewHand
     play(hand, (1, raise_to(100)), (2, CALL), (3, CALL))
     showdown = start_and_check(hand)
     run_out(hand)
+    before = hand.history
 
     settle_hand(hand)
 
     assert hand.showdown is showdown
+    assert hand.settlement is not None
+    assert hand.history.events == (*before.events, HandSettled(hand.settlement))  # no second `ShowdownStarted`
+    assert [event for event in hand.history.events if isinstance(event, ShowdownStarted)] == [
+        ShowdownStarted(ShowdownKind.ALL_IN, showdown.order)
+    ]
 
 
 def test_a_completed_river_showdown_is_kept_by_settlement(new_hand: NewHand) -> None:
@@ -611,10 +624,13 @@ def test_a_completed_river_showdown_is_kept_by_settlement(new_hand: NewHand) -> 
     for seat in (2, 3, 1):
         apply_showdown_action(hand, seat, SHOW)
     showdown = started(hand)
+    before = hand.history
 
     settle_hand(hand)
 
     assert hand.showdown is showdown
+    assert hand.settlement is not None
+    assert hand.history.events == (*before.events, HandSettled(hand.settlement))
     assert showdown == Showdown(INTERACTIVE, (2, 3, 1), (SHOW, SHOW, SHOW))
 
 

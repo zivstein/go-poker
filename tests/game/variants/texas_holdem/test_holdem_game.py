@@ -19,7 +19,7 @@ from go_poker.core.card import Card
 from go_poker.game.betting.actions import Action, ActionType
 from go_poker.game.betting.apply import NotPlayersTurnError
 from go_poker.game.betting.legal_actions import legal_actions
-from go_poker.game.betting.pots import pots
+from go_poker.game.betting.pots import Pot, pots
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.game_lifecycle import GameAlreadyStartedError, GameNotStartedError
 from go_poker.game.hand_history import (
@@ -30,15 +30,19 @@ from go_poker.game.hand_history import (
     ChipsReturned,
     HandHistory,
     HandParticipant,
+    HandSettled,
     HandStarted,
     HoleCardsDealt,
     SeatHoleCards,
+    ShowdownDecided,
+    ShowdownStarted,
 )
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import HandAlreadySettledError, PokerHand
 from go_poker.game.position import Blind, InvalidPlayerCount, Position
 from go_poker.game.position_assignment import ButtonSeatNotInHandError
-from go_poker.game.showdown import ShowdownAction
+from go_poker.game.settlement import PotAward, Settlement
+from go_poker.game.showdown import ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
 from go_poker.game.table import Table
 from go_poker.game.variants.texas_holdem import hand_flow
@@ -789,6 +793,7 @@ def test_histories_survive_later_hands_by_value(
             ActionTaken(2, FOLD, 0, False),
             ChipsReturned(3, 5),
             BettingRoundCompleted(Street.PREFLOP),
+            HandSettled(Settlement((PotAward(Pot(10, frozenset({3})), ((3, 10),)),), ())),
         )
     )
     assert first.history == expected_first
@@ -817,6 +822,65 @@ def test_histories_survive_later_hands_by_value(
         ),
         ActionTaken(2, FOLD, 0, False),
     )
+
+
+def test_a_completed_history_stays_the_durable_record_after_later_hands_move_the_stacks(
+    queue_decks: QueueDecks,
+    draw_order: DrawOrder,
+    fold_history: Callable[[HandHistory], Any],
+    assert_orchestrated_order: Callable[[HandHistory], None],
+) -> None:
+    """Three hands are played through the game with the same `Player` objects: a showdown won by seat 1, a hand folded
+    out, and a showdown won by seat 3. Each completed history equals its independent copy afterwards, folds again to the
+    facts captured at settlement (final stacks and settlement) and keeps the orchestrated order, although the live
+    stacks have moved on, and the game itself retains no history."""
+    game, _, players = make_game({1: 1000, 2: 1000, 3: 1000})
+    queue_decks(
+        order(draw_order, (1, 2, 3), button=1, winner=1),
+        order(draw_order, (1, 2, 3), button=2),
+        order(draw_order, (1, 2, 3), button=3, winner=3),
+    )
+    retained: list[tuple[PokerHand, HandHistory, Any, dict[int, int]]] = []
+
+    def retain(hand: PokerHand) -> None:
+        assert hand.settlement is not None and hand.history.is_complete
+        facts = fold_history(hand.history)
+        stacks = {seat: player.stack for seat, player in players.items()}
+        assert {seat: seat_facts.stack for seat, seat_facts in facts.seats.items()} == stacks
+        assert facts.settlement == hand.settlement == hand.history.settlement
+        retained.append((hand, copy.deepcopy(hand.history), facts, stacks))
+
+    first = game.start(button_at(1))
+    check_down_to_showdown(game)
+    for seat, decision in ((2, SHOW), (3, MUCK), (1, SHOW)):
+        game.act(seat, decision)
+    retain(first)
+    assert first.history.events[-5:-1] == (
+        ShowdownStarted(ShowdownKind.INTERACTIVE, (2, 3, 1)),
+        ShowdownDecided(2, SHOW),
+        ShowdownDecided(3, MUCK),
+        ShowdownDecided(1, SHOW),
+    )
+
+    second = game.next_hand()
+    fold_out(game)
+    retain(second)
+
+    third = game.next_hand()
+    check_down_to_showdown(game)
+    for seat, decision in ((1, MUCK), (2, MUCK)):
+        game.act(seat, decision)
+    retain(third)
+
+    assert vars(game).keys() == {"_table", "_stakes", "_hand"}
+    assert len({tuple(stacks.values()) for _, _, _, stacks in retained}) == 3  # the live stacks moved every hand
+    for hand, copied, facts, stacks in retained:
+        assert hand.history == copied
+        assert hand.history is not copied
+        assert fold_history(hand.history) == facts
+        assert fold_history(copied) == facts
+        assert {seat: player.stack for seat, player in players.items()} != stacks or hand is third
+        assert_orchestrated_order(hand.history)
 
 
 def test_rejected_starts_leave_no_hand_and_the_game_that_does_start_is_hand_one() -> None:

@@ -5,12 +5,18 @@ Every field is an immutable value, and histories are compared by value equality,
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from go_poker.core.card import Card
 from go_poker.game.betting.actions import Action
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.position import Blind, Position
+from go_poker.game.showdown import ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
+
+if TYPE_CHECKING:
+    # Type-only: settlement reaches PokerHand, which owns the history, through the pots it derives from a hand.
+    from go_poker.game.settlement import Settlement
 
 
 @dataclass(frozen=True)
@@ -109,6 +115,30 @@ class BettingRoundCompleted:
     street: Street
 
 
+@dataclass(frozen=True)
+class ShowdownStarted:
+    """A showdown started: its kind and its order, which is `hand.showdown.order` at the start. For `INTERACTIVE` it is
+    the decision order; for `ALL_IN` it is every live seat in canonical storage order, not a sequence of actions."""
+
+    kind: ShowdownKind
+    order: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class ShowdownDecided:
+    """One seat's SHOW or MUCK decision in an `INTERACTIVE` showdown."""
+
+    seat: int
+    action: ShowdownAction
+
+
+@dataclass(frozen=True)
+class HandSettled:
+    """The last event of every completed history: the hand's settlement, equal to `hand.settlement`."""
+
+    settlement: Settlement
+
+
 type HandEvent = (
     HandStarted
     | BlindsPosted
@@ -118,6 +148,9 @@ type HandEvent = (
     | ActionTaken
     | ChipsReturned
     | BettingRoundCompleted
+    | ShowdownStarted
+    | ShowdownDecided
+    | HandSettled
 )
 
 
@@ -127,7 +160,8 @@ class HandHistory:
 
     It holds only `events`; the hand number and participants are read from `HandStarted`. Like `Showdown`, it does not
     validate on construction: engine-produced histories are well-formed. A history never changes once taken; recording
-    replaces it with a new value that has one more event.
+    replaces it with a new value that has one more event. A history is complete once it ends with `HandSettled`; a
+    history taken earlier stays incomplete, and a completed one is the durable record of the hand.
     """
 
     events: tuple[HandEvent, ...]
@@ -146,6 +180,17 @@ class HandHistory:
     @property
     def participants(self) -> tuple[HandParticipant, ...]:
         return self._started.participants
+
+    @property
+    def is_complete(self) -> bool:
+        """Whether the hand is settled: the history ends with `HandSettled`."""
+        return isinstance(self.events[-1], HandSettled)
+
+    @property
+    def settlement(self) -> Settlement | None:
+        """The hand's settlement from `HandSettled`, or None while the history is incomplete."""
+        last = self.events[-1]
+        return last.settlement if isinstance(last, HandSettled) else None
 
 
 def _appended(history: HandHistory, event: HandEvent) -> HandHistory:

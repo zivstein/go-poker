@@ -22,6 +22,7 @@ import copy
 import random
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -32,6 +33,7 @@ from go_poker.game.betting.apply import NotPlayersTurnError
 from go_poker.game.betting.legal_actions import NOTHING_LEGAL, LegalActions, legal_actions
 from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.stakes import Stakes
+from go_poker.game.hand_history import HandHistory
 from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import HandAlreadySettledError, PokerHand
@@ -229,15 +231,22 @@ def canonical_index(hand: PokerHand, seat: int) -> int:
     return clockwise.index(seat)
 
 
-def assert_history_replays(
-    hand: PokerHand, replay_facts: Callable[..., Any], betting_actions: list[tuple[int, Action]]
-) -> None:
-    """The facts replayed from the history equal the live hand (a settled hand's payout is not recorded yet, so its
-    stacks and all-in flags are skipped) and the history holds exactly the betting actions played."""
-    assert replay_facts(hand, settled=hand.settlement is not None).actions == betting_actions
+def assert_history_replays(hand: PokerHand, checks: HistoryChecks, betting_actions: list[tuple[int, Action]]) -> None:
+    """The facts replayed from the history equal the live hand (stacks, all-in, showdown and settlement included), the
+    history holds exactly the betting actions played, and it follows the orchestrated presentation order."""
+    assert checks.replay_facts(hand).actions == betting_actions
+    checks.assert_orchestrated_order(hand.history)
 
 
-def play_seed(seed: int, counters: Counter[str], replay_facts: Callable[..., Any]) -> None:
+@dataclass(frozen=True)
+class HistoryChecks:
+    """The shared history fixtures (see `tests/game/conftest.py`) a seed uses."""
+
+    replay_facts: Callable[[PokerHand], Any]
+    assert_orchestrated_order: Callable[[HandHistory], None]
+
+
+def play_seed(seed: int, counters: Counter[str], checks: HistoryChecks) -> None:
     rng = random.Random(seed)
     name = PROFILE_NAMES[seed % len(PROFILE_NAMES)]
     stack_range, fold_weight, aggression, show_chance = PROFILES[name]
@@ -247,7 +256,7 @@ def play_seed(seed: int, counters: Counter[str], replay_facts: Callable[..., Any
 
     begin_hand(hand, STAKES)
     betting_actions: list[tuple[int, Action]] = []
-    assert_history_replays(hand, replay_facts, betting_actions)
+    assert_history_replays(hand, checks, betting_actions)
     river_actions: list[tuple[int, Action]] = []
     decisions_made = False
     calls = 0
@@ -266,7 +275,7 @@ def play_seed(seed: int, counters: Counter[str], replay_facts: Callable[..., Any
             decision = ShowdownAction.SHOW if rng.random() < show_chance else ShowdownAction.MUCK
             act(hand, seat, decision)
             decisions_made = True
-            assert_history_replays(hand, replay_facts, betting_actions)
+            assert_history_replays(hand, checks, betting_actions)
             continue
         assert hand.betting is not None
         legal = legal_actions(hand)
@@ -275,9 +284,10 @@ def play_seed(seed: int, counters: Counter[str], replay_facts: Callable[..., Any
             river_actions.append((seat, action))
         act(hand, seat, action)
         betting_actions.append((seat, action))
-        assert_history_replays(hand, replay_facts, betting_actions)
+        assert_history_replays(hand, checks, betting_actions)
 
     check_settled(hand, total, counters, decisions_made)
+    assert hand.history.is_complete and hand.history.settlement == hand.settlement
     assert_settled_rejects_everything(hand, rng)
 
 
@@ -295,14 +305,19 @@ def assert_settled_rejects_everything(hand: PokerHand, rng: random.Random) -> No
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_hand_flow_alone_drives_random_hands_to_settlement(seed: int, replay_facts: Callable[..., Any]) -> None:
-    play_seed(seed, Counter(), replay_facts)
+def test_hand_flow_alone_drives_random_hands_to_settlement(
+    seed: int, replay_facts: Callable[..., Any], assert_orchestrated_order: Callable[[HandHistory], None]
+) -> None:
+    play_seed(seed, Counter(), HistoryChecks(replay_facts, assert_orchestrated_order))
 
 
-def test_the_seeds_reach_every_shape_the_flow_must_handle(replay_facts: Callable[..., Any]) -> None:
+def test_the_seeds_reach_every_shape_the_flow_must_handle(
+    replay_facts: Callable[..., Any], assert_orchestrated_order: Callable[[HandHistory], None]
+) -> None:
     counters: Counter[str] = Counter()
+    checks = HistoryChecks(replay_facts, assert_orchestrated_order)
     for seed in SEEDS:
-        play_seed(seed, counters, replay_facts)
+        play_seed(seed, counters, checks)
     required: dict[str, int] = {
         "interactive": 30,
         "interactive_mucks": 15,

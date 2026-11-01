@@ -32,6 +32,7 @@ from go_poker.game.betting.pots import middle_pot, pots
 from go_poker.game.betting.rounds import is_round_complete, start_betting_round
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.betting.state import BettingState
+from go_poker.game.hand_history import HandSettled, ShowdownDecided, ShowdownStarted
 from go_poker.game.poker_hand import PokerHand
 from go_poker.game.settlement import HandAlreadySettledError
 from go_poker.game.showdown import NotShowdownTurnError, Showdown, ShowdownAction, ShowdownKind
@@ -140,6 +141,7 @@ def snapshot(hand: PokerHand) -> dict[str, Any]:
         "betting": copy.deepcopy(hand.betting),
         "settlement": hand.settlement,
         "showdown": hand.showdown,
+        "history": hand.history,
         "players": [
             (
                 state.seat_number,
@@ -235,6 +237,7 @@ def decide_to_completion(seed: int, hand: PokerHand, order: tuple[int, ...]) -> 
     assert snapshot(hand) == before_start
 
     start_showdown(hand)
+    assert hand.history.events == (*before_start["history"].events, ShowdownStarted(ShowdownKind.INTERACTIVE, order))
     show_probability = random.Random(f"show-{seed}").choice(SHOW_PROBABILITIES)
     rng = random.Random(f"decisions-{seed}")
     decisions: list[ShowdownAction] = []
@@ -255,7 +258,11 @@ def decide_to_completion(seed: int, hand: PokerHand, order: tuple[int, ...]) -> 
         apply_showdown_action(hand, order[len(decisions)], action)
         decisions.append(action)
         after = snapshot(hand)
-        assert unchanged_but(after, "showdown") == unchanged_but(before, "showdown")
+        assert unchanged_but(after, "showdown", "history") == unchanged_but(before, "showdown", "history")
+        assert after["history"].events == (
+            *before["history"].events,
+            ShowdownDecided(order[len(decisions) - 1], action),
+        )
         assert hand.showdown is not previous
 
 
@@ -307,7 +314,11 @@ def check_settlement(hand: PokerHand, outcome: Outcome) -> dict[str, bool]:
     settlement = hand.settlement
     assert settlement is not None
     after = snapshot(hand)
-    assert unchanged_but(after, "settlement", "players") == unchanged_but(before, "settlement", "players")
+    assert unchanged_but(after, "settlement", "players", "history") == unchanged_but(
+        before, "settlement", "players", "history"
+    )
+    assert after["history"].events == (*before["history"].events, HandSettled(settlement))  # the start is not repeated
+    assert after["history"].is_complete and after["history"].settlement == settlement
     assert hand.showdown is showdown
     assert settlement.showdown_ranks == tuple(shown_ranks.items())  # only shown seats, in hand order
     assert [award.pot for award in settlement.pot_awards] == list(layers) == list(pots(hand))  # the pot as contested

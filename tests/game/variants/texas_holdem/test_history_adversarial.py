@@ -1,7 +1,8 @@
 """Adversarial validation of what the Hold'em operations do and do not record (ADR 0004 §1, §4, §8).
 
-Showdown, settlement, the derived reads and the orchestration record nothing in Cycle 3, and the low-level operations
-record the call order they are given, even an order the flow would never produce.
+The showdown and settlement operations record exactly `ShowdownStarted`, `ShowdownDecided` and `HandSettled`; the
+derived reads and the orchestration record nothing; and the low-level operations record the call order they are given,
+even an order the flow would never produce.
 """
 
 from collections.abc import Callable
@@ -21,15 +22,18 @@ from go_poker.game.hand_history import (
     BettingRoundCompleted,
     BettingRoundStarted,
     HandHistory,
+    HandSettled,
+    ShowdownDecided,
+    ShowdownStarted,
     StreetDealt,
 )
 from go_poker.game.poker_hand import HandAlreadySettledError, PokerHand
-from go_poker.game.showdown import ShowdownAction
+from go_poker.game.showdown import ShowdownAction, ShowdownKind
 from go_poker.game.street import Street
 from go_poker.game.variants.texas_holdem.dealing import deal_hole_cards, deal_next_street
 from go_poker.game.variants.texas_holdem.hand_flow import act, begin_hand, current_actor
 from go_poker.game.variants.texas_holdem.hand_strength import hand_strength
-from go_poker.game.variants.texas_holdem.showdown import settle_hand, start_showdown
+from go_poker.game.variants.texas_holdem.showdown import apply_showdown_action, settle_hand, start_showdown
 
 STAKES = Stakes(small_blind=5, big_blind=10)
 BOARD = "2c 7d 9h Jc Ks"
@@ -51,37 +55,71 @@ def checked_down_to_showdown(hand: PokerHand) -> None:
             act(hand, seat, CHECK)
 
 
-def test_showdown_decisions_and_settlement_record_nothing(stacked_hand: StackedHand) -> None:
-    """Every show or muck, and the settlement they end in, leave the history exactly as the river round left it."""
+def test_each_showdown_decision_and_the_settlement_append_exactly_their_own_event(stacked_hand: StackedHand) -> None:
+    """Every show or muck appends one `ShowdownDecided` and nothing else; the settlement they end in appends exactly
+    `HandSettled`. The history taken at the start of the showdown is unchanged and stays incomplete."""
     hand = stacked_hand(HOLES, BOARD)
     checked_down_to_showdown(hand)
     at_showdown: HandHistory = hand.history
     assert hand.showdown is not None and hand.settlement is None
+    assert at_showdown.events[-1] == ShowdownStarted(ShowdownKind.INTERACTIVE, (2, 3, 1))
+    assert not at_showdown.is_complete
 
+    expected = list(at_showdown.events)
     while (decider := current_actor(hand)) is not None:
-        act(hand, decider, ShowdownAction.SHOW if decider % 2 else ShowdownAction.MUCK)
-        assert hand.history == at_showdown
+        decision = ShowdownAction.SHOW if decider % 2 else ShowdownAction.MUCK
+        act(hand, decider, decision)
+        if hand.settlement is None:
+            expected.append(ShowdownDecided(decider, decision))
+            assert hand.history.events == (*expected,)
+        else:
+            expected += [ShowdownDecided(decider, decision), HandSettled(hand.settlement)]
 
     assert hand.settlement is not None
-    assert hand.history == at_showdown
-    assert isinstance(at_showdown.events[-1], BettingRoundCompleted)
+    assert hand.history.events == (*expected,)
+    assert [event for event in hand.history.events if isinstance(event, ShowdownDecided)] == [
+        ShowdownDecided(2, ShowdownAction.MUCK),
+        ShowdownDecided(3, ShowdownAction.SHOW),
+        ShowdownDecided(1, ShowdownAction.SHOW),
+    ]
+    assert hand.history.is_complete and hand.history.settlement == hand.settlement
+    assert not at_showdown.is_complete and at_showdown.events == hand.history.events[: len(at_showdown.events)]
 
 
-def test_the_low_level_showdown_and_settlement_operations_record_nothing(stacked_hand: StackedHand) -> None:
-    """An all-in runout started and settled by the low-level operations, with the history unchanged by each."""
+def test_the_low_level_showdown_and_settlement_operations_append_exactly_their_own_events(
+    stacked_hand: StackedHand,
+) -> None:
+    """An all-in runout started, dealt and settled by the low-level operations: starting appends exactly
+    `ShowdownStarted`, dealing appends the streets, settling appends exactly `HandSettled` (never a second start), and
+    every rejected call on the settled hand leaves the history unchanged."""
     hand = stacked_hand({1: HOLES[1], 2: HOLES[2]}, BOARD, stacks={1: 100, 2: 100})
     initialize_betting(hand, STAKES)
     deal_hole_cards(hand)
     apply_action(hand, 1, Action(ActionType.RAISE, 100))
     apply_action(hand, 2, CALL)
-    for _ in range(3):
-        deal_next_street(hand)
     before = hand.history
 
     start_showdown(hand)
-    assert hand.history == before
+    assert hand.history.events == (*before.events, ShowdownStarted(ShowdownKind.ALL_IN, (2, 1)))
+    for _ in range(3):
+        deal_next_street(hand)
+    dealt = hand.history
+    assert [event.street for event in dealt.events[-3:] if isinstance(event, StreetDealt)] == [
+        Street.FLOP,
+        Street.TURN,
+        Street.RIVER,
+    ]
+
     settle_hand(hand)
-    assert hand.history == before
+    assert hand.settlement is not None
+    assert hand.history.events == (*dealt.events, HandSettled(hand.settlement))
+    settled = hand.history
+    with pytest.raises(HandAlreadySettledError):
+        settle_hand(hand)
+    with pytest.raises(HandAlreadySettledError):
+        start_showdown(hand)
+    with pytest.raises(HandAlreadySettledError):
+        apply_showdown_action(hand, 2, ShowdownAction.SHOW)
     with pytest.raises(HandAlreadySettledError):
         deal_next_street(hand)
     with pytest.raises(HandAlreadySettledError):
@@ -92,7 +130,7 @@ def test_the_low_level_showdown_and_settlement_operations_record_nothing(stacked
         initialize_betting(hand, STAKES)
     with pytest.raises(HandAlreadySettledError):
         deal_hole_cards(hand)
-    assert hand.history == before
+    assert hand.history == settled
 
 
 def test_derived_reads_never_record_at_any_point_of_a_hand(stacked_hand: StackedHand) -> None:
