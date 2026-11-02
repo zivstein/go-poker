@@ -15,19 +15,22 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 4 | Showdown + settlement | Complete |
 | 5 | Complete continuous PokerHand/game loop | Complete |
 | 6 | Structured Hand History / Event Log | Complete |
-| 7 | Bots + simulation / large-scale testing | **Next** (not yet planned) |
-| 8 | Omaha + Pot-Limit / PLO | Planned |
-| 9 | Pineapple | Planned |
-| 10 | Mixed/private-table per-hand variant selection | Planned |
-| 11 | Chinese Poker game family | Planned |
-| 12 | Unified history + stats/analytics | Planned |
-| 13 | Accounts + persistence/database | Planned |
-| 14 | Backend API | Planned |
-| 15 | Real-time multiplayer/reconnect | Planned |
-| 16 | Web client | Planned |
-| 17 | Mobile/desktop clients | Planned |
-| 18 | AI analysis/coaching/player assistant | Planned |
-| 19 | Further variants, tournaments, and game modes | Planned |
+| 7 | Player view + local table | **Next** (planned; ready for Cycle 1 planning) |
+| 8 | Private table online | Planned (Friends Alpha) |
+| 9 | Friends Alpha v0.1 | Planned (Friends Alpha) |
+| 10 | Bots + simulation / large-scale testing | Post-Alpha |
+| 11 | Omaha + Pot-Limit / PLO | Post-Alpha |
+| 12 | Pineapple | Post-Alpha |
+| 13 | Mixed/private-table per-hand variant selection | Post-Alpha |
+| 14 | Chinese Poker game family | Post-Alpha |
+| 15 | Unified history + stats/analytics | Post-Alpha |
+| 16 | Accounts + persistence/database | Post-Alpha |
+| 17 | Reconnect + platform scaling | Post-Alpha |
+| 18 | Mobile/desktop clients | Post-Alpha |
+| 19 | AI analysis/coaching/player assistant | Post-Alpha |
+| 20 | Further variants, tournaments, and game modes | Post-Alpha |
+
+Milestones 7–9 are the Roadmap-to-Alpha, approved on 2026-11-02 (see [Reach a Friends Alpha](#reach-a-friends-alpha)). The order of the post-Alpha milestones is provisional and is revisited after the Friends Alpha. The former Backend API, Real-time multiplayer and Web client milestones are absorbed into Milestones 7–9; reconnect beyond rejoining by guest token, and scaling beyond one server process, become Milestone 17.
 
 ## Product Direction
 
@@ -52,16 +55,16 @@ Deferred beyond Milestone 5:
 - voluntary show by a player not asked to decide (an uncontested winner or a last remaining contender), automatic muck, show/muck preferences, and showdown timers;
 - a folded player voluntarily revealing one or both hole cards (a visibility and history feature only; it never changes folded status, pot eligibility, or settlement);
 - reporting the best five cards (derived hand strength, Milestone 6);
-- leaving, sitting out, timeouts, and auto-fold during a hand (Milestones 14–15);
-- busting, rebuys, and top-ups (no milestone assigned yet);
-- blind levels, antes, straddles, dead-button and missed-blind rules (Milestone 19);
+- leaving and sitting out during a hand, as application-level hand-boundary intents with an automatic action for a leaving player (Milestone 7); an action timer (Milestone 9);
+- busting, rebuys, and top-ups (a simple play-money rebuy/top-up between hands, Milestone 9);
+- blind levels, antes, straddles, dead-button and missed-blind rules (Milestone 20);
 - run it twice.
 
 ### Change Table Rules Only Between Hands
 
 An active hand captures the effective rules it starts with; a hand already captures its stakes when betting is initialized. Game and table configuration changes take effect only at a hand boundary.
 
-Milestone 5's `HoldemGame` keeps its stakes fixed for its lifetime ([ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md) §3). That is the Milestone 5 implementation contract, not a permanent product rule. Changing stakes, betting structures (Milestone 8), per-hand variant selection (Milestone 10), antes, straddles, and other house rules are future work. No generic configuration framework is built until a milestone needs one.
+Milestone 5's `HoldemGame` keeps its stakes fixed for its lifetime ([ADR 0002](adr/0002-hand-lifecycle-orchestration-contract.md) §3). That is the Milestone 5 implementation contract, not a permanent product rule. Changing stakes, betting structures (Milestone 11), per-hand variant selection (Milestone 13), antes, straddles, and other house rules are future work. No generic configuration framework is built until a milestone needs one.
 
 ### Build Reconstructable Data
 
@@ -122,36 +125,123 @@ Approved for Milestone 6 on 2026-11-01, extending that decision:
 
 Deferred beyond Milestone 6:
 
-- serialization, wire and storage formats (Milestone 13);
-- the API projection and redaction of hidden data (Milestone 14);
-- global hand, table, and session identifiers; timestamps and clocks;
+- serialization: the wire form of player views (Milestone 7); completed-history JSON logs (Milestone 9); history storage formats (Milestone 16);
+- the player-view projection and redaction of hidden data (Milestone 7, [ADR 0005](adr/0005-player-view-and-table-session-boundary.md));
+- table and session identifiers (application-level, Milestone 7); global hand identifiers and any table-wide hand sequence (a later application/persistence concern); timestamps and clocks, which stay outside the engine (application timers from Milestone 7);
 - a replay engine, rebuilding a live `PokerHand` from history, and validating externally supplied histories;
-- history query helpers and analytics, including a "board plays" flag (Milestone 12);
+- history query helpers and analytics, including a "board plays" flag (Milestone 15);
 - table- and game-level events (sitting down, standing up, status changes);
-- account and display identity, and participant uniqueness beyond a table (platform milestones);
+- guest and display identity (application-level, Milestone 7); accounts and participant uniqueness beyond a table (Milestone 16);
 - hand strength for other variants, and localized descriptions.
+
+### Reach a Friends Alpha
+
+Approved on 2026-11-02: the next product checkpoint is a **Friends Alpha**, and Milestones 7–9 are the shortest sound path to it. A user can:
+
+1. open the Go! Poker website;
+2. create a private table or join one through a link or code;
+3. use a simple guest identity and display name;
+4. sit at the table;
+5. play with several real human players connected at once;
+6. start and play consecutive Texas Hold'em hands;
+7. see only the information they are allowed to see;
+8. make Fold / Check / Call / Bet / Raise and SHOW / MUCK decisions;
+9. see the board, stacks, pots, current actor, action and result feedback, and the hand result;
+10. continue into later hands without anyone resetting the engine.
+
+Desktop web is enough, and visual polish can be modest.
+
+Non-goals for the first Alpha:
+
+- native mobile or desktop apps;
+- tournaments, clubs, payments, rake, and real money;
+- advanced anti-cheat;
+- variants beyond Hold'em;
+- AI bots or coaching;
+- persistent statistics;
+- complex accounts or authentication;
+- social features, matchmaking, and lobby discovery;
+- reconnect perfection;
+- a hand-history UI beyond what play and debugging need;
+- production-scale traffic.
+
+The boundaries between the engine, the application layer, and the server are in [ADR 0005](adr/0005-player-view-and-table-session-boundary.md) (accepted 2026-11-02). In summary:
+
+- one authoritative server-side game state;
+- clients never decide poker legality;
+- clients never receive hidden information they may not see;
+- the projection is read-only derived state;
+- the application layer coordinates the engine and never reimplements poker rules.
+
+#### Milestones
+
+| # | Milestone | Purpose | Ends with |
+| --- | --- | --- | --- |
+| 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; real-time WebSocket server; unstyled browser client skeleton | Several local browser tabs play consecutive hands at one table, each seeing only what it may see |
+| 8 | Private table online | First remote deployment; private-table link flow, display names, and rejoin by guest token; playable table UI | A friend opens a URL and plays remotely with a legible UI |
+| 9 | Friends Alpha v0.1 | Table-life rules (action timer, sit out / back, rebuy and top-up) and hardening (socket drops, logs, limits, cleanup), then a playtest | Friends Alpha v0.1 |
+
+The Milestone 7 Cycle split is in `CURRENT_CYCLE.md`. Milestones 8 and 9 are split into Cycles when they are planned.
+
+#### Approved decisions
+
+Approved on 2026-11-02:
+
+- **Player view.**
+  - The poker visibility boundary lives in the engine: `game/visibility.py` plus the Hold'em view layer.
+  - Clients receive full per-viewer snapshots plus an allowlist-redacted log of the current hand. There is no diff protocol.
+- **Server.**
+  - Python with Starlette, uvicorn, and WebSocket.
+  - Server dependencies stay outside the dependency-free engine.
+  - Python 3.14 compatibility is confirmed before the server Cycle is implemented.
+- **Client.** TypeScript with React and Vite.
+- **Repository.** `src/go_poker/app/` (application layer), `src/go_poker/server/` (server), and `web/` (client) in this repository.
+- **Identity.**
+  - A server-issued guest token and an opaque engine `player_id`.
+  - The display name is separate, application-level data.
+  - The creator of a private table is its host.
+- **Next hand.** It starts automatically after a short pause, about 5 seconds as the initial product default. The pause is owned by the application/server, not the engine.
+- **Stale commands.**
+  - A monotonic application-level revision is the concurrency token.
+  - Every snapshot carries it, and every state-changing command carries the revision it expects.
+- **Leaving and sitting out during a hand.**
+  - These are recorded as pending hand-boundary intents. The current hand's engine state is not changed.
+  - When a leaving player's turn comes, the application checks if that is legal, otherwise folds, and mucks at a showdown decision.
+  - The leave takes effect after settlement.
+- **Engine-generation reset.**
+  - At a hand boundary, when the current engine game can no longer progress because no `READY` player with chips remains, the application rebuilds a fresh engine `Table` and `HoldemGame`.
+  - The private table, its code, guests, seats, names, and revision persist.
+  - This is an application-layer policy. The engine lifecycle contract is unchanged.
+- **Rebuy.** Milestone 9 may add a simple play-money rebuy/top-up policy between hands.
+- **Browser test.** A minimal Playwright browser smoke test, folded into the Milestone 8 UI Cycle once the playable UI exists.
+- **History logs.** Completed-history JSON logs are useful work for Milestone 9.
+- **No autoplayer.** No dev-only autoplayer is added unless a later test or load need independently justifies it.
+- **Hosting.** The hosting provider is decided at Milestone 8 planning.
 
 ### Exercise the Engine at Scale
 
-Milestone 7 introduces bots and simulation for large-scale validation and experimentation.
+After the Friends Alpha, Milestone 10 introduces bots and simulation for large-scale validation and experimentation.
 
 ### Expand Poker Variants
 
-Omaha + Pot-Limit provides the second concrete variant/betting-structure combination and creates the first strong opportunity to extract proven shared abstractions.
+Omaha + Pot-Limit (Milestone 11) provides the second concrete variant/betting-structure combination and creates the first strong opportunity to extract proven shared abstractions.
 
 Pineapple and mixed/private-table selection follow.
 
-Milestone 10 may select the poker variant at table/session level or per hand. The exact product design remains future work.
+Milestone 13 may select the poker variant at table/session level or per hand. The exact product design remains future work.
 
 Chinese Poker remains a separate game family.
 
-### Build the Platform
+### Grow the Platform
 
-Accounts/persistence, backend APIs, and real-time multiplayer are added after the engine and history contracts are stable.
+After the Friends Alpha:
+
+- accounts and persistence (Milestone 16) replace guest-only, in-memory tables;
+- reconnect and platform scaling (Milestone 17) go beyond rejoining by guest token and beyond one server process.
 
 ### Add Clients
 
-Web and later mobile/desktop clients consume platform and engine contracts rather than recreating poker rules.
+The web client is built in Milestones 7–9. Later mobile and desktop clients (Milestone 18) consume the same server protocol and engine contracts rather than recreating poker rules.
 
 ### Add Analytics and AI
 
