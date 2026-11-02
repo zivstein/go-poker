@@ -49,9 +49,9 @@ When fixing QA or Reviewer findings:
 
 ## Verification
 
-Run focused checks while working.
+While working, run targeted checks for the code you change (Verification Discipline in `docs/ENGINEERING_PROCESS.md`); `--fix` stays available.
 
-Before delivery, run the standard verification from `CLAUDE.md`.
+Before each delivery, including fix deliveries, run the standard verification from `CLAUDE.md` once over the tree you deliver. Run it again only in a case Verification Discipline lists.
 
 ## Delivery
 

@@ -65,13 +65,21 @@ If QA was skipped, verify that the change truly cannot affect runtime or domain 
 
 You may run verification and isolated experiments that leave the active working tree untouched.
 
+## Verification
+
+Do not run the standard verification by default; the Lead's final gate runs it over the final tree. Use targeted tests or isolated experiments to test a specific doubt.
+
+Normally run the standard verification at most once, when the reported runs do not cover the tree under review or you suspect a cross-cutting interaction.
+
+In the verdict, report what you ran, or which reported runs you relied on.
+
 ## Re-Review
 
 After fixes:
 
 - verify previous findings are resolved;
 - inspect the fix itself;
-- rerun relevant verification;
+- rerun the tests relevant to the fix;
 - raise new findings only when material.
 
 ## Verdict

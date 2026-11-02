@@ -144,10 +144,100 @@ def test_plan_usage_is_shown_only_when_recorded(script: Script, projects: Path) 
     rows = report.session_summaries(session, None, 150_000, 50_000)
 
     assert "Plan usage: 5-hour: not recorded, weekly: not recorded" in report.format_report(
-        session, rows, None, None, 150_000
+        session, rows, None, None, 150_000, []
     )
     assert "Plan usage: 5-hour: 45% (as recorded), weekly: 42.5% (as recorded)" in report.format_report(
-        session, rows, 45.0, 42.5, 150_000
+        session, rows, 45.0, 42.5, 150_000, []
+    )
+
+
+def test_verification_counts_only_executions_of_the_verify_script(script: Script, tmp_path: Path) -> None:
+    commands = {
+        "uv run scripts/verify.py": 1,
+        "uv run scripts/verify.py --fix": 1,
+        'cd "$S/go-poker" && uv run scripts/verify.py': 1,
+        "python3 scripts/verify.py": 1,
+        '(cd "$S/go-poker" && uv run scripts/verify.py)': 1,
+        "uv run scripts/verify.py --fix && uv run scripts/verify.py": 2,
+        "sed -n 1,40p scripts/verify.py": 0,
+        "grep -n GATES scripts/verify.py": 0,
+        "python3 scripts/finish_cycle.py <<'MANIFEST'\nmessage: chore: x\npath: scripts/verify.py\nMANIFEST": 0,
+        "uv run pytest -q tests/game && uv run mypy src": 0,
+        "uv run scripts/verify.pyc": 0,
+    }
+    blocks = [tool("Bash", f"t{index}", command=command) for index, command in enumerate(commands)]
+    write_jsonl(tmp_path / "s2.jsonl", [assistant("m1", "claude-opus-5-5", usage(1000), *blocks)])
+    report = script("usage_report")
+
+    for command, runs in commands.items():
+        assert report._verify_runs(command) == runs, command
+    session = report.load_session(tmp_path, "s2")
+    assert session.groups["lead/planning"].verify_runs == sum(commands.values())
+
+
+@pytest.fixture
+def pressure(tmp_path: Path) -> Path:
+    """A session at the edge of every warning: the engineer at the context threshold, QA just above it."""
+    directory = tmp_path / "pressure"
+    verify_blocks = [tool("Bash", f"v{index}", command="uv run scripts/verify.py") for index in range(8)]
+    write_jsonl(
+        directory / "s3.jsonl",
+        [
+            assistant("m1", "claude-opus-5-5", usage(1000), tool("Agent", "t1", subagent_type="engineer", prompt="go")),
+            assistant("m2", "claude-opus-5-5", usage(300_000), *verify_blocks),
+            user(FINISH),
+            assistant("m3", "claude-opus-5-5", usage(300_000, write_1h=50_000)),
+        ],
+    )
+    subagents = directory / "s3" / "subagents"
+    for name, read in (("engineer", 149_999), ("qa-engineer", 150_000), ("reviewer", 200_000)):
+        write_jsonl(subagents / f"{name}.jsonl", [assistant("a1", "claude-sonnet-5-5", usage(read))])
+        (subagents / f"{name}.meta.json").write_text(json.dumps({"agentType": name}))
+    return directory
+
+
+def test_pressure_warnings_flag_worker_context_and_verification_above_their_thresholds(
+    script: Script, pressure: Path
+) -> None:
+    report = script("usage_report")
+    rows = report.session_summaries(report.load_session(pressure, "s3"), None, 150_000, 50_000)
+
+    assert report.pressure_warnings(rows, 150_000, 50_000, 8) == ["qa-engineer peak context 150,001 > 150,000"]
+    assert report.pressure_warnings(rows, 149_999, 50_000, 7) == [
+        "engineer peak context 150,000 > 149,999",
+        "qa-engineer peak context 150,001 > 149,999",
+        "full verifications 8 > 7",
+    ]
+
+
+def test_cold_finish_writes_are_flagged(script: Script, projects: Path, pressure: Path) -> None:
+    report = script("usage_report")
+    rows = report.session_summaries(report.load_session(projects, "s1"), None, 150_000, 50_000)
+    edge = report.session_summaries(report.load_session(pressure, "s3"), None, 150_000, 49_999)
+
+    assert report.pressure_warnings(rows, 150_000, 50_000, 8) == ["lead/finish cold cache writes 1 (each > 50,000)"]
+    assert "lead/finish cold cache writes 1 (each > 49,999)" in report.pressure_warnings(edge, 150_000, 49_999, 8)
+
+
+def test_warnings_are_reported_without_changing_the_exit_code(
+    script: Script, pressure: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report = script("usage_report")
+    session = report.load_session(pressure, "s3")
+    rows = report.session_summaries(session, None, 150_000, 50_000)
+    pricing_file = tmp_path / "pricing.json"
+    pricing_file.write_text(json.dumps({"models": {}}))
+
+    assert report.format_report(session, rows, None, None, 150_000, []).endswith(
+        "Warnings: none\nPlan usage: 5-hour: not recorded, weekly: not recorded\n"
+    )
+    exit_code = report.main(
+        ["s3", "--projects-dir", str(pressure), "--pricing", str(pricing_file), "--verify-threshold", "7"]
+    )
+
+    assert exit_code == 0
+    assert "Warnings:\n  qa-engineer peak context 150,001 > 150,000\n  full verifications 8 > 7\nPlan usage:" in (
+        capsys.readouterr().out
     )
 
 

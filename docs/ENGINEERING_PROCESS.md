@@ -73,6 +73,40 @@ Before implementation of a new milestone:
 
 Do not implement while milestone-level decisions remain unresolved.
 
+## Cycle Sizing
+
+A Cycle is one coherent work unit. Delegation separates roles from each other but does not bound the work each role carries: an oversized Cycle makes the Engineer and QA sessions themselves long-context sessions.
+
+The Lead checks size when proposing a milestone's Cycle split and again when drafting each Cycle Brief, before execution.
+
+Sizing signals:
+
+- several implementation surfaces that could each be verified on their own;
+- more than about three production subsystems changed;
+- a significant test-harness redesign alongside new production behavior;
+- a large migration of existing tests or assertions;
+- a major stress-suite expansion;
+- a large expected diff, roughly 20+ changed paths or 2k+ inserted lines;
+- the Engineer asked to build both production behavior and substantial independent validation infrastructure;
+- a natural midpoint that is independently testable.
+
+The signals are heuristics. None is a hard threshold, and no number of signals requires a split by itself.
+
+Multiple signals trigger an explicit sizing decision. Split when there is a natural, independently verifiable seam and the split materially reduces the work and context a role carries. Otherwise keep the Cycle whole and state why in the Brief.
+
+Every part of a split:
+
+- has a coherent goal;
+- is independently testable and reviewable;
+- leaves docs accurate;
+- is independently committable.
+
+Typical seams are production behavior first and harness, migration, or stress expansion second, or one subsystem per Cycle. Small-Change Path work is not split unnecessarily.
+
+A split proposed in a Cycle Brief is approved with it and recorded in `CURRENT_CYCLE.md`. An executing Cycle is not split; it continues autonomously, and sizing lessons go into the Cycle Report's process improvements.
+
+`scripts/usage_report.py` warnings after a Cycle inform later sizing decisions; they are not gates.
+
 ## Cycle Flow
 
 Behavioral work follows:
@@ -83,8 +117,8 @@ Behavioral work follows:
 4. Lead checks the delivery.
 5. QA validates; fixes are followed by affected QA re-validation.
 6. Reviewer reviews; fixes are followed by affected QA and Reviewer re-review.
-7. Lead runs final verification.
-8. Lead closes out docs and status.
+7. Lead closes out docs and status.
+8. Lead runs final verification over the final working tree.
 9. Lead returns the Cycle Report.
 10. User approves the commit.
 
@@ -114,7 +148,8 @@ A behavioral Cycle is ready when the Lead can state without guessing:
 - relevant domain behavior and invariants;
 - architecture and ownership;
 - test strategy;
-- known deferred behavior.
+- known deferred behavior;
+- a bounded size (see Cycle Sizing).
 
 An unresolved approval-level decision blocks implementation.
 
@@ -134,6 +169,8 @@ Include only information that is not already clear from durable repository conte
 8. Execution plan
 
 Do not restate the whole architecture or engineering process.
+
+When multiple Cycle Sizing signals apply, the Execution plan records the sizing decision: the split, or why the Cycle stays whole.
 
 ## Definition of Done
 
@@ -288,6 +325,23 @@ Hypothesis is not currently a dependency.
 
 Reconsider it only when a concrete milestone benefits enough from property generation and shrinking to justify the dependency.
 
+### Verification Discipline
+
+The standard verification command and its rules are in `CLAUDE.md`. This section sets how often it runs.
+
+Iterate with targeted checks: `uv run pytest <paths>` or `-k`, and `uv run ruff check <paths>` or `uv run mypy src` when relevant. Run the full standard verification at handoffs, over the tree being handed off. Each role's default is in its agent file.
+
+An extra full run is justified when:
+
+- the previous full run failed and was fixed;
+- the change touches shared test infrastructure (conftest, fixtures, helpers) or cross-cutting production code, where targeted selection may miss affected tests;
+- a targeted run shows an unexpected interaction or a failure outside the expected area;
+- the tree changed after the last full run in a way targeted checks do not cover.
+
+These are defaults, not caps. Never skip a full run a handoff requires, and never report a targeted run as full verification.
+
+The Lead reads the verification reported at each handoff rather than re-running it. After closeout docs and status are updated, the Lead runs one final full verification over the final working tree, and runs it again if anything changes afterwards. `/finish-cycle` runs its own verification inside the script.
+
 ### Deliberate Breakage
 
 Never intentionally break production code in the active working tree, even briefly.
@@ -297,7 +351,7 @@ Mutation experiments run in an isolated copy that includes the current working-t
 ```bash
 scratch="$(mktemp -d)"
 rsync -a --exclude .git --exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude .mypy_cache --exclude .ruff_cache ./ "$scratch/go-poker/"
-cd "$scratch/go-poker" && uv run pytest -q
+cd "$scratch/go-poker" && uv run pytest -q <tests that should catch the mutation>
 ```
 
 Do not use a Git worktree: it checks out committed code, not the uncommitted work under test. Mutation experiments never change the real repository's Git state.
@@ -368,6 +422,7 @@ Detailed company/reference docs under `docs/company/` are loaded only for Meta w
 - Costs appear only with a local pricing file; prices are not recorded in process docs.
 - 5-hour and weekly percentages are recorded only when read from the app's usage display, never estimated.
 - Pricing and history live in the git-ignored `.claude/usage/`; personal usage data never enters the repository.
+- Each session report ends with workflow-pressure warnings: Engineer or QA peak context above the context threshold, a high full-verification count, and cold cache writes during `/finish-cycle`. They are telemetry, never gates.
 
 ## Cycle Closeout
 
@@ -417,11 +472,11 @@ Control/process files include:
 - `docs/ENGINEERING_PROCESS.md`;
 - `.claude/agents/`;
 - `.claude/skills/`;
-- workflow tooling under `scripts/` (verification, closeout, and usage measurement);
+- workflow tooling under `scripts/` (verification, closeout, and usage measurement) and its tests under `tests/tooling/`;
 - future hooks/config that change AI-team behavior.
 
 They are not modified during feature work.
 
 Process improvements are applied as dedicated Meta work with user approval.
 
-Meta work does not change production code, tests, dependencies, or product behavior unless that change is separately approved as product work.
+Meta work does not change production code, product tests, dependencies, or product behavior unless that change is separately approved as product work. Workflow-tooling tests under `tests/tooling/` change with the tooling they test.

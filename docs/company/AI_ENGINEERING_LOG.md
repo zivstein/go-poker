@@ -12,10 +12,105 @@ Cost figures are API-equivalent estimates computed from local session transcript
 
 | ID | Date | Improvement | Status |
 | --- | --- | --- | --- |
+| [AIE-006](#aie-006-context-isolation-depends-on-bounded-work-units) | 2026-11-02 | Context isolation depends on bounded work units | Change applied; result pending |
+| [AIE-005](#aie-005-deterministic-closeout-and-cache-aware-cost) | 2026-11-02 | Deterministic closeout and cache-aware cost | Measured |
 | [AIE-004](#aie-004-deterministic-finish-cycle) | 2026-11-01 | Deterministic `/finish-cycle` closeout | Measured |
 | [AIE-003](#aie-003-independent-milestone-level-external-audit) | Milestone 5 boundary | Independent milestone-level external audit | Completed |
 | [AIE-002](#aie-002-autonomous-lead--engineer--qa--reviewer-workflow) | 2026-10-29 – 2026-10-30 | Autonomous Lead → Engineer → QA → Reviewer workflow | Backfill pending |
 | [AIE-001](#aie-001-durable-context-architecture) | 2026-10-29 – 2026-10-30 | Durable context architecture | Backfill pending |
+
+## AIE-006: Context isolation depends on bounded work units
+
+Date: 2026-11-02 · Milestone 6 measurements, applied in Meta Cycle 2
+
+### Problem
+
+The Core Engineering Team delegates implementation and validation to fresh Engineer and QA subagents, partly to keep each role's context small. Milestone 6 showed that delegation alone does not keep it small: the size of the delegated work does.
+
+### Evidence
+
+Per Milestone 6 Cycle, from `scripts/usage_report.py` and the Cycle commits:
+
+| Cycle | Equivalent cost | Engineer peak context | QA peak context | Changed paths | Inserted lines |
+| --- | --- | --- | --- | --- | --- |
+| 1 | $5.13 | ~105k | ~81k | 14 | ~1.2k |
+| 2 | $4.90 | ~84k | ~70k | 20 | ~1.0k |
+| 3 | $8.31 | ~166k | ~131k | 25 | ~2.3k |
+| 4 | $10.92 | ~240k | ~212k | 25 | ~3.0k |
+
+- In Cycle 4 the Lead's context grew from ~72k to ~190k during planning and from ~193k to ~237k during execution.
+- Cycle 4 changed only 3 production files but 18 test paths: much of its weight was test-harness extension, replay, and stress work beside the production change.
+- Full verification runs, as originally counted: 9, 14, 18, and 18. That counter also matched commands that only mentioned the script or chained `pytest` with `mypy`, including targeted and scratch-copy runs. Recounted with the narrowed counter, which counts only executions of `scripts/verify.py`: 7, 12, 13, and 13.
+
+Cycles 1 and 2 kept useful context isolation. In Cycles 3 and 4, Engineer and QA became long-context sessions themselves. Larger Cycles correlated with larger worker contexts and higher Cycle cost; these measurements do not establish causality, and Cycle content differed in other ways too.
+
+### Change
+
+Meta Cycle 2 tuned the workflow without changing roles, models, or gates:
+
+- Cycle Sizing guidance in `docs/ENGINEERING_PROCESS.md`: multiple sizing signals trigger an explicit sizing decision before execution; a Cycle is split only at a natural, independently verifiable seam that materially reduces the work a role carries.
+- Verification Discipline: targeted checks while working, one full run per handoff by default, extra runs for justified cases, and the Lead's final run after closeout docs are updated.
+- `scripts/usage_report.py` counts only executions of `scripts/verify.py` and ends each report with non-blocking warnings for worker peak context, verification count, and cold finish writes.
+
+### Measured result
+
+Pending. Later Cycles should compare worker peak context, verification runs (with the narrowed counter), and Cycle cost against the table above.
+
+### Engineering lesson
+
+**Multi-agent delegation does not automatically create bounded context; the delegated work itself must be bounded.**
+
+A fresh subagent starts small, but it grows with everything its task needs it to read, write, and re-check. Role separation and work-unit size are separate controls.
+
+### Reusable principle
+
+Size each work unit so the roles that execute it stay within a bounded context, and decide the size before execution, when splitting is still cheap. Measure worker context per work unit after the fact and feed it into the next sizing decision.
+
+## AIE-005: Deterministic closeout and cache-aware cost
+
+Date: 2026-11-02 · Milestone 6 measurements · Follows up AIE-004
+
+### Problem
+
+AIE-004 moved Cycle closeout into deterministic tooling, with one measured run. Its cost result needed confirmation across real Cycles, and its explicit-manifest requirement had not yet met a real case.
+
+### Evidence
+
+Across Milestone 6, every closeout went through the explicit closeout manifest and `scripts/finish_cycle.py`.
+
+Fail-closed behavior: at the Milestone 6 planning-record closeout, before Cycle 1, `/finish-cycle` was invoked without a formal closeout manifest. It refused to infer one from `git status`, made no commit and no push, and left the working tree unchanged with exactly its three planning-doc paths. After an explicit manifest was produced, `/finish-cycle` ran again and committed and pushed only those approved paths.
+
+That refusal came from the skill's manifest precondition, before `scripts/finish_cycle.py` ran. The script's own fail-closed checks have not yet stopped a real closeout.
+
+Equivalent closeout cost:
+
+| Closeout | Equivalent cost | Notes |
+| --- | --- | --- |
+| Before AIE-004 (3 runs) | about $0.78 average | model switch, cold cache |
+| Cycle 1 | $0.16 | warm cache |
+| Cycle 2 | $0.16 | warm cache |
+| Cycle 3 | $1.31 | 60.9% cache hit, one cold call, Lead context ~200k |
+| Cycle 4 | $0.15 | 99.1% cache hit, Lead context ~241k |
+
+The cause of the Cycle 3 cold call was not established.
+
+### Change
+
+No change to the closeout itself. `scripts/usage_report.py` now warns when the `/finish-cycle` phase has a cold cache write, so the outlier is visible in every report.
+
+### Measured result
+
+With a warm cache, closeout cost about $0.15–$0.16 equivalent, roughly 80% below the earlier average, even with a ~241k Lead context. The single cold-cache closeout cost about eight times a warm one.
+
+### Engineering lesson
+
+**Deterministic work belongs in deterministic tooling; cost then depends on cache state more than context size.**
+
+A large context that stays cached is cheap to continue. Invalidating that cache, by a model switch or any other cold start, can dominate the cost of an otherwise cheap step.
+
+### Reusable principle
+
+Keep mechanical steps in tested, fail-closed scripts behind an explicit approved artifact, and refuse rather than infer a missing approval. When measuring AI workflow cost, report cache hit rate and cold writes alongside context size, and treat cold re-caching of a large session as the main outlier risk.
 
 ## AIE-004: Deterministic `/finish-cycle`
 
@@ -52,7 +147,7 @@ The model switch was meant as a saving; the cache cost it caused was larger than
 
 Closeout cost fell by approximately 74%. Safety improved too: commit scope and push conditions are now enforced by code rather than by instructions.
 
-The V2 figure is a single run; later Cycles should confirm it.
+The V2 figure is a single run; later Cycles should confirm it. Follow-up measurement: [AIE-005](#aie-005-deterministic-closeout-and-cache-aware-cost).
 
 ### Engineering lesson
 

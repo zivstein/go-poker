@@ -26,6 +26,6 @@ For code or test changes, the standard verification is one command:
 
 It runs Ruff check, Ruff format check, mypy, and pytest, keeps their real exit codes, and ends with `VERIFY: PASS` or `VERIFY: FAIL`. Only `VERIFY: PASS` with exit code 0 passes. Run it directly; do not pipe or truncate it.
 
-Every gate (Engineer delivery, QA, Reviewer, Lead final verification, and `/finish-cycle`) runs it independently, without `--fix`. While implementing, the Engineer may run `uv run scripts/verify.py --fix`, which first rewrites files with Ruff's fixes and formatting.
+A gate's full run is made independently and without `--fix`. How often each role runs it is in `docs/ENGINEERING_PROCESS.md` (Verification Discipline); `/finish-cycle` always runs it. While implementing, the Engineer may run `uv run scripts/verify.py --fix`, which first rewrites files with Ruff's fixes and formatting.
 
 Never hide, weaken, or bypass failures.

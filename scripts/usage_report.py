@@ -12,7 +12,12 @@ It reads the session transcripts Claude Code keeps on this machine (`~/.claude/p
 until the first Agent launch, `execution` after it, and `finish` after `/finish-cycle` is invoked. Subagents
 are grouped by agent type. Per group it reports calls, model split, first-call and peak context, calls above the
 context threshold, cache hit rate (cache reads over all input), cold cache writes (calls writing more than the
-cold-write threshold to cache, typically a model switch or a fresh context), and verification runs.
+cold-write threshold to cache, typically a model switch or a fresh context), and verification runs (executions of
+`scripts/verify.py`, with or without `--fix`; reading or mentioning the script does not count).
+
+Each session report ends with workflow-pressure warnings, which are telemetry and never change the exit code: an
+`engineer` or `qa-engineer` peak context above the context threshold, more full verification runs in the session
+than the verify threshold, and cold cache writes during `/finish-cycle`.
 
 Costs appear only with a pricing file: `--pricing FILE`, or `.claude/usage/pricing.json` when present. Prices are
 USD per million tokens, per model id; a key also matches model ids it prefixes. A group with an unpriced model shows
@@ -47,6 +52,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 USAGE_DIR = REPO_ROOT / ".claude" / "usage"
 FINISH_COMMAND = "<command-name>/finish-cycle</command-name>"
 AGENT_TOOLS = frozenset({"Agent", "Task"})
+WORKER_GROUPS = ("engineer", "qa-engineer")
+SHELL_SEPARATOR = re.compile(r"&&|\|\||[;|&\n]")
+VERIFY_RUN = re.compile(r"\(?\s*(?:uv run\s+(?:python3?\s+)?|python3?\s+)(?:\S*/)?scripts/verify\.py(?:[\s)]|$)")
 PRICE_KEYS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h")
 CSV_FIELDS = (
     "session_id",
@@ -144,8 +152,9 @@ def _text(content: Any) -> str:
     return ""
 
 
-def _is_verification(command: str) -> bool:
-    return "scripts/verify.py" in command or ("pytest" in command and "mypy" in command)
+def _verify_runs(command: str) -> int:
+    """How many shell segments of a Bash command execute `scripts/verify.py`."""
+    return sum(1 for segment in SHELL_SEPARATOR.split(command) if VERIFY_RUN.match(segment.strip()))
 
 
 def read_transcript(path: Path, lead: bool) -> tuple[dict[str, Group], list[str]]:
@@ -176,8 +185,8 @@ def read_transcript(path: Path, lead: bool) -> tuple[dict[str, Group], list[str]
                 phase = "execution"
                 group = groups.setdefault(phase, Group(phase))
             command = (block.get("input") or {}).get("command")
-            if block.get("name") == "Bash" and isinstance(command, str) and _is_verification(command):
-                group.verify_runs += 1
+            if block.get("name") == "Bash" and isinstance(command, str):
+                group.verify_runs += _verify_runs(command)
         message_id = str(message.get("id") or entry.get("uuid"))
         known = calls.get(message_id)
         calls[message_id] = (known[0] if known else group.name, _call(message["model"], message.get("usage") or {}))
@@ -324,6 +333,22 @@ def session_summaries(
     return [*rows, total]
 
 
+def pressure_warnings(
+    rows: Sequence[Summary], context_threshold: int, cold_write_threshold: int, verify_threshold: int
+) -> list[str]:
+    """Workflow-pressure signals for one session, in row order, with the session's verification count last."""
+    warnings = []
+    for row in rows:
+        if row.group in WORKER_GROUPS and row.peak_context > context_threshold:
+            warnings.append(f"{row.group} peak context {row.peak_context:,} > {context_threshold:,}")
+        if row.group == "lead/finish" and row.cold_writes:
+            warnings.append(f"lead/finish cold cache writes {row.cold_writes} (each > {cold_write_threshold:,})")
+    verify_runs = sum(row.verify_runs for row in rows if row.group != "total")
+    if verify_runs > verify_threshold:
+        warnings.append(f"full verifications {verify_runs} > {verify_threshold}")
+    return warnings
+
+
 def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.1%}"
 
@@ -333,7 +358,12 @@ def _money(value: float | None) -> str:
 
 
 def format_report(
-    session: Session, rows: Sequence[Summary], five_hour: float | None, weekly: float | None, threshold: int
+    session: Session,
+    rows: Sequence[Summary],
+    five_hour: float | None,
+    weekly: float | None,
+    threshold: int,
+    warnings: Sequence[str],
 ) -> str:
     header = (
         "group",
@@ -365,6 +395,7 @@ def format_report(
     widths = [max(len(line[column]) for line in table) for column in range(len(header))]
     lines = [f"Session {session.session_id}  {session.title}".rstrip(), f"{session.start} -> {session.end}"]
     lines += ["  ".join(cell.ljust(width) for cell, width in zip(line, widths, strict=True)).rstrip() for line in table]
+    lines += ["Warnings:", *(f"  {warning}" for warning in warnings)] if warnings else ["Warnings: none"]
     plan = [
         f"{label} {'not recorded' if value is None else f'{value:g}% (as recorded)'}"
         for label, value in (("5-hour:", five_hour), ("weekly:", weekly))
@@ -427,6 +458,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--pricing", type=Path, help="pricing JSON (default: .claude/usage/pricing.json if present)")
     parser.add_argument("--context-threshold", type=int, default=150_000)
     parser.add_argument("--cold-write-threshold", type=int, default=50_000)
+    parser.add_argument("--verify-threshold", type=int, default=8, help="warn above this many full verification runs")
     parser.add_argument("--five-hour", type=_percentage, help="5-hour usage percent read from the app")
     parser.add_argument("--weekly", type=_percentage, help="weekly usage percent read from the app")
     parser.add_argument("--append", action="store_true", help="append rows to the git-ignored usage history")
@@ -442,7 +474,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     for index, session_id in enumerate(session_ids):
         session = load_session(directory, session_id)
         rows = session_summaries(session, pricing, arguments.context_threshold, arguments.cold_write_threshold)
-        report = format_report(session, rows, arguments.five_hour, arguments.weekly, arguments.context_threshold)
+        warnings = pressure_warnings(
+            rows, arguments.context_threshold, arguments.cold_write_threshold, arguments.verify_threshold
+        )
+        report = format_report(
+            session, rows, arguments.five_hour, arguments.weekly, arguments.context_threshold, warnings
+        )
         sys.stdout.write(("\n" if index else "") + report)
         if arguments.append:
             append_history(arguments.history, session, rows, arguments.five_hour, arguments.weekly, REPO_ROOT)

@@ -73,9 +73,11 @@ After a fix, re-run the reproduction and affected validation.
 
 ## Verification
 
-Run the standard verification from `CLAUDE.md`.
+Iterate on tests with targeted runs. Mutation experiments in the isolated copy run only the tests that should catch the mutation.
 
-Report failures honestly.
+The first QA pass ends with one run of the standard verification from `CLAUDE.md`, after your test changes are final. On re-validation, run the reproduction and affected tests, and run the standard verification again only if you changed tests or the fix was broad. Other extra runs follow Verification Discipline in `docs/ENGINEERING_PROCESS.md`.
+
+Report which runs were full and which were targeted, and report failures honestly.
 
 ## Report
 
