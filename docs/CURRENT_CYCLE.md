@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 7 — Player view + local table** is planned and ready for Cycle 1 planning. No Cycle has started.
+**Milestone 7 — Player view + local table** is in progress. Cycle 1 (player view projection) is complete; Cycle 2 is next and has no Brief yet.
 
 Milestone 6 is complete. Its behavior is recorded in `ARCHITECTURE.md` and its history in Git.
 
@@ -18,7 +18,7 @@ The boundary contract for this milestone is [ADR 0005](adr/0005-player-view-and-
 - The milestone scope, the Cycle split, and every product and architecture decision were approved on 2026-11-02.
 - The engine-generation reset (ADR 0005 §11) resolved the last planning question.
 - No planning-level question remains open.
-- Milestone 7 is ready for Cycle 1 planning.
+- Cycle 1 is complete. Each later Cycle still needs its own approved Brief.
 
 ## Goal
 
@@ -60,7 +60,7 @@ Out of scope:
 
 | Step | Title | Surface | Status |
 | --- | --- | --- | --- |
-| Cycle 1 | Player view projection | Engine: `game/visibility.py`, the Hold'em view layer | Not started (Brief not drafted) |
+| Cycle 1 | Player view projection | Engine: `game/visibility.py`, the Hold'em view layer | Complete; its behavior is in `ARCHITECTURE.md` ([Player View](ARCHITECTURE.md#player-view)) |
 | Cycle 2 | `TableSession` application layer | `src/go_poker/app/` | Not started |
 | Cycle 3 | Real-time table server | `src/go_poker/server/` | Not started |
 | Meta | Frontend tooling in verification | `scripts/verify.py`, CI, agent instructions | Not started; separate Meta work needing its own approval |
@@ -116,4 +116,6 @@ Before the Cycle 3 Brief is approved, confirm that Starlette and uvicorn work wi
 
 ## Brief-Level Choices
 
-None yet. Each Cycle Brief settles its own implementation-level choices within ADR 0005 and the approved decisions in `ROADMAP.md`.
+Each Cycle Brief settles its own implementation-level choices within ADR 0005 and the approved decisions in `ROADMAP.md`.
+
+Cycle 1 settled its choices in its Brief, approved on 2026-11-02. The implemented result is recorded in `ARCHITECTURE.md` ([Player View](ARCHITECTURE.md#player-view)).

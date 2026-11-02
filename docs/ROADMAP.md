@@ -15,7 +15,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 4 | Showdown + settlement | Complete |
 | 5 | Complete continuous PokerHand/game loop | Complete |
 | 6 | Structured Hand History / Event Log | Complete |
-| 7 | Player view + local table | **Next** (planned; ready for Cycle 1 planning) |
+| 7 | Player view + local table | **In progress** (Cycle 1 of 4 complete) |
 | 8 | Private table online | Planned (Friends Alpha) |
 | 9 | Friends Alpha v0.1 | Planned (Friends Alpha) |
 | 10 | Bots + simulation / large-scale testing | Post-Alpha |

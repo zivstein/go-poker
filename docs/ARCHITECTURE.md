@@ -22,8 +22,8 @@ Paths are under `src/go_poker/`.
 | Area | Responsibility |
 | --- | --- |
 | `core/` | cards, deck, hand ranks, hand evaluation |
-| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, hand history, showdown, settlement |
-| `game/variants/` | poker-variant-specific rules |
+| `game/` | players, seats, table, lifecycle, hand setup, per-hand state, hand history, showdown, settlement, the visibility rule and log projection (`visibility.py`) |
+| `game/variants/` | poker-variant-specific rules and views |
 | `game/betting/` | betting-structure rules, currently No-Limit |
 
 `core/` never depends on `game/`.
@@ -557,7 +557,7 @@ A contested hand is ready by the showdown classification (see [Showdown](#showdo
 
 ### Showdown
 
-A showdown records which live seats reach showdown, of which kind, and the SHOW or MUCK decisions made so far. It records seats and decisions, not cards: hole cards, including mucked and unshown ones, stay in engine state, and who may see them is a matter for a future API projection. The contract is in [ADR 0003](adr/0003-interactive-showdown-and-muck.md).
+A showdown records which live seats reach showdown, of which kind, and the SHOW or MUCK decisions made so far. It records seats and decisions, not cards: hole cards, including mucked and unshown ones, stay in engine state, and who may see them is decided by the [Player View](#player-view). The contract is in [ADR 0003](adr/0003-interactive-showdown-and-muck.md).
 
 `Showdown(kind, order, decisions)` is immutable. `ShowdownKind` is `ALL_IN` or `INTERACTIVE`; `ShowdownAction` is `SHOW` or `MUCK`. `order` holds the live seats when the showdown starts and never changes; folded seats never appear and the winner of an uncontested hand has no showdown. `decisions[i]` is the decision of `order[i]`, and an `ALL_IN` showdown has none.
 
@@ -734,7 +734,63 @@ English only, derived from the category and tiebreakers, with no kickers. The wo
 
 `None` therefore means a valid hand with two hole cards and no board. `hand_strength` first rejects a seat that does not play in the hand with `SeatNotInHandError`; a seat whose hole cards are not yet dealt then raises `InvalidHoleCardCountError`.
 
-`hand_strength` is a read and not guarded against a settled hand. It consults neither the betting, the showdown, the street, the deck, nor the settlement, so it works for folded, mucked and settled seats. It never changes the hand, and a `BestHand` holds fresh tuples, never the hand's lists. Who may see a seat's strength is the concern of a future API projection.
+`hand_strength` is a read and not guarded against a settled hand. It consults neither the betting, the showdown, the street, the deck, nor the settlement, so it works for folded, mucked and settled seats. It never changes the hand, and a `BestHand` holds fresh tuples, never the hand's lists. Who may see a seat's strength is decided by the [Player View](#player-view).
+
+## Player View
+
+A player view is a read-only projection of the table and the current hand for one viewer. The contract is [ADR 0005](adr/0005-player-view-and-table-session-boundary.md) §2-5, which implements [ADR 0004](adr/0004-hand-history-and-event-contract.md) §9. This section describes only what is implemented.
+
+- `game/visibility.py` is variant-agnostic and never imports `game/variants/`. It owns the viewer rule, the visible seats, the projected log and settlement values, and `project_log`.
+- `game/variants/texas_holdem/view.py` owns the Hold'em view values and `holdem_view`.
+
+A view is derived on request and never stored. It changes nothing and no rule reads it. Every value is a frozen dataclass whose collections are tuples or frozensets, so no `Table`, `Seat`, `Player`, `PokerHand`, `HandPlayerState`, `Deck`, `BettingState`, `HandHistory`, `HandEvent` or `Settlement` is reachable from it. It reuses only safe leaf values: `Card`, the enums, `Action`, `Stakes`, `Pot`, `HandRank`, `BestHand`, `LegalActions` and the immutable `Showdown` record.
+
+### API
+
+`holdem_view(table, hand, viewer_seat) -> HoldemView` is the single public entry point. The caller passes the table's current hand; this is a precondition and is not checked. A past hand is never projected from a live `PokerHand`, whose players are shared with later hands.
+
+- `viewer_seat=None` is the public view. `hand=None` gives the seats only.
+- A viewer seat outside `1..max_seats` raises `InvalidSeatNumber`, checked first and also when there is no hand.
+- A hand whose betting is not initialized raises `BettingNotInitializedError`.
+- Both errors are raised before anything is projected.
+
+### Viewer identity
+
+`viewer_participant_seat(table, hand, viewer_seat)` returns the viewer seat only when the hand has a participant there and the table's current occupant of that seat has that participant's `player_id`, compared as ids and never as objects. An empty seat, a seated non-participant and a new occupant of a settled hand's seat get `None`, and so does `None`: they have the public facts only. `player_id` is used only for this check and appears in no view or projected event.
+
+### Visibility
+
+`visible_hole_card_seats(hand, participant_seat)` is the viewer's own participant seat plus `hand.showdown.shown`, the single source of shown cards: every live seat of an `ALL_IN` showdown and each SHOW of an `INTERACTIVE` one. A viewer always keeps its own cards, including after a fold or a muck. Folded, mucked and unshown cards, and the cards of a last contender who wins unshown, are never visible to another seat.
+
+| Value | Authoritative fact | Rule |
+| --- | --- | --- |
+| `ParticipantView.hole_cards` | `HandPlayerState.hole_cards` | the visible seats' cards (`()` for a visible seat not yet dealt, reachable only through low-level calls), otherwise `None`: absent, never masked |
+| `ParticipantView.strength` | `hand_strength(hand, seat)` | a visible, dealt seat; `None` preflop |
+| `ParticipantView.has_live_cards` | dealt, `folded`, `showdown.mucked` | dealt and neither folded nor mucked; the same for every viewer |
+| `HandView.turn` | `current_actor(hand)` | public; `BETTING` when `hand.betting.current_actor` is the seat, otherwise `SHOWDOWN` |
+| `HandView.legal_actions` | `legal_actions(hand)` | only the viewer who is the `BETTING` turn seat |
+| `HandView.showdown_actions` | `ShowdownAction` | `(SHOW, MUCK)` only for the viewer who is the `SHOWDOWN` turn seat |
+| `HandView.pots`, `stakes`, `street`, `board`, `showdown`, `settlement` | the hand | public, as derived or dealt |
+| `SeatView.occupant` | the table's seats, `Player.stack` and `Player.status` | `OccupantView(stack, status)` for every seat `1..max_seats`, `None` when empty; `status` is the projection-owned `OccupantStatus` (`READY` → `None`, `WAITING` → `WAITING_TO_JOIN`, `SITTING_OUT` → `SITTING_OUT`) through one exhaustive `match` ending in `assert_never`, so a new engine status fails the type checker until it is classified |
+
+### View values
+
+- `HoldemView(seats, hand)`; `SeatView(number, occupant)`; `OccupantView(stack, status)` with `status` an `OccupantStatus | None`: `None` for a ready player, otherwise `WAITING_TO_JOIN` or `SITTING_OUT`.
+- `HandView(number, stakes, street, board, participants, pots, turn, legal_actions, showdown_actions, showdown, settlement, log)`, with `participants` in hand order, button first.
+- `ParticipantView(seat, position, blind, in_front, folded, all_in, has_live_cards, hole_cards, strength)`. The button is the `Position.BTN` participant.
+- `Turn(seat, kind)` with `TurnKind` `BETTING` or `SHOWDOWN`; `None` once the hand is settled.
+
+Never projected: the burned cards and the deck, `player_id`, the raw engine `PlayerStatus`, `Table.button_seat_number`, `middle_pot`, `current_bet` and the other betting internals, and `total_contribution`.
+
+### Log classification
+
+`project_event` maps every `HandEvent` through one exhaustive `match` ending in `assert_never` to a projection-owned `*View` value built field by field, so a new event type fails the type checker until it is classified. `project_log` keeps one projected event per event, in order, and omits none. Shown cards are never added to the log.
+
+- Public as they are: `BlindsPosted` (its posts rebuilt), `BettingRoundStarted`, `ActionTaken`, `ChipsReturned`, `BettingRoundCompleted`, `ShowdownStarted`, `ShowdownDecided`.
+- `HandStarted`: the participants drop `player_id`.
+- `HoleCardsDealt`: `own_cards` holds only the viewer's own cards, or `None`.
+- `StreetDealt`: the board cards only; the burned cards are dropped.
+- `HandSettled`: carries the `SettlementView`, which `settlement_view` builds for the log and for `HandView.settlement` alike. It holds the pot awards and the showdown ranks of the shown seats only.
 
 ## Durable Invariants
 
