@@ -12,7 +12,9 @@ revision unchanged. The engine outcomes a resume expects (too few players, no `R
 application outcomes - waiting or an engine-generation reset - not command rejections. An unexpected or unmapped
 exception is a defect: it propagates without rollback, and the in-memory session must then be treated as failed. This
 is narrow atomicity, consistent with the engine's. Each successful shared change is a `Transition`: it increments the
-revision once and captures every member's view. Private intents change no revision.
+revision once and captures every member's view. Private intents change no revision. A pre-action selection is a private
+intent that every shared transition reconciles before its views are captured (`_reconcile_pre_actions`); a selection
+whose owner's turn has arrived is consumed there and executed as the next transition of the same command.
 """
 
 from collections.abc import Callable
@@ -20,17 +22,19 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from go_poker.app.identity import DisplayName, UserId
+from go_poker.app.pre_actions import PreAction, PreActionKind
 from go_poker.app.results import Accepted, CommandResult, Rejected, RejectionCode, Transition, TransitionCause
 from go_poker.app.views import SessionSeatView, TablePhase, TableSettings, TableView, YouView
 from go_poker.game.betting.actions import Action, ActionType
 from go_poker.game.betting.apply import IllegalActionError, NotPlayersTurnError
-from go_poker.game.betting.legal_actions import legal_actions
+from go_poker.game.betting.legal_actions import LegalActions, call_obligation, legal_actions
 from go_poker.game.game_lifecycle import ButtonChooser, GameNotStartedError
 from go_poker.game.player import Player, PlayerStatus
 from go_poker.game.poker_hand import HandAlreadySettledError
 from go_poker.game.position import InvalidPlayerCount
 from go_poker.game.seat import SeatOccupiedError
 from go_poker.game.showdown import NotShowdownTurnError, ShowdownAction
+from go_poker.game.street import Street
 from go_poker.game.table import InvalidSeatNumber, Table
 from go_poker.game.variants.texas_holdem.game import HoldemGame
 from go_poker.game.variants.texas_holdem.hand_flow import current_actor
@@ -39,17 +43,58 @@ from go_poker.game.variants.texas_holdem.view import holdem_view
 from go_poker.game.visibility import viewer_participant_seat
 
 
+@dataclass(frozen=True)
+class _Selection:
+    """A stored pre-action selection: the selected intent, and the hand and street it was selected in, so that a later
+    round or hand is recognized as ending it."""
+
+    intent: PreAction
+    hand_number: int
+    street: Street
+
+
 @dataclass
 class _Member:
     """A user who owns a seat, with the display name the table shows. The pending flags are private intents, and exist
     only for a participant of the hand in progress (a pending sit-out is cancelled by `sit_back`; a pending leave has no
-    cancel)."""
+    cancel). `pre_action` is the selected pre-action; `consumed` is a selection whose turn has arrived, held only until
+    the end of the command that is executing it."""
 
     user_id: UserId
     display_name: DisplayName
     seat: int
     pending_leave: bool = False
     pending_sit_out: bool = False
+    pre_action: _Selection | None = None
+    consumed: PreAction | None = None
+
+
+def _pre_action_options(amount_owed: int) -> tuple[PreAction, ...]:
+    """The pre-actions offered at an amount owed (read from the engine's `call_obligation`)."""
+    if amount_owed == 0:
+        return (PreAction(PreActionKind.CHECK), PreAction(PreActionKind.CHECK_OR_FOLD))
+    return (PreAction(PreActionKind.FOLD), PreAction(PreActionKind.CALL_CURRENT, amount_owed))
+
+
+def _presented(intent: PreAction, amount_owed: int) -> PreAction:
+    """How a stored intent presents: a `CHECK_OR_FOLD` presents as `FOLD` once chips are owed."""
+    if intent.kind is PreActionKind.CHECK_OR_FOLD and amount_owed > 0:
+        return PreAction(PreActionKind.FOLD)
+    return intent
+
+
+def _pre_action_to_action(pre_action: PreAction, legal: LegalActions) -> Action | None:
+    """The engine action a pre-action becomes when its turn arrives, or None when it no longer applies and is dropped.
+    The engine's own `legal_actions` decide; the engine still judges the submitted action."""
+    match pre_action.kind:
+        case PreActionKind.CHECK:
+            return Action(ActionType.CHECK) if legal.can_check else None
+        case PreActionKind.CHECK_OR_FOLD:
+            return Action(ActionType.CHECK if legal.can_check else ActionType.FOLD)
+        case PreActionKind.FOLD:
+            return Action(ActionType.FOLD)
+        case PreActionKind.CALL_CURRENT:
+            return Action(ActionType.CALL) if legal.can_call and legal.amount_owed == pre_action.amount else None
 
 
 def _rejected(code: RejectionCode, message: str) -> Rejected:
@@ -192,6 +237,7 @@ class TableSession:
         if self._in_hand_in_progress(member):
             member.pending_leave = True
             member.pending_sit_out = False  # the leave subsumes it
+            member.pre_action = None
         else:
             self._remove_member(member)
             out.append(self._record(TransitionCause.COMMAND))
@@ -254,6 +300,35 @@ class TableSession:
         out = [self._record(TransitionCause.COMMAND)]
         return self._finish(user_id, out)
 
+    def select_pre_action(self, user_id: UserId, expected_revision: int, pre_action: PreAction) -> CommandResult:
+        """Select a pre-action, replacing any selection. A private intent: no revision, no transition. Only a currently
+        offered option can be selected; selecting what is already presented is `NO_CHANGE`."""
+        if (rejection := self._check(user_id, expected_revision)) is not None:
+            return rejection
+        member = self._members[user_id]
+        if member.pending_leave:
+            return _rejected(RejectionCode.LEAVE_PENDING, "A leave is pending")
+        hand = self._game.hand
+        if pre_action not in self._pre_action_options_for(member):
+            return _rejected(RejectionCode.PRE_ACTION_UNAVAILABLE, "That pre-action is not available")
+        if pre_action == self._presented_pre_action(member):
+            return _rejected(RejectionCode.NO_CHANGE, "That pre-action is already selected")
+        assert hand is not None and hand.betting is not None  # options are offered only in an open betting round
+        member.pre_action = _Selection(pre_action, hand.number, hand.betting.street)
+        return Accepted((), self._view(member))
+
+    def clear_pre_action(self, user_id: UserId, expected_revision: int) -> CommandResult:
+        """Clear the selected pre-action. A private intent: no revision, no transition."""
+        if (rejection := self._check(user_id, expected_revision)) is not None:
+            return rejection
+        member = self._members[user_id]
+        if member.pending_leave:
+            return _rejected(RejectionCode.LEAVE_PENDING, "A leave is pending")
+        if member.pre_action is None:
+            return _rejected(RejectionCode.NO_CHANGE, "No pre-action is selected")
+        member.pre_action = None
+        return Accepted((), self._view(member))
+
     def advance_hand(self, expected_revision: int) -> CommandResult:
         """The hand boundary, accepted only when the hand is complete. The caller decides when (there are no timers).
 
@@ -305,6 +380,34 @@ class TableSession:
         if hand is None or hand.settlement is not None:
             return False
         return viewer_participant_seat(self._table, hand, member.seat) is not None
+
+    def _amount_owed(self, member: _Member) -> int | None:
+        """What the member owes in the open betting round, or None when they have no obligation: no hand in progress, no
+        open round, not a participant, folded or all-in. Their own turn included. Read from the engine."""
+        hand = self._game.hand
+        if hand is None or hand.settlement is not None or hand.betting is None:
+            return None
+        if viewer_participant_seat(self._table, hand, member.seat) is None:
+            return None
+        obligation = call_obligation(hand, member.seat)
+        return None if obligation is None else obligation.amount_owed
+
+    def _pre_action_options_for(self, member: _Member) -> tuple[PreAction, ...]:
+        """The pre-actions offered to the member now: none on their own turn or with a pending leave."""
+        amount_owed = self._amount_owed(member)
+        if amount_owed is None or member.pending_leave or self._is_betting_actor(member):
+            return ()
+        return _pre_action_options(amount_owed)
+
+    def _is_betting_actor(self, member: _Member) -> bool:
+        hand = self._game.hand
+        return hand is not None and hand.betting is not None and hand.betting.current_actor == member.seat
+
+    def _presented_pre_action(self, member: _Member) -> PreAction | None:
+        amount_owed = self._amount_owed(member)
+        if member.pre_action is None or amount_owed is None:
+            return None
+        return _presented(member.pre_action.intent, amount_owed)
 
     def _seat_new_member(self, user_id: UserId, display_name: DisplayName, seat: int) -> None:
         self._table.sit_in(Player(user_id.value, self._settings.buy_in), seat)
@@ -362,10 +465,36 @@ class TableSession:
     # --- Transitions and views ---
 
     def _record(self, cause: TransitionCause) -> Transition:
-        """Close a shared transition: one revision increment and every member's view, captured right after it."""
+        """Close a shared transition: one revision increment and every member's view, captured right after it, with the
+        private pre-action selections reconciled to the new state first."""
         self._revision += 1
+        self._reconcile_pre_actions()
         views = {user_id: self._view(member) for user_id, member in self._members.items()}
         return Transition(self._revision, cause, MappingProxyType(views))
+
+    def _reconcile_pre_actions(self) -> None:
+        """Bring every pre-action selection up to date with the state the transition has just produced. A selection is
+        cleared when its round or hand has ended, its owner can no longer act, a leave is pending, or its presentation
+        is no longer offered at what is owed. One that survives to its owner's turn is consumed: it leaves the visible
+        selection and is held to be executed next."""
+        hand = self._game.hand
+        for member in self._members.values():
+            selection = member.pre_action
+            if selection is None:
+                continue
+            amount_owed = self._amount_owed(member)
+            member.pre_action = None  # kept below only while it still stands
+            if amount_owed is None or member.pending_leave:
+                continue
+            assert hand is not None and hand.betting is not None  # an obligation exists only in an open betting round
+            if (hand.number, hand.betting.street) != (selection.hand_number, selection.street):
+                continue
+            if _presented(selection.intent, amount_owed) not in _pre_action_options(amount_owed):
+                continue
+            if hand.betting.current_actor == member.seat:
+                member.consumed = selection.intent
+            else:
+                member.pre_action = selection
 
     def _finish(self, requester: UserId | None, out: list[Transition], *, resume: bool = False) -> Accepted:
         """Complete an accepted command: a resume attempt while waiting, then the leaving players' automatic actions,
@@ -377,20 +506,35 @@ class TableSession:
         return Accepted(tuple(out), None if member is None else self._view(member))
 
     def _auto_actions(self, out: list[Transition]) -> None:
-        """While the seat to act belongs to a member with a pending leave, act for them: CHECK if legal, otherwise
-        FOLD, or MUCK at a showdown. Each action is submitted to the engine like any other and is its own transition."""
+        """While the seat to act belongs to a member who has a pending leave or a consumed pre-action, act for them. A
+        leaving player: CHECK if legal, otherwise FOLD, or MUCK at a showdown. A pre-action: the action it translates to
+        under the engine's `legal_actions`; one that no longer applies is dropped and its owner keeps the turn. Each
+        action is submitted to the engine like any other and is its own transition, which reconciles the others'
+        pre-actions and so may hand the turn to the next one."""
         while (hand := self._game.hand) is not None:
             seat = current_actor(hand)
-            leaver = next((m for m in self._members.values() if m.seat == seat and m.pending_leave), None)
-            if leaver is None:
-                return
+            member = next((m for m in self._members.values() if m.seat == seat), None)
+            if member is None:
+                break
             assert hand.betting is not None
-            if hand.betting.current_actor == leaver.seat:
-                kind = ActionType.CHECK if legal_actions(hand).can_check else ActionType.FOLD
-                self._game.act(leaver.seat, Action(kind))
+            if member.pending_leave:
+                if hand.betting.current_actor == member.seat:
+                    kind = ActionType.CHECK if legal_actions(hand).can_check else ActionType.FOLD
+                    self._game.act(member.seat, Action(kind))
+                else:
+                    self._game.act(member.seat, ShowdownAction.MUCK)
+                out.append(self._record(TransitionCause.LEAVE_AUTO_ACTION))
+            elif member.consumed is not None and hand.betting.current_actor == member.seat:
+                pre_action, member.consumed = member.consumed, None
+                action = _pre_action_to_action(pre_action, legal_actions(hand))
+                if action is None:  # reconciliation already clears a selection that would be dropped; contract only
+                    break
+                self._game.act(member.seat, action)
+                out.append(self._record(TransitionCause.PRE_ACTION))
             else:
-                self._game.act(leaver.seat, ShowdownAction.MUCK)
-            out.append(self._record(TransitionCause.LEAVE_AUTO_ACTION))
+                break
+        for member in self._members.values():
+            member.consumed = None  # a consumed pre-action never outlives the command that executes it
 
     def _view(self, member: _Member) -> TableView:
         by_seat = {m.seat: m for m in self._members.values()}
@@ -415,5 +559,7 @@ class TableSession:
                 is_host=member.user_id == self._host,
                 pending_leave=member.pending_leave,
                 pending_sit_out=member.pending_sit_out,
+                pre_action=self._presented_pre_action(member),
+                pre_action_options=self._pre_action_options_for(member),
             ),
         )

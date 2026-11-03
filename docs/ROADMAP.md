@@ -15,8 +15,8 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 4 | Showdown + settlement | Complete |
 | 5 | Complete continuous PokerHand/game loop | Complete |
 | 6 | Structured Hand History / Event Log | Complete |
-| 7 | Player view + local table | **In progress** (Cycle 2 of 3 complete) |
-| 8 | Multi-Agent Engineering Organization + Product Architecture | Planned |
+| 7 | Player view + local table | Complete |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | **Next** (planned; not started) |
 | 10 | Bots + simulation / large-scale testing | Post-Alpha (provisional) |
 | 11 | Omaha + Pot-Limit / PLO | Post-Alpha (provisional) |
 | 12 | Pineapple | Post-Alpha (provisional) |
@@ -29,7 +29,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 19 | AI analysis/coaching/player assistant | Post-Alpha (provisional) |
 | 20 | Further variants, tournaments, and game modes | Post-Alpha (provisional) |
 
-Milestones 7 and 8 are the committed next steps (see [Reach a Friends Alpha](#reach-a-friends-alpha)). The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 planning replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
+Milestone 7 is complete (2026-11-03). Milestone 8 is the committed next step, and it has not been planned in detail (see [Reach a Friends Alpha](#reach-a-friends-alpha)). The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 planning replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
 
 ## Product Direction
 
@@ -179,7 +179,7 @@ The boundaries between the engine, the application layer, and the server are in 
 | 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; betting pre-actions | Scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see |
 | 8 | Multi-Agent Engineering Organization + Product Architecture | The multi-team engineering organization (see `docs/company/ORGANIZATION_ROADMAP.md`); the API architecture; product and UX design; replanning the road to the Friends Alpha | Planned when Milestone 7 is complete |
 
-The Milestone 7 Cycle split is in `CURRENT_CYCLE.md`. Milestone 8 is split into Cycles when it is planned.
+Milestone 7's Cycle split and decisions are recorded in `CURRENT_CYCLE.md`. Milestone 8 is split into Cycles when it is planned.
 
 #### Road to Friends Alpha after M8
 

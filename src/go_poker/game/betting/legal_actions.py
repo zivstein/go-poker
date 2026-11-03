@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
 from go_poker.game.betting.no_limit import has_raise_rights, max_target, min_bet_target, min_raise_target
-from go_poker.game.betting.rounds import call_target, can_opponent_respond
+from go_poker.game.betting.rounds import call_target, can_opponent_respond, is_eligible
 from go_poker.game.betting.state import BettingNotInitializedError
+from go_poker.game.hand_state import HandPlayerState
 from go_poker.game.poker_hand import PokerHand
 
 
@@ -39,6 +40,17 @@ class LegalActions:
     short_all_in_target: int | None
 
 
+@dataclass(frozen=True)
+class CallObligation:
+    """What a seat owes to stay in the current betting round, with the same meanings as the matching `LegalActions`
+    fields: `amount_owed` (0 when nothing is owed), `call_amount` (what a CALL commits, 0 when nothing is owed) and
+    `call_is_all_in`."""
+
+    amount_owed: int
+    call_amount: int
+    call_is_all_in: bool
+
+
 NOTHING_LEGAL = LegalActions(
     can_fold=False,
     can_check=False,
@@ -52,6 +64,33 @@ NOTHING_LEGAL = LegalActions(
     max_target=None,
     short_all_in_target=None,
 )
+
+
+def _obligation(hand: PokerHand, hand_player: HandPlayerState, current_bet: int) -> CallObligation:
+    """The single calculation of what a player owes: the call target less their street contribution, and what a call
+    commits (the whole stack when that is less, a short call)."""
+    stack = hand_player.player.stack
+    amount_owed = max(0, call_target(hand.players, hand_player, current_bet) - hand_player.street_contribution)
+    call_amount = min(amount_owed, stack)
+    return CallObligation(amount_owed, call_amount, amount_owed > 0 and call_amount == stack)
+
+
+def call_obligation(hand: PokerHand, seat: int) -> CallObligation | None:
+    """What the participant at `seat` owes in the open betting round, the current actor or not; a derived read.
+
+    None when no betting round is open (nobody is to act), or when the seat has no player in this hand, has folded or
+    is all-in. Read-only and unguarded, like `legal_actions`, with which it shares one calculation: for the current
+    actor the two agree.
+    """
+    betting = hand.betting
+    if betting is None:
+        raise BettingNotInitializedError("Betting has not been initialized for this hand")
+    if betting.current_actor is None:
+        return None
+    hand_player = next((candidate for candidate in hand.players if candidate.seat_number == seat), None)
+    if hand_player is None or not is_eligible(hand_player):
+        return None
+    return _obligation(hand, hand_player, betting.current_bet)
 
 
 def legal_actions(hand: PokerHand) -> LegalActions:
@@ -70,10 +109,7 @@ def legal_actions(hand: PokerHand) -> LegalActions:
         return NOTHING_LEGAL
 
     actor = next(hand_player for hand_player in hand.players if hand_player.seat_number == betting.current_actor)
-    stack = actor.player.stack
-    amount_owed = max(0, call_target(hand.players, actor, betting.current_bet) - actor.street_contribution)
-    can_call = amount_owed > 0
-    call_amount = min(amount_owed, stack) if can_call else 0
+    obligation = _obligation(hand, actor, betting.current_bet)
     opponent_can_respond = can_opponent_respond(hand.players, actor)
 
     is_unopened = betting.current_bet == 0
@@ -86,11 +122,11 @@ def legal_actions(hand: PokerHand) -> LegalActions:
 
     return LegalActions(
         can_fold=True,
-        can_check=amount_owed == 0,
-        can_call=can_call,
-        amount_owed=amount_owed,
-        call_amount=call_amount,
-        call_is_all_in=can_call and call_amount == stack,
+        can_check=obligation.amount_owed == 0,
+        can_call=obligation.amount_owed > 0,
+        amount_owed=obligation.amount_owed,
+        call_amount=obligation.call_amount,
+        call_is_all_in=obligation.call_is_all_in,
         can_bet=can_aggress and is_unopened,
         can_raise=can_aggress and not is_unopened,
         min_full_target=min_full_target if can_aggress else None,

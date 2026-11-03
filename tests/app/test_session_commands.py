@@ -87,7 +87,9 @@ def test_create_seats_the_host_as_a_waiting_player_at_revision_one(make_session:
     assert (session.revision, view.revision, session.phase) == (1, 1, TablePhase.NOT_STARTED)
     assert (view.table_id, view.code, view.phase) == ("table-1", "ABCD", TablePhase.NOT_STARTED)
     assert view.settings == TableSettings(Stakes(5, 10), 1000, 6)
-    assert view.you == YouView(seat=1, is_host=True, pending_leave=False, pending_sit_out=False)
+    assert view.you == YouView(
+        seat=1, is_host=True, pending_leave=False, pending_sit_out=False, pre_action=None, pre_action_options=()
+    )
     assert occupant(view, 1) == OccupantView(stack=1000, status=OccupantStatus.WAITING_TO_JOIN)
     assert view.game.hand is None
     assert [(s.number, s.display_name, s.is_host) for s in view.seats] == [(1, DisplayName("Alice"), True)] + [
@@ -133,7 +135,9 @@ def test_join_seats_the_user_as_waiting_with_the_buy_in_in_one_transition(make_s
     assert set(transition.views) == {uid("alice"), uid("bob")}
     assert result.view == transition.views[uid("bob")] == session.view_for(uid("bob"))
     assert result.view is not None
-    assert result.view.you == YouView(seat=2, is_host=False, pending_leave=False, pending_sit_out=False)
+    assert result.view.you == YouView(
+        seat=2, is_host=False, pending_leave=False, pending_sit_out=False, pre_action=None, pre_action_options=()
+    )
     assert occupant(result.view, 2) == OccupantView(1000, OccupantStatus.WAITING_TO_JOIN)
     assert transition.views[uid("alice")].seats[1].display_name == DisplayName("Bob")
     with pytest.raises(TypeError):

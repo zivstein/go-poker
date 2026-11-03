@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from go_poker.app.identity import DisplayName
+from go_poker.app.pre_actions import PreAction
 from go_poker.game.betting.stakes import Stakes
 from go_poker.game.variants.texas_holdem.view import HoldemView
 
@@ -42,12 +43,20 @@ class SessionSeatView:
 
 @dataclass(frozen=True)
 class YouView:
-    """The viewer's own seat, host flag and pending intents. The intents are private to the viewer."""
+    """The viewer's own seat, host flag and private intents. The intents are private to the viewer.
+
+    `pre_action` is the viewer's selected pre-action as presented (a selected `CHECK_OR_FOLD` presents as `FOLD` while
+    chips are owed), None when nothing is selected. `pre_action_options` are the pre-actions the viewer may select now,
+    empty when none is available (not a participant, their own turn, folded, all-in, no open betting round, a pending
+    leave).
+    """
 
     seat: int
     is_host: bool
     pending_leave: bool
     pending_sit_out: bool
+    pre_action: PreAction | None
+    pre_action_options: tuple[PreAction, ...]
 
 
 @dataclass(frozen=True)

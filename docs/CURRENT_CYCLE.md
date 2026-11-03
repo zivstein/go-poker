@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 7 — Player view + local table** is in progress. Cycle 1 (player view projection) and Cycle 2 (TableSession Core) are complete. Cycle 3 (Pre-actions + Call Obligation) is next and needs its Brief. Milestone 7 completes after Cycle 3.
+**Milestone 7 — Player view + local table** is complete. All three Cycles are complete. Milestone 8 (Multi-Agent Engineering Organization + Product Architecture) is next. It has not been planned in detail or started (see `ROADMAP.md`).
 
 Milestone 6 is complete. Its behavior is recorded in `ARCHITECTURE.md` and its history in Git.
 
@@ -23,7 +23,8 @@ They build on earlier contracts:
 - ADR 0005 was accepted on 2026-11-02, with the milestone's original scope and decisions.
 - On 2026-11-03 the milestone was re-scoped to end after the application layer, the Cycle split was revised, ADR 0006 was accepted, and the Cycle 2 and Cycle 3 decisions were approved.
 - No planning-level question remains open.
-- Cycles 1 and 2 are complete. Cycle 3 still needs its own approved Brief, based on the decisions below.
+- Cycle 3 was executed on 2026-11-03 from the approved decisions below, without a separate Brief, as the user directed.
+- All three Cycles are complete.
 
 ## Goal
 
@@ -62,7 +63,7 @@ Out of scope:
 | --- | --- | --- | --- |
 | Cycle 1 | Player view projection | Engine: `game/visibility.py`, the Hold'em view layer | Complete; its behavior is in `ARCHITECTURE.md` ([Player View](ARCHITECTURE.md#player-view)) |
 | Cycle 2 | TableSession Core | `src/go_poker/app/`, the layering test | Complete; its behavior is in `ARCHITECTURE.md` ([Application Layer](ARCHITECTURE.md#application-layer)) |
-| Cycle 3 | Pre-actions + Call Obligation | `game/betting/legal_actions.py` (`call_obligation`), `src/go_poker/app/` | Not started; Brief to be drafted from the decisions below |
+| Cycle 3 | Pre-actions + Call Obligation | `game/betting/legal_actions.py` (`call_obligation`), `src/go_poker/app/` | Complete; its behavior is in `ARCHITECTURE.md` ([Actions and Legal Actions](ARCHITECTURE.md#actions-and-legal-actions), [Pre-actions](ARCHITECTURE.md#pre-actions)) |
 
 Dependencies:
 
@@ -72,7 +73,7 @@ Dependencies:
 Checkpoints:
 
 - **Cycle 1:** per-seat views of the same hand differ exactly as ADR 0004 §9 requires.
-- **Milestone 7 (after Cycle 3):** scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see.
+- **Milestone 7 (after Cycle 3):** scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see. Met on 2026-11-03.
 
 Sizing:
 
@@ -179,7 +180,14 @@ While waiting, every accepted join, sit-back or leave is followed, in the same c
 
 ## Cycle 3 — Pre-actions + Call Obligation
 
-Approved decisions on 2026-11-03; its Brief is drafted after Cycle 2.
+Approved decisions on 2026-11-03. Complete; the implemented behavior is recorded in `ARCHITECTURE.md` ([Actions and Legal Actions](ARCHITECTURE.md#actions-and-legal-actions), [Pre-actions](ARCHITECTURE.md#pre-actions)), which is authoritative where it is more precise than these decisions. The Lead settled these implementation-level choices within them:
+
+- the values `PreActionKind` and `PreAction(kind, amount)` (`amount` only for `CALL_CURRENT`) in `app/pre_actions.py`;
+- the private commands `select_pre_action` and `clear_pre_action`, checked in the order revision, membership, `LEAVE_PENDING`, `PRE_ACTION_UNAVAILABLE`, then `NO_CHANGE`;
+- `YouView.pre_action` (the effective presentation) and `YouView.pre_action_options`;
+- `TransitionCause.PRE_ACTION` for an executed pre-action.
+
+Reconciliation consumes a selection only while it is still offered, so in play a consumed selection always applies. The drop rule below is kept as contract behavior.
 
 - **Engine read.** `call_obligation(hand, seat) -> CallObligation | None` in `game/betting/legal_actions.py`, with `amount_owed`, `call_amount` and `call_is_all_in`. It is `None` when no betting round is open, or when the seat is not a participant, has folded, or is all-in. It is read-only and unguarded, raises `BettingNotInitializedError` like `legal_actions`, and shares one calculation with `legal_actions`; for the current actor, the two agree.
 - **Pre-actions** are private intents that exist only while it is not the player's turn: while a hand is in progress, a betting round is open, the user is that seat's own participant and not the current actor, `call_obligation` is not `None`, and no leave is pending.
@@ -201,4 +209,4 @@ Each Cycle Brief settles its own implementation-level choices within ADR 0005, A
 
 Cycle 1 settled its choices in its Brief, approved on 2026-11-02. The implemented result is recorded in `ARCHITECTURE.md` ([Player View](ARCHITECTURE.md#player-view)).
 
-Cycle 2's choices are recorded above; the implemented result is in `ARCHITECTURE.md` ([Application Layer](ARCHITECTURE.md#application-layer)).
+Cycle 2's and Cycle 3's choices are recorded above; the implemented result is in `ARCHITECTURE.md` ([Application Layer](ARCHITECTURE.md#application-layer)).

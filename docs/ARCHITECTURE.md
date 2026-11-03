@@ -344,6 +344,8 @@ There is no separate `ALL_IN` action.
 
 It exposes enough information for a caller to present valid choices without recreating betting rules.
 
+`call_obligation(hand, seat)` is the same kind of derived read for any participant seat, the current actor or not. It returns a `CallObligation` (`amount_owed`, `call_amount`, `call_is_all_in`, with the meanings of the matching `LegalActions` fields), or `None` when no betting round is open or when the seat is not a participant of the hand, has folded or is all-in. It raises `BettingNotInitializedError` like `legal_actions`, is read-only, and is unguarded. It shares one calculation with `legal_actions`, so for the current actor the two agree. A caller that has to know what a seat owes while waiting for its turn, such as the application's pre-actions, reads it instead of recreating the call rule.
+
 Rejected actions are atomic.
 
 `apply_action` applies one action and collects the round it completes; it never deals, starts the next round or a showdown, or settles. Those steps are the caller's with the low-level operations, and `hand_flow` performs them (see [Hand Flow](#hand-flow)).
@@ -803,6 +805,7 @@ Modules:
 
 - `identity.py`: the identity facts a table needs, and no account entity. The caller supplies a `UserId` (an opaque non-empty string; the engine's `Player.player_id` is its `value`) and a `DisplayName` (the table-visible name: NFC, trimmed, 1-20 characters, no character of Unicode general category C (control, format such as zero-width and bidi-override characters, surrogate, private-use, unassigned); table display policy only). `DisplayName` compares and hashes by its normalized `value`, so `Bob` and `bob` are different values, and its `conflict_key` (the NFC normalization of the casefolded value) is what a table compares among its current members to keep their names distinct. Invalid input raises `ValueError`. Accounts, usernames, authentication, minting ids and persistence are outside this layer.
 - `views.py`: `TableView`, `SessionSeatView`, `YouView`, `TablePhase` and `TableSettings` (stakes, a positive buy-in, max seats).
+- `pre_actions.py`: the pre-action values `PreActionKind` and `PreAction`.
 - `results.py`: `Accepted`, `Rejected`, `RejectionCode`, `Transition` and `TransitionCause`.
 - `session.py`: `TableSession`.
 
@@ -820,15 +823,16 @@ Every state-changing command takes `expected_revision`; commands return `Accepte
 
 - `join(user_id, expected_revision, display_name, seat)`: joins and sits as a `WAITING` player with the buy-in. The first member of an empty table becomes host.
 - `leave`, `sit_out`, `sit_back`, `start_game` (host only, once), `act(user_id, expected_revision, action)` with an `Action` or `ShowdownAction` passed to the engine unchanged.
+- `select_pre_action(user_id, expected_revision, pre_action)` and `clear_pre_action(user_id, expected_revision)`: private intents (see [Pre-actions](#pre-actions)).
 - `advance_hand(expected_revision)`: the hand boundary, accepted only in `HAND_COMPLETE` (`NOT_AT_HAND_BOUNDARY` otherwise). The caller decides when; there are no timers.
 
-`RejectionCode`: `STALE_REVISION`, `NOT_A_MEMBER`, `ALREADY_MEMBER`, `LEFT_TABLE`, `DISPLAY_NAME_TAKEN`, `SEAT_TAKEN`, `INVALID_SEAT`, `NOT_HOST`, `GAME_ALREADY_STARTED`, `NOT_ENOUGH_PLAYERS`, `NO_HAND_IN_PROGRESS`, `NOT_YOUR_TURN`, `ILLEGAL_ACTION`, `LEAVE_PENDING`, `NO_CHANGE`, `NOT_AT_HAND_BOUNDARY`. One function maps engine errors to them (`NotPlayersTurnError`, `NotShowdownTurnError` and `ShowdownNotStartedError` to `NOT_YOUR_TURN`; `IllegalActionError`; `HandAlreadySettledError` and `GameNotStartedError` to `NO_HAND_IN_PROGRESS`; `SeatOccupiedError`; `InvalidSeatNumber`; `InvalidPlayerCount` from `start` to `NOT_ENOUGH_PLAYERS`). An unmapped exception is a defect and propagates without rollback; the in-memory `TableSession` must then be treated as failed. This is narrow atomicity, as in the engine ([Hand Flow](#hand-flow), [Hold'em Game](#holdem-game)).
+`RejectionCode`: `STALE_REVISION`, `NOT_A_MEMBER`, `ALREADY_MEMBER`, `LEFT_TABLE`, `DISPLAY_NAME_TAKEN`, `SEAT_TAKEN`, `INVALID_SEAT`, `NOT_HOST`, `GAME_ALREADY_STARTED`, `NOT_ENOUGH_PLAYERS`, `NO_HAND_IN_PROGRESS`, `NOT_YOUR_TURN`, `ILLEGAL_ACTION`, `LEAVE_PENDING`, `NO_CHANGE`, `NOT_AT_HAND_BOUNDARY`, `PRE_ACTION_UNAVAILABLE`. One function maps engine errors to them (`NotPlayersTurnError`, `NotShowdownTurnError` and `ShowdownNotStartedError` to `NOT_YOUR_TURN`; `IllegalActionError`; `HandAlreadySettledError` and `GameNotStartedError` to `NO_HAND_IN_PROGRESS`; `SeatOccupiedError`; `InvalidSeatNumber`; `InvalidPlayerCount` from `start` to `NOT_ENOUGH_PLAYERS`). An unmapped exception is a defect and propagates without rollback; the in-memory `TableSession` must then be treated as failed. This is narrow atomicity, as in the engine ([Hand Flow](#hand-flow), [Hold'em Game](#holdem-game)).
 
 `Accepted(transitions, view)`: `transitions` are the command's shared transitions in order (none for a private-only command), and `view` is the requester's view after the whole command, `None` for `advance_hand` and when the requester has just left.
 
 ### Revision and transitions
 
-`revision` increments exactly once per shared transition, never for a rejection, a read or a private intent, and never resets. A `Transition(revision, cause, views)` holds the revision it produced, a cause (`COMMAND`, `LEAVE_AUTO_ACTION`, `HAND_BOUNDARY` or `RESUME`) and an immutable mapping of every current member's `UserId` to their full `TableView`, captured right after it. Changes to private intents caused by a shared transition are made before its views are captured.
+`revision` increments exactly once per shared transition, never for a rejection, a read or a private intent, and never resets. A `Transition(revision, cause, views)` holds the revision it produced, a cause (`COMMAND`, `LEAVE_AUTO_ACTION`, `PRE_ACTION`, `HAND_BOUNDARY` or `RESUME`) and an immutable mapping of every current member's `UserId` to their full `TableView`, captured right after it. Changes to private intents caused by a shared transition are made before its views are captured.
 
 ### Intents, leaving and the host
 
@@ -838,6 +842,20 @@ After any transition that leaves a hand in progress, while the engine's `current
 
 An applied leave stands the user up, removes the member, records the `UserId` as departed (a later `join` is `LEFT_TABLE`), frees the display name, and passes the host role to the earliest-joined remaining member (nobody on an empty table; the next joiner becomes host). The host change is part of that transition.
 
+### Pre-actions
+
+A pre-action is a private intent: a member's selection of what to do when the turn arrives. `PreAction(kind, amount)` is a frozen value; `kind` is `CHECK`, `CHECK_OR_FOLD`, `FOLD` or `CALL_CURRENT`, and `amount` is a positive integer for `CALL_CURRENT` and `None` otherwise (anything else raises `ValueError`). Every input to the rules below comes from the engine (`call_obligation`, `betting.current_actor`, `viewer_participant_seat`); the application re-derives no betting rule.
+
+**Offered options.** A member is offered options only while a hand is in progress (not settled), a betting round is open, their seat is a participant and not the current betting actor, `call_obligation(hand, seat)` is not `None`, and no leave is pending. With nothing owed the options are `(CHECK, CHECK_OR_FOLD)`; with chips owed, `(FOLD, CALL_CURRENT(amount_owed))`. `YouView.pre_action_options` holds them (empty when none is offered) and `YouView.pre_action` the selection as presented.
+
+**Commands.** `select_pre_action` and `clear_pre_action` never change the revision and return `Accepted(transitions=(), view=<the owner's updated view>)`; other members' views are unaffected. Check order: the revision (`STALE_REVISION`), membership (`NOT_A_MEMBER`), a pending leave (`LEAVE_PENDING`), then availability. A `pre_action` that is not among the offered options is `PRE_ACTION_UNAVAILABLE` (no hand, settled, showdown, not a participant, folded, all-in, the member's own turn, a `CALL_CURRENT` for another amount, an option of the other row). Selecting what is already presented is `NO_CHANGE`; otherwise a selection replaces the previous one. Clearing with no selection is `NO_CHANGE`. A rejection changes nothing.
+
+**Stored state and presentation.** Each member stores the selected intent and the hand number and street it was selected in. A stored `CHECK_OR_FOLD` presents as `FOLD` while chips are owed; the stored intent stays `CHECK_OR_FOLD`.
+
+**Reconciliation.** Every shared transition reconciles the selections before its views are captured (inside `_record`, whatever the cause). A selection is cleared when its hand or street differs from the one it was selected in, when the hand is settled, when its owner has no obligation (folded, all-in, no open round, not a participant) or a leave is pending, or when its presented form is no longer among the options offered at the current obligation (`CHECK` when chips are owed, `CALL_CURRENT(b)` when the amount owed is no longer `b`, `FOLD` when nothing is owed). A selection that survives to its owner becoming the current betting actor is consumed: it leaves the visible selection, so that transition's views show the actor their full legal actions, and it is held for execution. Requesting a leave clears the selection as part of that private command.
+
+**Execution.** In the automatic-action loop, after each accepted command and after each transition inside it, while the current actor is a member with a consumed pre-action (or a pending leave), the session translates it with the engine's `legal_actions`: `CHECK` checks if it can (else is dropped), `CHECK_OR_FOLD` checks if it can (else folds), `FOLD` folds, `CALL_CURRENT(b)` calls if call is legal and the amount owed is `b` (else is dropped). The action is submitted through the engine like any other, and it is its own `PRE_ACTION` transition with its own revision and its own reconciliation, so a fold can hand the turn to the next pre-action and a cascade chains. Reconciliation means a consumed selection always applies; the drop rule (no transition, and its owner keeps the turn) is kept as contract behavior. A consumed selection never outlives the command that consumed it. An engine error from this submission is a defect and propagates.
+
 ### Hand boundary, waiting and reset
 
 `advance_hand` is one `HAND_BOUNDARY` transition, in this order: pending leaves are applied; pending sit-outs are applied; the next hand starts. `InvalidPlayerCount` makes the table wait. `GameNotStartedError` (no `READY` player with chips remains) replaces the engine generation: a fresh `Table` and, for each member in the same seat, a `Player` with the same `player_id`, the stack of the old engine, and status `SITTING_OUT` if they were sitting out, otherwise `WAITING`; a fresh `HoldemGame` is swapped in only once everything is built, then started with `choose_button`. The table id and code, members, seats, display names, host and revision persist; hand numbers restart. A fresh generation that has not started is started, never advanced.
@@ -846,7 +864,7 @@ While `WAITING_FOR_PLAYERS`, an accepted `join`, `sit_back` or `leave` is follow
 
 ### TableView
 
-`TableView(revision, table_id, code, settings, phase, seats, game, you)`: `seats` is one `SessionSeatView(number, display_name, is_host)` per seat; `game` is `holdem_view(table, hand, member_seat)` for the viewer's own seat; `you` is `YouView(seat, is_host, pending_leave, pending_sit_out)`, the viewer's own private intents. No view carries a `UserId`, and two views for the same viewer at the same revision differ only in that viewer's private intents.
+`TableView(revision, table_id, code, settings, phase, seats, game, you)`: `seats` is one `SessionSeatView(number, display_name, is_host)` per seat; `game` is `holdem_view(table, hand, member_seat)` for the viewer's own seat; `you` is `YouView(seat, is_host, pending_leave, pending_sit_out, pre_action, pre_action_options)`, the viewer's own private intents and pre-action options. No view carries a `UserId`, and two views for the same viewer at the same revision differ only in that viewer's private intents.
 
 ## Durable Invariants
 

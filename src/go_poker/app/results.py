@@ -29,6 +29,7 @@ class RejectionCode(Enum):
     LEAVE_PENDING = "leave_pending"
     NO_CHANGE = "no_change"
     NOT_AT_HAND_BOUNDARY = "not_at_hand_boundary"
+    PRE_ACTION_UNAVAILABLE = "pre_action_unavailable"
 
 
 class TransitionCause(Enum):
@@ -36,6 +37,7 @@ class TransitionCause(Enum):
 
     COMMAND = "command"  # the requester's own shared change
     LEAVE_AUTO_ACTION = "leave_auto_action"  # the automatic action of a player with a pending leave
+    PRE_ACTION = "pre_action"  # a pre-action executing when its owner's turn arrived
     HAND_BOUNDARY = "hand_boundary"  # `advance_hand`
     RESUME = "resume"  # a hand started and/or the engine generation was replaced while waiting
 
