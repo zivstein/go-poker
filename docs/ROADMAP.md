@@ -15,7 +15,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 4 | Showdown + settlement | Complete |
 | 5 | Complete continuous PokerHand/game loop | Complete |
 | 6 | Structured Hand History / Event Log | Complete |
-| 7 | Player view + local table | **In progress** (Cycle 1 of 3 complete) |
+| 7 | Player view + local table | **In progress** (Cycle 2 of 3 complete) |
 | 8 | Multi-Agent Engineering Organization + Product Architecture | Planned |
 | 10 | Bots + simulation / large-scale testing | Post-Alpha (provisional) |
 | 11 | Omaha + Pot-Limit / PLO | Post-Alpha (provisional) |
@@ -229,10 +229,10 @@ Approved on 2026-11-02. Milestone references after 8 below follow the provisiona
 Approved on 2026-11-03, for Milestone 7 Cycles 2 and 3 (details in `CURRENT_CYCLE.md`):
 
 - **One logical identity.**
-  - Every user, guest or future registered account, has an opaque, stable `UserId` and a username. The `UserId` is authoritative; the username is what other players see.
+  - A table receives two identity facts from its caller: an opaque, stable `UserId` and a table-visible display name. The `UserId` is authoritative; the display name is what other players see.
   - The engine receives the `UserId` value as `Player.player_id`. There is no second application id. It never appears in a client-facing view.
   - Commands are authorized by `UserId`. Where bearer tokens map to a `UserId` is decided with the future API architecture.
-- **Usernames.** NFC-normalized and trimmed, 1–20 characters, no control characters, compared case-insensitively, and unique among a table's current members. Global uniqueness is deferred.
+- **Display names.** A table display policy: NFC-normalized and trimmed, 1–20 characters, no control characters, and no two current members of a table with names that differ only by case. Accounts, account usernames, authentication and persistence are a separate future capability. The application layer defines no user or account entity and decides none of their rules.
 - **Shared revision and private intents.** The revision is the shared table-state revision ([ADR 0006](adr/0006-shared-table-revision-and-private-intents.md)). Pre-action selections and pending leave, sit-out and sit-back requests are private intents: they still carry the expected revision, but never increment it.
 - **Sitting back** returns a player to waiting, so they re-enter through the engine's existing waiting rule.
 - **Host.** When the host leaves, the earliest-joined remaining member becomes host.

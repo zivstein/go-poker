@@ -25,10 +25,13 @@ Paths are under `src/go_poker/`.
 | `game/` | players, seats, table, lifecycle, hand setup, per-hand state, hand history, showdown, settlement, the visibility rule and log projection (`visibility.py`) |
 | `game/variants/` | poker-variant-specific rules and views |
 | `game/betting/` | betting-structure rules, currently No-Limit |
+| `app/` | the transport-free application layer: member identity facts, `TableSession`, commands, revisions and per-user table views |
 
 `core/` never depends on `game/`.
 
 `game/` never depends on `game/variants/`. Shared concepts that `game/` needs belong in `game/`, not in a concrete variant; for example, `Street` lives in `game/street.py`.
+
+`core/` and `game/` never depend on `app/`. `app/` depends on `game/` and never on a server. `tests/test_layering.py` enforces both directions with `ast`.
 
 The engine never depends on persistence, accounts, networking, API, or UI layers.
 
@@ -791,6 +794,59 @@ Never projected: the burned cards and the deck, `player_id`, the raw engine `Pla
 - `HoleCardsDealt`: `own_cards` holds only the viewer's own cards, or `None`.
 - `StreetDealt`: the board cards only; the burned cards are dropped.
 - `HandSettled`: carries the `SettlementView`, which `settlement_view` builds for the log and for `HandView.settlement` alike. It holds the pot awards and the showdown ranks of the shown seats only.
+
+## Application Layer
+
+`app/` runs a private table above one `HoldemGame`. The contracts are [ADR 0005](adr/0005-player-view-and-table-session-boundary.md) §6-11 and [ADR 0006](adr/0006-shared-table-revision-and-private-intents.md). It has no transport, serialization, timers or persistence, and it re-derives no poker rule or state: stacks, participation status, turn, legality, pots and cards are read from the engine, and an engine error decides a rejection.
+
+Modules:
+
+- `identity.py`: the identity facts a table needs, and no account entity. The caller supplies a `UserId` (an opaque non-empty string; the engine's `Player.player_id` is its `value`) and a `DisplayName` (the table-visible name: NFC, trimmed, 1-20 characters, no character of Unicode general category C (control, format such as zero-width and bidi-override characters, surrogate, private-use, unassigned); table display policy only). `DisplayName` compares and hashes by its normalized `value`, so `Bob` and `bob` are different values, and its `conflict_key` (the NFC normalization of the casefolded value) is what a table compares among its current members to keep their names distinct. Invalid input raises `ValueError`. Accounts, usernames, authentication, minting ids and persistence are outside this layer.
+- `views.py`: `TableView`, `SessionSeatView`, `YouView`, `TablePhase` and `TableSettings` (stakes, a positive buy-in, max seats).
+- `results.py`: `Accepted`, `Rejected`, `RejectionCode`, `Transition` and `TransitionCause`.
+- `session.py`: `TableSession`.
+
+### TableSession
+
+`TableSession.create(table_id, code, settings, host_id, host_name, host_seat, *, choose_button)` seats the host (`WAITING`, with the buy-in) at revision 1; invalid input raises. The session owns the settings, the members in join order (each with a seat and its pending intents), the departed users, the host, the revision, one `waiting` flag and its current engine generation (one `Table` and one `HoldemGame`, never handed out). `choose_button` is injected.
+
+The phase is derived from the engine and the one flag: `WAITING_FOR_PLAYERS` when `waiting`; else `NOT_STARTED` without a hand; else `HAND_IN_PROGRESS` or `HAND_COMPLETE` by whether the hand is settled. `waiting` is set when a boundary or resume attempt cannot start a hand (`InvalidPlayerCount`) and cleared when a hand starts.
+
+Queries change nothing: `revision`, `phase`, `is_member(user_id)` and `view_for(user_id)` (`None` for a non-member).
+
+### Commands and results
+
+Every state-changing command takes `expected_revision`; commands return `Accepted` or `Rejected` values. Checks run in this order: the revision, membership (for `join`: `LEFT_TABLE`, `ALREADY_MEMBER`, `DISPLAY_NAME_TAKEN`), host, application state, then the engine call. Every expected rejection is decided before any mutation and leaves the session, the engine and the revision unchanged; the only engine call that can reject is the command's first change and is atomic in the engine. Expected resume outcomes are handled application outcomes, not rejections: too few players leads to waiting, and no `READY` player with chips leads to an engine-generation reset.
+
+- `join(user_id, expected_revision, display_name, seat)`: joins and sits as a `WAITING` player with the buy-in. The first member of an empty table becomes host.
+- `leave`, `sit_out`, `sit_back`, `start_game` (host only, once), `act(user_id, expected_revision, action)` with an `Action` or `ShowdownAction` passed to the engine unchanged.
+- `advance_hand(expected_revision)`: the hand boundary, accepted only in `HAND_COMPLETE` (`NOT_AT_HAND_BOUNDARY` otherwise). The caller decides when; there are no timers.
+
+`RejectionCode`: `STALE_REVISION`, `NOT_A_MEMBER`, `ALREADY_MEMBER`, `LEFT_TABLE`, `DISPLAY_NAME_TAKEN`, `SEAT_TAKEN`, `INVALID_SEAT`, `NOT_HOST`, `GAME_ALREADY_STARTED`, `NOT_ENOUGH_PLAYERS`, `NO_HAND_IN_PROGRESS`, `NOT_YOUR_TURN`, `ILLEGAL_ACTION`, `LEAVE_PENDING`, `NO_CHANGE`, `NOT_AT_HAND_BOUNDARY`. One function maps engine errors to them (`NotPlayersTurnError`, `NotShowdownTurnError` and `ShowdownNotStartedError` to `NOT_YOUR_TURN`; `IllegalActionError`; `HandAlreadySettledError` and `GameNotStartedError` to `NO_HAND_IN_PROGRESS`; `SeatOccupiedError`; `InvalidSeatNumber`; `InvalidPlayerCount` from `start` to `NOT_ENOUGH_PLAYERS`). An unmapped exception is a defect and propagates without rollback; the in-memory `TableSession` must then be treated as failed. This is narrow atomicity, as in the engine ([Hand Flow](#hand-flow), [Hold'em Game](#holdem-game)).
+
+`Accepted(transitions, view)`: `transitions` are the command's shared transitions in order (none for a private-only command), and `view` is the requester's view after the whole command, `None` for `advance_hand` and when the requester has just left.
+
+### Revision and transitions
+
+`revision` increments exactly once per shared transition, never for a rejection, a read or a private intent, and never resets. A `Transition(revision, cause, views)` holds the revision it produced, a cause (`COMMAND`, `LEAVE_AUTO_ACTION`, `HAND_BOUNDARY` or `RESUME`) and an immutable mapping of every current member's `UserId` to their full `TableView`, captured right after it. Changes to private intents caused by a shared transition are made before its views are captured.
+
+### Intents, leaving and the host
+
+A pending intent is created only for a participant of the hand in progress (`viewer_participant_seat` decides participation) and persists, through `HAND_COMPLETE`, until `advance_hand` applies it. For such a participant `leave` and `sit_out` are private: recording the intent changes no revision and adds no transition of its own (`transitions=()`), except that a leave requested on the user's own turn is followed at once by its `LEAVE_AUTO_ACTION` transition; a participant is always `READY`, so the only pending participation intent is a sit-out, which `sit_back` cancels, and a pending leave has no cancel. Otherwise the request applies at once as a shared transition: leave stands the user up, sit-out sets `SITTING_OUT`, sit-back sets `WAITING`. Repeating what is in effect, applied or pending, is `NO_CHANGE`; with a pending leave, `sit_out` and `sit_back` are `LEAVE_PENDING`.
+
+After any transition that leaves a hand in progress, while the engine's `current_actor` is a member with a pending leave, the session submits `CHECK` if `legal_actions(hand).can_check`, otherwise `FOLD`, or `MUCK` at a showdown, as a normal engine action. Each is its own `LEAVE_AUTO_ACTION` transition. Requesting a leave on one's own turn is the private intent followed by that transition.
+
+An applied leave stands the user up, removes the member, records the `UserId` as departed (a later `join` is `LEFT_TABLE`), frees the display name, and passes the host role to the earliest-joined remaining member (nobody on an empty table; the next joiner becomes host). The host change is part of that transition.
+
+### Hand boundary, waiting and reset
+
+`advance_hand` is one `HAND_BOUNDARY` transition, in this order: pending leaves are applied; pending sit-outs are applied; the next hand starts. `InvalidPlayerCount` makes the table wait. `GameNotStartedError` (no `READY` player with chips remains) replaces the engine generation: a fresh `Table` and, for each member in the same seat, a `Player` with the same `player_id`, the stack of the old engine, and status `SITTING_OUT` if they were sitting out, otherwise `WAITING`; a fresh `HoldemGame` is swapped in only once everything is built, then started with `choose_button`. The table id and code, members, seats, display names, host and revision persist; hand numbers restart. A fresh generation that has not started is started, never advanced.
+
+While `WAITING_FOR_PLAYERS`, an accepted `join`, `sit_back` or `leave` is followed in the same command by the same resume attempt. A hand that starts, or a generation replaced, is a `RESUME` transition; an attempt that changes nothing produces none.
+
+### TableView
+
+`TableView(revision, table_id, code, settings, phase, seats, game, you)`: `seats` is one `SessionSeatView(number, display_name, is_host)` per seat; `game` is `holdem_view(table, hand, member_seat)` for the viewer's own seat; `you` is `YouView(seat, is_host, pending_leave, pending_sit_out)`, the viewer's own private intents. No view carries a `UserId`, and two views for the same viewer at the same revision differ only in that viewer's private intents.
 
 ## Durable Invariants
 

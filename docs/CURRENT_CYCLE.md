@@ -1,6 +1,6 @@
 # Current Cycle
 
-**Milestone 7 — Player view + local table** is in progress. Cycle 1 (player view projection) is complete. Cycle 2 (TableSession Core) has an approved Brief and is next; Cycle 3 (Pre-actions + Call Obligation) follows. Milestone 7 completes after Cycle 3.
+**Milestone 7 — Player view + local table** is in progress. Cycle 1 (player view projection) and Cycle 2 (TableSession Core) are complete. Cycle 3 (Pre-actions + Call Obligation) is next and needs its Brief. Milestone 7 completes after Cycle 3.
 
 Milestone 6 is complete. Its behavior is recorded in `ARCHITECTURE.md` and its history in Git.
 
@@ -23,7 +23,7 @@ They build on earlier contracts:
 - ADR 0005 was accepted on 2026-11-02, with the milestone's original scope and decisions.
 - On 2026-11-03 the milestone was re-scoped to end after the application layer, the Cycle split was revised, ADR 0006 was accepted, and the Cycle 2 and Cycle 3 decisions were approved.
 - No planning-level question remains open.
-- Cycle 1 is complete. Cycle 2's Brief is approved. Cycle 3 still needs its own approved Brief, based on the decisions below.
+- Cycles 1 and 2 are complete. Cycle 3 still needs its own approved Brief, based on the decisions below.
 
 ## Goal
 
@@ -51,7 +51,7 @@ Out of scope:
 - any server or client code, React, and UI design;
 - bearer tokens and the token → `UserId` mapping;
 - timers and clocks (the next-hand pause is triggered by the caller);
-- persistence, registered accounts, and global username uniqueness;
+- accounts, account usernames, authentication, persistence, and any user or account entity (a separate future capability);
 - rejoining a table after an explicit Leave, transport reconnect, rebuy, and top-up;
 - the remaining Friends Alpha work, which is replanned during Milestone 8 (see `ROADMAP.md`);
 - any change to the engine's poker rules or lifecycle contract.
@@ -61,7 +61,7 @@ Out of scope:
 | Step | Title | Surface | Status |
 | --- | --- | --- | --- |
 | Cycle 1 | Player view projection | Engine: `game/visibility.py`, the Hold'em view layer | Complete; its behavior is in `ARCHITECTURE.md` ([Player View](ARCHITECTURE.md#player-view)) |
-| Cycle 2 | TableSession Core | `src/go_poker/app/`, the layering test | Brief approved 2026-11-03; not started |
+| Cycle 2 | TableSession Core | `src/go_poker/app/`, the layering test | Complete; its behavior is in `ARCHITECTURE.md` ([Application Layer](ARCHITECTURE.md#application-layer)) |
 | Cycle 3 | Pre-actions + Call Obligation | `game/betting/legal_actions.py` (`call_obligation`), `src/go_poker/app/` | Not started; Brief to be drafted from the decisions below |
 
 Dependencies:
@@ -106,17 +106,21 @@ Sizing:
 
 ## Cycle 2 — TableSession Core
 
-Approved on 2026-11-03.
+Approved on 2026-11-03. Complete; the implemented behavior is recorded in `ARCHITECTURE.md` ([Application Layer](ARCHITECTURE.md#application-layer)), which is authoritative where it is more precise than this Brief:
+
+- the only pending participation intent is a sit-out, which `sit_back` cancels, because a participant of the hand in progress is always `READY` (so no pending sit-back can arise);
+- `DisplayName` rejects every character of Unicode category C (control, format, surrogate, private-use, unassigned), not only control characters;
+- on 2026-11-03, before closeout, the identity boundary was narrowed (approved): there is no `User` value, the table-visible name is a `DisplayName` with plain value equality, and table-local collisions compare its `conflict_key`.
 
 **Goal.** A transport-free `TableSession` that runs a private table above `HoldemGame`: users and seats, the host's start, commands with the shared revision and private intents, hand-boundary intents, the automatic next hand when triggered, the waiting state, and the engine-generation reset, with per-user views composed from the Cycle 1 projection.
 
 **Identity.**
 
 - `UserId` is an opaque, non-empty string value. It is the one logical identity: the engine receives `Player.player_id = user_id.value`. The engine's `player_id` and the application's `user_id` are the same identity at two boundaries.
-- There is no second application id and no id factory. The caller supplies `User(id, username)`; minting guest ids and mapping tokens to a `UserId` belong to the future API architecture.
-- A guest and a future registered account share this `User` model.
+- There is no second application id and no id factory. The caller supplies a `UserId` and a `DisplayName`; minting ids, guest and registered accounts, account usernames, authentication, and mapping tokens to a `UserId` belong to a future Accounts and API capability.
+- `TableSession` defines no user or account entity: it owns only the identity facts a table needs, and pairs them itself as a membership.
 - Commands are authorized by `UserId`.
-- `Username`: NFC-normalized and trimmed, 1–20 characters, no control characters, compared with `casefold`. It is unique among a table's current members (`USERNAME_TAKEN`); global uniqueness is deferred.
+- `DisplayName`, the table-visible name: NFC-normalized and trimmed, 1–20 characters, no control characters. It is a table display policy only. No two current members of a table may have names that differ only by case or normalization (`DISPLAY_NAME_TAKEN`).
 
 **Ownership.**
 
@@ -139,7 +143,7 @@ Approved on 2026-11-03.
 - With no hand in progress (including `HAND_COMPLETE`), or for a seated user who is not a participant of the current hand, the request applies at once and is a shared transition: leave stands the user up; sit-out sets `SITTING_OUT`; sit-back sets `WAITING`, so the user re-enters through the engine's existing waiting rule.
 - For a participant of the hand in progress, the request is a private pending intent. A pending sit-out or sit-back can be cancelled by the opposite request; a pending leave has no cancel.
 - When a betting action is required of a user with a pending leave, the application submits `CHECK` if legal, otherwise `FOLD`; at a showdown decision it submits `MUCK`. This includes the moment of the request when it is that user's turn. Each such action is its own shared transition.
-- An explicit Leave removes the user from the session. A user who has left cannot join the same `TableSession` again (`LEFT_TABLE`). Their username becomes free.
+- An explicit Leave removes the user from the session. A user who has left cannot join the same `TableSession` again (`LEFT_TABLE`). Their display name becomes free.
 - When the host leaves, the earliest-joined remaining member becomes host. On an empty table, the next user to join becomes host.
 - Repeating a request that is already in effect is rejected with `NO_CHANGE`.
 
@@ -153,15 +157,15 @@ Approved on 2026-11-03.
 
 While waiting, every accepted join, sit-back or leave is followed, in the same command, by a resume attempt; a hand that starts is its own shared transition. A failed attempt changes nothing.
 
-**Engine-generation reset (ADR 0005 §11).** Build a fresh `Table` and, for each member in the same seat, a `Player` with the same `player_id` (the `UserId`), their stack in the old engine, and status `SITTING_OUT` if they were sitting out, otherwise `WAITING`. Build a fresh `HoldemGame`, swap both in only once everything is built, then try to start. The table id and code, members, seats, usernames, host and revision persist; hand numbers restart.
+**Engine-generation reset (ADR 0005 §11).** Build a fresh `Table` and, for each member in the same seat, a `Player` with the same `player_id` (the `UserId`), their stack in the old engine, and status `SITTING_OUT` if they were sitting out, otherwise `WAITING`. Build a fresh `HoldemGame`, swap both in only once everything is built, then try to start. The table id and code, members, seats, display names, host and revision persist; hand numbers restart.
 
-**Views.** `TableView` holds the revision, the table id and code, the settings, the phase, each seat's username and host flag, the Cycle 1 `HoldemView` for the viewer's own seat, and the viewer's own pending intents. Pending intents are private to their owner. No view carries a `UserId`.
+**Views.** `TableView` holds the revision, the table id and code, the settings, the phase, each seat's display name and host flag, the Cycle 1 `HoldemView` for the viewer's own seat, and the viewer's own pending intents. Pending intents are private to their owner. No view carries a `UserId`.
 
 **Tests.**
 
 - Focused command tests over every command and phase. Every rejection is checked for an unchanged revision and unchanged views.
 - Revision tests: one increment per shared transition, consecutive revisions across a cascade, none for private intents, reads or rejections, stale commands rejected before the engine, and continuity across a reset.
-- Scenarios on stacked decks, using the `Deck` shuffle seam through a local `tests/app/conftest.py`: consecutive hands, a leave mid-hand with an automatic check, fold or muck, a pending sit-out, waiting and resuming, a reset when every `READY` player sits out or leaves, host change, a rejected rejoin, and username collisions.
+- Scenarios on stacked decks, using the `Deck` shuffle seam through a local `tests/app/conftest.py`: consecutive hands, a leave mid-hand with an automatic check, fold or muck, a pending sit-out, waiting and resuming, a reset when every `READY` player sits out or leaves, host change, a rejected rejoin, and display-name collisions.
 - An application leak test at every emitted transition: each member's game view equals the Cycle 1 projection for their own seat, its cards are only their own, the board, and shown cards, and no `UserId` appears.
 - A layering test: `game` never imports `app`, and `app` never imports `server`.
 
@@ -170,7 +174,7 @@ While waiting, every accepted join, sit-back or leave is followed, in the same c
 **Roles.**
 
 - Engineer: the production code, focused tests, and the `ARCHITECTURE.md` section.
-- QA: attacks rejection atomicity across every command and phase, stale commands after cascades and at the boundary, boundary order, reset correctness, the leaving player's automatic actions in betting and at showdown, username edge cases, and a seeded multi-user session stress test with leak checks.
+- QA: attacks rejection atomicity across every command and phase, stale commands after cascades and at the boundary, boundary order, reset correctness, the leaving player's automatic actions in betting and at showdown, display-name edge cases, and a seeded multi-user session stress test with leak checks.
 - Reviewer: conformance with ADR 0005 and ADR 0006, no poker rule or state re-derived in `app/`, the engine untouched, no `UserId` in any view, the dependency direction, and rejections as values while defects propagate.
 
 ## Cycle 3 — Pre-actions + Call Obligation
@@ -197,4 +201,4 @@ Each Cycle Brief settles its own implementation-level choices within ADR 0005, A
 
 Cycle 1 settled its choices in its Brief, approved on 2026-11-02. The implemented result is recorded in `ARCHITECTURE.md` ([Player View](ARCHITECTURE.md#player-view)).
 
-Cycle 2's choices are recorded above.
+Cycle 2's choices are recorded above; the implemented result is in `ARCHITECTURE.md` ([Application Layer](ARCHITECTURE.md#application-layer)).
