@@ -15,22 +15,21 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 4 | Showdown + settlement | Complete |
 | 5 | Complete continuous PokerHand/game loop | Complete |
 | 6 | Structured Hand History / Event Log | Complete |
-| 7 | Player view + local table | **In progress** (Cycle 1 of 4 complete) |
-| 8 | Private table online | Planned (Friends Alpha) |
-| 9 | Friends Alpha v0.1 | Planned (Friends Alpha) |
-| 10 | Bots + simulation / large-scale testing | Post-Alpha |
-| 11 | Omaha + Pot-Limit / PLO | Post-Alpha |
-| 12 | Pineapple | Post-Alpha |
-| 13 | Mixed/private-table per-hand variant selection | Post-Alpha |
-| 14 | Chinese Poker game family | Post-Alpha |
-| 15 | Unified history + stats/analytics | Post-Alpha |
-| 16 | Accounts + persistence/database | Post-Alpha |
-| 17 | Reconnect + platform scaling | Post-Alpha |
-| 18 | Mobile/desktop clients | Post-Alpha |
-| 19 | AI analysis/coaching/player assistant | Post-Alpha |
-| 20 | Further variants, tournaments, and game modes | Post-Alpha |
+| 7 | Player view + local table | **In progress** (Cycle 1 of 3 complete) |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | Planned |
+| 10 | Bots + simulation / large-scale testing | Post-Alpha (provisional) |
+| 11 | Omaha + Pot-Limit / PLO | Post-Alpha (provisional) |
+| 12 | Pineapple | Post-Alpha (provisional) |
+| 13 | Mixed/private-table per-hand variant selection | Post-Alpha (provisional) |
+| 14 | Chinese Poker game family | Post-Alpha (provisional) |
+| 15 | Unified history + stats/analytics | Post-Alpha (provisional) |
+| 16 | Accounts + persistence/database | Post-Alpha (provisional) |
+| 17 | Reconnect + platform scaling | Post-Alpha (provisional) |
+| 18 | Mobile/desktop clients | Post-Alpha (provisional) |
+| 19 | AI analysis/coaching/player assistant | Post-Alpha (provisional) |
+| 20 | Further variants, tournaments, and game modes | Post-Alpha (provisional) |
 
-Milestones 7–9 are the Roadmap-to-Alpha, approved on 2026-11-02 (see [Reach a Friends Alpha](#reach-a-friends-alpha)). The order of the post-Alpha milestones is provisional and is revisited after the Friends Alpha. The former Backend API, Real-time multiplayer and Web client milestones are absorbed into Milestones 7–9; reconnect beyond rejoining by guest token, and scaling beyond one server process, become Milestone 17.
+Milestones 7 and 8 are the committed next steps (see [Reach a Friends Alpha](#reach-a-friends-alpha)). The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 planning replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
 
 ## Product Direction
 
@@ -55,8 +54,8 @@ Deferred beyond Milestone 5:
 - voluntary show by a player not asked to decide (an uncontested winner or a last remaining contender), automatic muck, show/muck preferences, and showdown timers;
 - a folded player voluntarily revealing one or both hole cards (a visibility and history feature only; it never changes folded status, pot eligibility, or settlement);
 - reporting the best five cards (derived hand strength, Milestone 6);
-- leaving and sitting out during a hand, as application-level hand-boundary intents with an automatic action for a leaving player (Milestone 7); an action timer (Milestone 9);
-- busting, rebuys, and top-ups (a simple play-money rebuy/top-up between hands, Milestone 9);
+- leaving and sitting out during a hand, as application-level hand-boundary intents with an automatic action for a leaving player (Milestone 7); an action timer ([Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8));
+- busting, rebuys, and top-ups (a simple play-money rebuy/top-up between hands, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8));
 - blind levels, antes, straddles, dead-button and missed-blind rules (Milestone 20);
 - run it twice.
 
@@ -125,9 +124,9 @@ Approved for Milestone 6 on 2026-11-01, extending that decision:
 
 Deferred beyond Milestone 6:
 
-- serialization: the wire form of player views (Milestone 7); completed-history JSON logs (Milestone 9); history storage formats (Milestone 16);
+- serialization: the wire form of player views and completed-history JSON logs ([Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8)); history storage formats (Milestone 16);
 - the player-view projection and redaction of hidden data (Milestone 7, [ADR 0005](adr/0005-player-view-and-table-session-boundary.md));
-- table and session identifiers (application-level, Milestone 7); global hand identifiers and any table-wide hand sequence (a later application/persistence concern); timestamps and clocks, which stay outside the engine (application timers from Milestone 7);
+- table and session identifiers (application-level, Milestone 7); global hand identifiers and any table-wide hand sequence (a later application/persistence concern); timestamps and clocks, which stay outside the engine (application or server timers, with the real-time server work);
 - a replay engine, rebuilding a live `PokerHand` from history, and validating externally supplied histories;
 - history query helpers and analytics, including a "board plays" flag (Milestone 15);
 - table- and game-level events (sitting down, standing up, status changes);
@@ -136,7 +135,7 @@ Deferred beyond Milestone 6:
 
 ### Reach a Friends Alpha
 
-Approved on 2026-11-02: the next product checkpoint is a **Friends Alpha**, and Milestones 7–9 are the shortest sound path to it. A user can:
+Approved on 2026-11-02: the next product checkpoint is a **Friends Alpha**. On 2026-11-03 the road to it was replanned: Milestone 7 ends with the transport-free application layer, Milestone 8 builds the multi-agent engineering organization and the product architecture, and the remaining Alpha work is replanned during Milestone 8 (see [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8)). At the Alpha, a user can:
 
 1. open the Go! Poker website;
 2. create a private table or join one through a link or code;
@@ -165,7 +164,7 @@ Non-goals for the first Alpha:
 - a hand-history UI beyond what play and debugging need;
 - production-scale traffic.
 
-The boundaries between the engine, the application layer, and the server are in [ADR 0005](adr/0005-player-view-and-table-session-boundary.md) (accepted 2026-11-02). In summary:
+The boundaries between the engine, the application layer, and the server are in [ADR 0005](adr/0005-player-view-and-table-session-boundary.md) (accepted 2026-11-02), partly superseded by [ADR 0006](adr/0006-shared-table-revision-and-private-intents.md) (accepted 2026-11-03) for the shared revision and private intents. In summary:
 
 - one authoritative server-side game state;
 - clients never decide poker legality;
@@ -177,15 +176,24 @@ The boundaries between the engine, the application layer, and the server are in 
 
 | # | Milestone | Purpose | Ends with |
 | --- | --- | --- | --- |
-| 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; real-time WebSocket server; unstyled browser client skeleton | Several local browser tabs play consecutive hands at one table, each seeing only what it may see |
-| 8 | Private table online | First remote deployment; private-table link flow, display names, and rejoin by guest token; playable table UI | A friend opens a URL and plays remotely with a legible UI |
-| 9 | Friends Alpha v0.1 | Table-life rules (action timer, sit out / back, rebuy and top-up) and hardening (socket drops, logs, limits, cleanup), then a playtest | Friends Alpha v0.1 |
+| 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; betting pre-actions | Scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | The multi-team engineering organization (see `docs/company/ORGANIZATION_ROADMAP.md`); the API architecture; product and UX design; replanning the road to the Friends Alpha | Planned when Milestone 7 is complete |
 
-The Milestone 7 Cycle split is in `CURRENT_CYCLE.md`. Milestones 8 and 9 are split into Cycles when they are planned.
+The Milestone 7 Cycle split is in `CURRENT_CYCLE.md`. Milestone 8 is split into Cycles when it is planned.
+
+#### Road to Friends Alpha after M8
+
+To be replanned during Milestone 8. These are the remaining capability areas expected on the way to the Friends Alpha. They have no milestone numbers yet, and their order and grouping are decided in Milestone 8 planning:
+
+- **Real-time API/server:** the server that owns live tables, real-time delivery of per-viewer snapshots, serialization of views, and command transport.
+- **Web poker experience:** the browser client and a playable, legible table UI.
+- **Deployment and private tables:** the first remote deployment, hosting, and the private-table link or code flow.
+- **Reconnect and table-life policy:** rejoining after a transport drop, the next-hand pause and other timers, the action timer, and rebuy and top-up.
+- **Alpha hardening and playtests:** socket drops, logs (including completed-history JSON logs), limits, cleanup, and playtests ending in Friends Alpha v0.1.
 
 #### Approved decisions
 
-Approved on 2026-11-02:
+Approved on 2026-11-02. Milestone references after 8 below follow the provisional numbering. The server, client and repository decisions remain the accepted direction ([ADR 0005](adr/0005-player-view-and-table-session-boundary.md) §12–14), which Milestone 8 may revisit when it plans the API architecture.
 
 - **Player view.**
   - The poker visibility boundary lives in the engine: `game/visibility.py` plus the Hold'em view layer.
@@ -193,16 +201,16 @@ Approved on 2026-11-02:
 - **Server.**
   - Python with Starlette, uvicorn, and WebSocket.
   - Server dependencies stay outside the dependency-free engine.
-  - Python 3.14 compatibility is confirmed before the server Cycle is implemented.
+  - Python 3.14 compatibility, including Starlette and uvicorn, is confirmed before the server is implemented.
 - **Client.** TypeScript with React and Vite.
 - **Repository.** `src/go_poker/app/` (application layer), `src/go_poker/server/` (server), and `web/` (client) in this repository.
 - **Identity.**
-  - A server-issued guest token and an opaque engine `player_id`.
+  - A server-issued guest token and an opaque engine `player_id` (refined on 2026-11-03, below).
   - The display name is separate, application-level data.
   - The creator of a private table is its host.
 - **Next hand.** It starts automatically after a short pause, about 5 seconds as the initial product default. The pause is owned by the application/server, not the engine.
 - **Stale commands.**
-  - A monotonic application-level revision is the concurrency token.
+  - A monotonic application-level revision is the concurrency token (refined by [ADR 0006](adr/0006-shared-table-revision-and-private-intents.md), below).
   - Every snapshot carries it, and every state-changing command carries the revision it expects.
 - **Leaving and sitting out during a hand.**
   - These are recorded as pending hand-boundary intents. The current hand's engine state is not changed.
@@ -212,11 +220,27 @@ Approved on 2026-11-02:
   - At a hand boundary, when the current engine game can no longer progress because no `READY` player with chips remains, the application rebuilds a fresh engine `Table` and `HoldemGame`.
   - The private table, its code, guests, seats, names, and revision persist.
   - This is an application-layer policy. The engine lifecycle contract is unchanged.
-- **Rebuy.** Milestone 9 may add a simple play-money rebuy/top-up policy between hands.
-- **Browser test.** A minimal Playwright browser smoke test, folded into the Milestone 8 UI Cycle once the playable UI exists.
-- **History logs.** Completed-history JSON logs are useful work for Milestone 9.
+- **Rebuy.** A simple play-money rebuy/top-up policy between hands may be added on the road to the Alpha.
+- **Browser test.** A minimal Playwright browser smoke test, added with the playable UI once it exists.
+- **History logs.** Completed-history JSON logs are useful Alpha hardening work.
 - **No autoplayer.** No dev-only autoplayer is added unless a later test or load need independently justifies it.
-- **Hosting.** The hosting provider is decided at Milestone 8 planning.
+- **Hosting.** The hosting provider is decided when deployment is planned.
+
+Approved on 2026-11-03, for Milestone 7 Cycles 2 and 3 (details in `CURRENT_CYCLE.md`):
+
+- **One logical identity.**
+  - Every user, guest or future registered account, has an opaque, stable `UserId` and a username. The `UserId` is authoritative; the username is what other players see.
+  - The engine receives the `UserId` value as `Player.player_id`. There is no second application id. It never appears in a client-facing view.
+  - Commands are authorized by `UserId`. Where bearer tokens map to a `UserId` is decided with the future API architecture.
+- **Usernames.** NFC-normalized and trimmed, 1–20 characters, no control characters, compared case-insensitively, and unique among a table's current members. Global uniqueness is deferred.
+- **Shared revision and private intents.** The revision is the shared table-state revision ([ADR 0006](adr/0006-shared-table-revision-and-private-intents.md)). Pre-action selections and pending leave, sit-out and sit-back requests are private intents: they still carry the expected revision, but never increment it.
+- **Sitting back** returns a player to waiting, so they re-enter through the engine's existing waiting rule.
+- **Host.** When the host leaves, the earliest-joined remaining member becomes host.
+- **Leave.** An explicit Leave removes the user from the table session, and that user cannot rejoin the same table session. Transport reconnect is separate, and rebuy/top-up stays deferred.
+- **Privacy of intents.** Pending leave and sit-out requests and pre-actions are visible only to their owner until applied.
+- **Automatic actions.** A leaving player's automatic action, a pre-action executing, and a resumed hand start are each a separate shared transition when they change shared state.
+- **Pre-actions.** `CHECK` and `CHECK_OR_FOLD` while nothing is owed; `FOLD` and `CALL_CURRENT` (bound to the exact amount owed) once chips are owed. A `CHECK_OR_FOLD` selected earlier survives later betting and presents as `FOLD`. `CHECK` clears when check becomes unavailable, and `CALL_CURRENT` clears when the amount owed changes. There is no `CALL_ANY`. Once it is the player's turn, they get their full legal actions.
+- **Engine read.** `call_obligation(hand, seat)` is the one new, read-only engine API pre-actions need. It shares its calculation with `legal_actions`.
 
 ### Exercise the Engine at Scale
 
@@ -241,7 +265,7 @@ After the Friends Alpha:
 
 ### Add Clients
 
-The web client is built in Milestones 7–9. Later mobile and desktop clients (Milestone 18) consume the same server protocol and engine contracts rather than recreating poker rules.
+The web client is built on the road to the Friends Alpha (see [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8)). Later mobile and desktop clients (Milestone 18) consume the same server protocol and engine contracts rather than recreating poker rules.
 
 ### Add Analytics and AI
 
