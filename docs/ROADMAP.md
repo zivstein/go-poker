@@ -2,6 +2,8 @@
 
 This is the product roadmap: the authoritative source for milestone status and for approved product decisions that are intentionally future and unbuilt.
 
+Where the [Friends Alpha Product Contract](product/FRIENDS_ALPHA_PRODUCT_CONTRACT.md) covers the same product scope, it governs any conflicting or stale description in this roadmap (approved on 2026-11-09). Known conflicts are listed for follow-up in `CURRENT_CYCLE.md`.
+
 Current architecture belongs in `ARCHITECTURE.md`.
 Active implementation detail belongs in `CURRENT_CYCLE.md`.
 AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
@@ -16,7 +18,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 5 | Complete continuous PokerHand/game loop | Complete |
 | 6 | Structured Hand History / Event Log | Complete |
 | 7 | Player view + local table | Complete |
-| 8 | Multi-Agent Engineering Organization + Product Architecture | **Next** (planned; not started) |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | **In progress** |
 | 10 | Bots + simulation / large-scale testing | Post-Alpha (provisional) |
 | 11 | Omaha + Pot-Limit / PLO | Post-Alpha (provisional) |
 | 12 | Pineapple | Post-Alpha (provisional) |
@@ -29,7 +31,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 19 | AI analysis/coaching/player assistant | Post-Alpha (provisional) |
 | 20 | Further variants, tournaments, and game modes | Post-Alpha (provisional) |
 
-Milestone 7 is complete (2026-11-03). Milestone 8 is the committed next step, and it has not been planned in detail (see [Reach a Friends Alpha](#reach-a-friends-alpha)). The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 planning replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
+Milestone 7 is complete (2026-11-03). Milestone 8 is in progress: its plan was approved on 2026-11-08 ([M8 Plan](milestones/M8_PLAN.md)), and its Cycle status is in `CURRENT_CYCLE.md`. The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
 
 ## Product Direction
 
@@ -135,6 +137,8 @@ Deferred beyond Milestone 6:
 
 ### Reach a Friends Alpha
 
+Since M8 C0 (approved 2026-11-08), the authoritative Friends Alpha scope and requirements are in the [Friends Alpha Product Contract](product/FRIENDS_ALPHA_PRODUCT_CONTRACT.md), as the [M8 Plan](milestones/M8_PLAN.md) records. This section predates the contract; the precedence rule at the top of this roadmap applies to it.
+
 Approved on 2026-11-02: the next product checkpoint is a **Friends Alpha**. On 2026-11-03 the road to it was replanned: Milestone 7 ends with the transport-free application layer, Milestone 8 builds the multi-agent engineering organization and the product architecture, and the remaining Alpha work is replanned during Milestone 8 (see [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8)). At the Alpha, a user can:
 
 1. open the Go! Poker website;
@@ -177,13 +181,13 @@ The boundaries between the engine, the application layer, and the server are in 
 | # | Milestone | Purpose | Ends with |
 | --- | --- | --- | --- |
 | 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; betting pre-actions | Scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see |
-| 8 | Multi-Agent Engineering Organization + Product Architecture | The multi-team engineering organization (see `docs/company/ORGANIZATION_ROADMAP.md`); the API architecture; product and UX design; replanning the road to the Friends Alpha | Planned when Milestone 7 is complete |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | The multi-team engineering organization (see `docs/company/ORGANIZATION_ROADMAP.md`); the API architecture; product and UX design; replanning the road to the Friends Alpha | The [M8 exit gates](milestones/M8_PLAN.md#m8-exit-gates) |
 
-Milestone 7's Cycle split and decisions are recorded in `CURRENT_CYCLE.md`. Milestone 8 is split into Cycles when it is planned.
+Milestone 7's implemented behavior is recorded in `ARCHITECTURE.md` and its Cycle history in Git. Milestone 8's Cycle split is in the [M8 Plan](milestones/M8_PLAN.md), and its Cycle status in `CURRENT_CYCLE.md`.
 
 #### Road to Friends Alpha after M8
 
-To be replanned during Milestone 8. These are the remaining capability areas expected on the way to the Friends Alpha. They have no milestone numbers yet, and their order and grouping are decided in Milestone 8 planning:
+To be replanned during Milestone 8. These are the remaining capability areas expected on the way to the Friends Alpha. They have no milestone numbers yet, and their order and grouping are decided in Milestone 8 Cycle C7 ([M8 Plan](milestones/M8_PLAN.md)):
 
 - **Real-time API/server:** the server that owns live tables, real-time delivery of per-viewer snapshots, serialization of views, and command transport.
 - **Web poker experience:** the browser client and a playable, legible table UI.
@@ -226,7 +230,7 @@ Approved on 2026-11-02. Milestone references after 8 below follow the provisiona
 - **No autoplayer.** No dev-only autoplayer is added unless a later test or load need independently justifies it.
 - **Hosting.** The hosting provider is decided when deployment is planned.
 
-Approved on 2026-11-03, for Milestone 7 Cycles 2 and 3 (details in `CURRENT_CYCLE.md`):
+Approved on 2026-11-03, for Milestone 7 Cycles 2 and 3 (implemented behavior in `ARCHITECTURE.md`):
 
 - **One logical identity.**
   - A table receives two identity facts from its caller: an opaque, stable `UserId` and a table-visible display name. The `UserId` is authoritative; the display name is what other players see.

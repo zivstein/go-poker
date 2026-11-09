@@ -1,6 +1,6 @@
 # Go! Poker — Milestone 8 Plan
 
-**Status:** M8 C0 PRODUCT BASELINE APPROVED; milestone implementation work pending  
+**Status:** Plan approved in M8 C0. Cycle status is in `docs/CURRENT_CYCLE.md`.  
 **Date:** 2026-11-08  
 **Milestone:** M8 — Go! Product & Company Foundation
 
@@ -84,4 +84,4 @@ Use a dedicated project-video notebook. Start with the C0 product contract and M
 
 ## Next action
 
-Commit C0 docs, then start **M8 C1 Product Identity**. In parallel, begin C5 organization discovery and architecture discovery as separate tracks without claiming their decisions are finalized.
+The active Cycle and each Cycle's status are in `docs/CURRENT_CYCLE.md`.

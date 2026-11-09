@@ -166,4 +166,4 @@ Begin defining agent team responsibilities, task contracts, review gates and esc
 - [x] Master-brand versus product-brand boundary specified.
 - [x] Explicit UX/design handoffs for C2/C3/C4 recorded.
 
-**Next step:** Commit this file; mark C1 complete in `docs/milestones/M8_PLAN.md`; start C2 (UX) and C3 (brand) in parallel, alongside C5 (AI organization) as capacity allows.
+**Next step:** M8 Cycle status, including C2, C3 and C5, is in `docs/CURRENT_CYCLE.md`.

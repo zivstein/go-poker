@@ -11,8 +11,11 @@ Detailed rationale and AI-engineering reference material belong under `docs/comp
 | Source | Holds |
 | --- | --- |
 | `ARCHITECTURE.md` | current implemented technical truth and durable boundaries |
-| `ROADMAP.md` | authoritative milestone status and approved future/unbuilt product decisions |
+| `ROADMAP.md` | authoritative milestone status and approved future/unbuilt product decisions, except where the Friends Alpha Product Contract governs (see the top of `ROADMAP.md`) |
 | `CURRENT_CYCLE.md` | active milestone/Cycle working state only |
+| `docs/milestones/` | a milestone's approved plan, when it has one: its Cycle split, deliverables, dependencies, and exit gates |
+| `docs/product/` | approved product contracts and product direction; the Friends Alpha Product Contract is authoritative for Friends Alpha scope and requirements, and its precedence over `ROADMAP.md` is stated at the top of `ROADMAP.md` |
+| `docs/design/` | design direction, the design workflow, and the approval status of design decisions |
 | `README.md` | human-facing overview; not authoritative for milestone status or history |
 | implementation-facing docs | README, API, and module documentation describing implemented behavior |
 | ADRs | why an important durable decision was made |
@@ -68,7 +71,7 @@ Before implementation of a new milestone:
 1. Lead studies the relevant code and architecture.
 2. Lead proposes milestone design, scope, important decisions, and Cycle split.
 3. User approves approval-level decisions.
-4. Lead records approved decisions in their sources of truth: future product decisions and milestone status in `ROADMAP.md`, the Cycle split and open decisions in `CURRENT_CYCLE.md`, and an ADR when the ADR policy calls for one. `ARCHITECTURE.md` changes when the behavior is implemented.
+4. Lead records approved decisions in their sources of truth: milestone status, and future product decisions not governed by the Friends Alpha Product Contract, in `ROADMAP.md`; product decisions within that contract's scope in the contract; the Cycle split in the milestone's plan under `docs/milestones/` when the milestone has one, otherwise in `CURRENT_CYCLE.md`; open decisions in `CURRENT_CYCLE.md`; and an ADR when the ADR policy calls for one. `ARCHITECTURE.md` changes when the behavior is implemented.
 5. Implementation Cycles begin.
 
 Do not implement while milestone-level decisions remain unresolved.
