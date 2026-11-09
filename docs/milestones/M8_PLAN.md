@@ -19,8 +19,8 @@ The authoritative Friends Alpha scope and decisions are in `docs/product/FRIENDS
 | C2 | Lobby, saved table, joining, wallet, seating, game and error/reconnect UX flows | `docs/product/UX_FLOWS.md` |
 | C3 | Visual brand directions, logo/wordmark selection, typography and table/motion art direction | `docs/design/BRAND.md` and visual references |
 | C4 | Cross-platform design tokens, component states, motion specifications and interactive prototype | `docs/design/DESIGN_SYSTEM.md`, `docs/design/MOTION_CONTRACTS.md`, prototype |
-| C5 | AI org structure: Lead, Core, Backend, Web, Product, QA/Reviewer; task contracts, escalation and budgets | `docs/organization/AI_ORGANIZATION.md` |
-| C6 | Evidence-based agent orchestration benchmark (lean Claude workflow, Paperclip/hybrid, alternatives as justified) | `docs/organization/TOOLING_EVALUATION.md`, delegated pilot findings |
+| C5 | AI organization: an Orchestrator and short-lived per-Work-Order Cycle Leads over lanes Core, Backend/API, Design, Org and Meta (Web after C7), with shared Engineer/QA/Reviewer roles; Work Orders, handoffs, contract-first parallelism, escalation and budgets; ownership and closeout tooling; an activation dry run (C5.1–C5.6) | Rules in `docs/ENGINEERING_PROCESS.md`, the lane map `.claude/ownership.json`, ADR 0007; rationale in `docs/company/M8_C5_2_ORGANIZATION_DESIGN.md` |
+| C6 | Native Claude Code organization pilot: a feature-sized cross-lane task, measured for outcome, usage, performance and manual intervention, under the technology freeze in `docs/ENGINEERING_PROCESS.md` | `docs/company/TOOLING_EVALUATION.md` (pilot findings) |
 | C7 | Integrate product/design/org with identity, wallet, ledger, sessions, API, hosting, security, operational tradeoffs | Architecture ADRs + next milestone execution plan |
 
 ## Dependency graph
@@ -33,7 +33,7 @@ flowchart TD
     C3["C3: Brand & Visual Identity"]
     C4["C4: Design System & Prototype"]
     C5["C5: AI Organization"]
-    C6["C6: Tooling Benchmark"]
+    C6["C6: Native Org Pilot"]
     A["Parallel Architecture Discovery"]
     C7["C7: Architecture & Delivery Plan"]
     G["M8 Exit Gate"]
@@ -65,7 +65,7 @@ C1 unlocks parallel UX (C2) and visual identity (C3). The AI organization (C5→
 2. Lobby, table and settings UX prototype covers 2–9 seats, interaction states, error/reconnect, wallet and account flows.
 3. Brand, design-system tokens, reusable UI component definitions and cross-platform motion contracts are approved with reference imagery/prototypes.
 4. AI team roles, ownership, handoffs, autonomy/escalation rules, context strategy and budget controls are specified.
-5. A real feature-sized task goes through Lead → Engineer → QA → Reviewer with documented outcome, cost and manual intervention; tooling choice based on results.
+5. A real feature-sized task goes through Orchestrator → Cycle Lead → Engineer → QA → Reviewer with documented outcome, usage, performance and manual intervention; the native workflow is kept or adjusted based on the results.
 6. Identity, Wallet, Ledger, Table/Session lifecycle and Core/API/client contract boundaries are reviewed, including recovery and security threat scenarios.
 7. Release architecture, test plan, performance targets, deployment/recovery path, implementation milestones, dependencies and owners are explicit.
 8. A NotebookLM Decision Pack accurately reflects approved decisions, with final sources suitable for explanatory video scripts.

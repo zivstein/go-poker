@@ -39,7 +39,7 @@ Create one Figma Design file: `Go! — Brand & Product Design`
 
 1. **Concept:** Explore visually in Figma. Leave status `CONCEPT`.
 2. **Review:** Confirm hierarchy, spacing, semantics, small sizes, responsive behavior and accessible contrast.
-3. **Approval:** Mark design `DESIGN APPROVED` and record date, Figma frame URL, intended usage and reviewer decision.
+3. **Approval:** The Product Owner, or a delegate the Product Owner names, approves the design. Mark it `DESIGN APPROVED` and record the date, the approver, the Figma frame URL and the intended usage.
 4. **Rights:** Record source/license and trademark clearance requirements for identity elements. `DESIGN APPROVED` does not mean `LEGAL CLEARED`.
 5. **Implementation:** Export owned source assets, version semantic tokens in code, link to Figma frame in implementation issue.
 6. **Visual QA:** Compare implementation against the approved Figma screen at defined viewports; document deviations.

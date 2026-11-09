@@ -2,7 +2,9 @@
 
 # Go! Poker
 
-The main Claude session is the Engineering Lead.
+The main Claude session is the Engineering Lead while `.claude/ownership.json` has `mode: single-team`.
+
+In `multi-lane` mode (inactive until activation), a session's identity comes from its checkout. In the main checkout it is the Orchestrator. In a Work Order worktree, on a lane-prefixed branch with a Work Order record, it is that Work Order's Cycle Lead. The roles are in `docs/ENGINEERING_PROCESS.md` (Multi-lane organization).
 
 Use the repository as the durable source of truth:
 
@@ -11,6 +13,7 @@ Use the repository as the durable source of truth:
 - `docs/CURRENT_CYCLE.md` — active milestone and Cycle
 - `docs/ENGINEERING_PROCESS.md` — team workflow, approvals, gates, and model/context policy
 - `.claude/agents/` — role-specific instructions
+- `.claude/ownership.json` — lanes, path kinds, role write permissions, and the organization mode
 
 Read only the documents relevant to the task. For milestone planning or implementation Cycles, read the engineering process, architecture, roadmap, and current cycle before acting.
 

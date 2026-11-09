@@ -155,7 +155,7 @@ Create tokens, component inventory/states, reusable layouts, prototype, referenc
 
 ### C5 — AI Organization (parallel)
 
-Begin defining agent team responsibilities, task contracts, review gates and escalation without waiting for C2/C3. Benchmark orchestration tools in C6.
+Begin defining agent team responsibilities, task contracts, review gates and escalation without waiting for C2/C3. Pilot the native organization in C6.
 
 ### C1 exit check
 

@@ -19,13 +19,21 @@ Milestone status lives in `ROADMAP.md`. The milestone plan — each Cycle's purp
 | C2 | Partially explored | `docs/product/UX_FLOWS.md` not yet produced |
 | C3 | Design in progress | Creative direction recorded in `docs/design/`; final brand assets, `docs/design/BRAND.md` and trademark clearance pending |
 | C4 | Prototype in progress | `docs/design/DESIGN_SYSTEM.md` and `docs/design/MOTION_CONTRACTS.md` not yet produced |
-| C5 | Started | The AI organization audit is complete (2026-11-09) and archived as historical analysis in [`docs/company/M8_C5_AI_ORGANIZATION_AUDIT.md`](company/M8_C5_AI_ORGANIZATION_AUDIT.md); C5.1, documentation reconciliation, is complete (2026-11-09); the next C5 step awaits the audit decisions below |
+| C5 | In progress | The AI organization audit is complete (2026-11-09) and archived as historical analysis in [`docs/company/M8_C5_AI_ORGANIZATION_AUDIT.md`](company/M8_C5_AI_ORGANIZATION_AUDIT.md). C5.1, documentation reconciliation, is complete (2026-11-09). C5.2, the organization design, was approved (2026-11-09); its rationale is archived in [`docs/company/M8_C5_2_ORGANIZATION_DESIGN.md`](company/M8_C5_2_ORGANIZATION_DESIGN.md). C5.3, the organization specification, is complete (2026-11-09): the rules are in `ENGINEERING_PROCESS.md`, the lane map in `.claude/ownership.json` (`mode: single-team`), and the rationale in [ADR 0007](adr/0007-lane-ownership-and-cross-lane-contracts.md). Next: C5.4, the guard and ownership check; then C5.5, Work Order tooling; then C5.6, activation and dry run |
 | C6 | Not started | |
 | C7 | Not started | |
 
 ## Open Decisions
 
-- The C5 audit's organization proposals await Product Owner decision. None is approved, and none is recorded as a decision until it is. They gate C5 implementation, not the milestone's Planning Gate.
+Deferred C5.2 organization decisions, each decided at its gate:
+
+- **Single-account residual risk** (OD10b): explicit Product Owner acceptance before the C5.6 Brief is Ready, so before branch protection is enabled or any real PR opens.
+- **`gh` as a tooling dependency** (OD15), including how the checkpoint script finds a producer's merge commit: the C5.5 Brief.
+- **C6 pilot choice and its Ready questions**, including whether it runs contract-first (OD17): C6 planning.
+- **Lane-specific agents**, for example a Figma-equipped designer (OD19): when a Design Work Order needs one.
+- **Identity separation** (machine user or token, credential sandbox): after Friends Alpha, or earlier after an incident.
+- **Pre-approved auto-merge**: after C6 measurement.
+- **Nested Cycle Lead sessions**: after Friends Alpha.
 
 ## Open Contradictions
 
@@ -43,8 +51,8 @@ Open for C7 or a Product Owner decision, not covered by the precedence rule:
 
 - The approved server and client decisions in `ROADMAP.md` (Python with Starlette, uvicorn and WebSocket; TypeScript with React and Vite), which `ROADMAP.md` already says Milestone 8 may revisit, against Product Contract §12, which delegates the Web framework and the real-time protocol to C7. These are technical decisions, so the product-description precedence rule does not settle them.
 - The application layer's host (the table's creator, succeeded by the earliest-joined member) and the contract's Table Owner (owner-only configuration; play continues without the Owner) have no defined relationship.
+- C6 is still described as a benchmark outside the amended C6 row: "tooling benchmarks" in the [M8 Plan](milestones/M8_PLAN.md) introduction, and "AI teams and orchestration benchmark" in `docs/design/BRAND_ASSET_PRODUCTION_BRIEF.md`. The amended C6 row is a native organization pilot, under the technology freeze; changing the plan's wording needs Product Owner approval.
 - The milestone name: "Multi-Agent Engineering Organization + Product Architecture" in `ROADMAP.md`, "Go! Product & Company Foundation" in the M8 Plan.
-- The M8 Plan's C5 row names a Product team and a `docs/organization/AI_ORGANIZATION.md` deliverable; the audit brief named a Design team, and `docs/organization/` does not exist.
 - C4 is in progress although the M8 Plan's dependency graph places it after C2 and C3; `docs/design/DESIGN_INDEX.md` still has no Figma file link.
 - The M8 Plan's parallel Architecture Discovery track has no recorded status.
-- The Ownership table in `ENGINEERING_PROCESS.md`, the document pointers in `CLAUDE.md`, and the Company Manual's operational context have no entries for `docs/milestones/`, `docs/product/` or `docs/design/`.
+- The document pointers in `CLAUDE.md` and the Company Manual's operational context have no entries for `docs/milestones/`, `docs/product/` or `docs/design/`.

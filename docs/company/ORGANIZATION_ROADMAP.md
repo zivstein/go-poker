@@ -18,6 +18,16 @@ Teams and roles are created only when the product creates a real independently o
 
 One Core Engineering Team currently owns the poker engine.
 
+## Planned: Multi-lane Organization (activates at M8 C5.6)
+
+Milestone 8 specifies a multi-lane organization. It stays inactive until M8 C5.6 switches the mode in `.claude/ownership.json`. Then an Orchestrator plans and integrates, and a short-lived Cycle Lead runs each Work Order in one lane, with the shared Engineer, QA and Reviewer roles.
+
+- The rules are in `docs/ENGINEERING_PROCESS.md` (Multi-lane organization).
+- The lanes and permissions are in `.claude/ownership.json`.
+- The rationale is in [ADR 0007](../adr/0007-lane-ownership-and-cross-lane-contracts.md).
+
+A lane is an ownership boundary, not a standing team. The team sections below remain growth criteria for future independent ownership.
+
 ## Growth Principle
 
 Do not create organizational complexity in advance.

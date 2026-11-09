@@ -7,4 +7,4 @@
 - Prefer typed, focused domain models, explicit state, and small functions.
 - Do not introduce abstractions until they have a concrete responsibility.
 - Keep rejected operations atomic.
-- Do not commit, push, amend, rebase, reset, restore, stash, or rewrite Git history unless the user explicitly authorizes it.
+- Do not commit, push, amend, rebase, reset, restore, stash, or rewrite Git history unless the user explicitly authorizes it. The only exception applies in multi-lane mode (inactive until activation): the project's checkpoint and branch-update scripts commit on Work Order branches (`docs/ENGINEERING_PROCESS.md`).

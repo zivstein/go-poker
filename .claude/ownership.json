@@ -1,0 +1,113 @@
+{
+  "about": "Go! Poker lane ownership map: the single home of lanes, path kinds, co-owned paths, role write permissions and the organization mode. Rules for using it: docs/ENGINEERING_PROCESS.md (Ownership; Multi-lane organization).",
+  "version": 1,
+  "mode": "single-team",
+  "patterns": {
+    "syntax": "A pattern is an exact repository-relative file path, a directory prefix ending in '/', or '*' (any file directly at the repository root).",
+    "precedence": ["exact", "longest-prefix", "root-wildcard"],
+    "co_owned": "co_owned keys are patterns too and take part in the same precedence.",
+    "includes": "A lane that includes another lane owns that lane's own paths. It does not inherit that lane's co_owned memberships; co-owners are listed only in co_owned.",
+    "unmapped": "fail-closed"
+  },
+  "kinds": [
+    "production",
+    "tests",
+    "docs",
+    "architecture",
+    "records",
+    "design",
+    "tooling",
+    "tooling-tests",
+    "control"
+  ],
+  "lanes": {
+    "core": {
+      "prefix": "core/",
+      "paths": {
+        "src/go_poker/core/": "production",
+        "src/go_poker/game/": "production",
+        "src/go_poker/__init__.py": "production",
+        "tests/core/": "tests",
+        "tests/game/": "tests"
+      }
+    },
+    "backend": {
+      "prefix": "backend/",
+      "paths": {
+        "src/go_poker/app/": "production",
+        "tests/app/": "tests"
+      }
+    },
+    "design": {
+      "prefix": "design/",
+      "paths": {
+        "docs/design/": "design"
+      }
+    },
+    "org": {
+      "prefix": "org/",
+      "paths": {
+        "docs/ROADMAP.md": "records",
+        "docs/CURRENT_CYCLE.md": "records",
+        "docs/milestones/": "records",
+        "docs/adr/": "records",
+        "docs/product/": "records",
+        "docs/company/": "records",
+        "README.md": "docs"
+      }
+    },
+    "meta": {
+      "prefix": "meta/",
+      "includes": ["org"],
+      "paths": {
+        "CLAUDE.md": "control",
+        "AGENTS.md": "control",
+        "docs/ENGINEERING_PROCESS.md": "control",
+        ".claude/agents/": "control",
+        ".claude/skills/": "control",
+        ".claude/settings.json": "control",
+        ".claude/ownership.json": "control",
+        "scripts/": "tooling",
+        "tests/tooling/": "tooling-tests",
+        ".github/": "control",
+        "pyproject.toml": "control",
+        "uv.lock": "control",
+        ".gitignore": "control",
+        "*": "control"
+      }
+    }
+  },
+  "co_owned": {
+    "docs/ARCHITECTURE.md": {
+      "kind": "architecture",
+      "lanes": ["core", "backend", "org"]
+    },
+    "tests/test_layering.py": {
+      "kind": "tests",
+      "lanes": ["core", "backend"]
+    }
+  },
+  "roles": {
+    "engineer": [
+      "production",
+      "tests",
+      "docs",
+      "architecture",
+      "design",
+      "tooling",
+      "tooling-tests"
+    ],
+    "qa": ["tests", "tooling-tests"],
+    "reviewer": [],
+    "cycle_lead": [
+      "architecture",
+      "records",
+      "design",
+      "control",
+      "tooling",
+      "tooling-tests"
+    ],
+    "orchestrator": []
+  },
+  "closeout_kinds": ["architecture", "design"]
+}

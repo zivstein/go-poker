@@ -1,6 +1,6 @@
 # M8 C5.2 AI Organization Design — Decision Package
 
-**Status: DECISION PACKAGE. Tier A approved by the PO on 2026-11-09, with three refinements (section 16). Not yet recorded in operational sources: C5.3 records them. Tier B and Tier C stay deferred to their gates. Until C5.3 changes an operational file, that file wins.**
+**Status: ARCHIVED RATIONALE. Tier A, approved by the PO on 2026-11-09 with three refinements (section 16), was recorded in its operational sources in C5.3 (2026-11-09). Those sources are authoritative and win over this document. C5.3 refined the map's kinds (`tooling` and `tooling-tests` for OD20) and limited closeout kinds to `architecture` and `design`. Tier B and Tier C stay deferred to their gates (`docs/CURRENT_CYCLE.md`).**
 
 Date: 2026-11-09 · Repository snapshot: commit `dc7a750` · Author: Engineering Lead · Input: [C5 audit](M8_C5_AI_ORGANIZATION_AUDIT.md) · Independent review: section 20
 
