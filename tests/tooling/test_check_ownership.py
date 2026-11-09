@@ -21,6 +21,7 @@ from argparse import Namespace
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -176,27 +177,6 @@ class Entry:
 type Change = str | Entry | None
 
 
-def isolated_git_env(directory: Path) -> dict[str, str]:
-    """Like `conftest.git_env`, which is function-scoped and so cannot serve a module-scoped repository."""
-    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-    empty_config = directory / "empty-gitconfig"
-    empty_config.write_text("")
-    home = directory / "home"
-    home.mkdir()
-    env.update(
-        HOME=str(home),
-        XDG_CONFIG_HOME=str(home / ".config"),
-        GIT_CONFIG_GLOBAL=str(empty_config),
-        GIT_CONFIG_NOSYSTEM="1",
-        GIT_TERMINAL_PROMPT="0",
-        GIT_AUTHOR_NAME="Test",
-        GIT_AUTHOR_EMAIL="test@example.com",
-        GIT_COMMITTER_NAME="Test",
-        GIT_COMMITTER_EMAIL="test@example.com",
-    )
-    return env
-
-
 class Lab:
     """One repository: `base` holds the seeded files, and master has moved on past it (it changed a record).
 
@@ -259,11 +239,11 @@ class Lab:
 
 
 @pytest.fixture(scope="module")
-def lab(tmp_path_factory: pytest.TempPathFactory) -> Lab:
+def lab(tmp_path_factory: pytest.TempPathFactory, make_git_env: Callable[[Path], dict[str, str]]) -> Lab:
     root = tmp_path_factory.mktemp("lab")
     work = root / "work"
     work.mkdir()
-    return Lab(work, isolated_git_env(root))
+    return Lab(work, make_git_env(root))
 
 
 def verdict(lab: Lab, branch: str, changes: Mapping[str, Change], **overrides: str) -> subprocess.CompletedProcess[str]:
@@ -748,6 +728,18 @@ def test_the_check_runs_on_the_system_python(lab: Lab, tmp_path: Path) -> None:
     assert_passes(run_cli(lab, workflow_arguments(head=own), python=python))
     assert_fails(run_cli(lab, workflow_arguments(head=foreign), python=python), "- docs/records/r.md")
     assert_passes(run_cli(lab, [*workflow_arguments(head=foreign), "--map", str(single)], python=python))
+
+
+def test_loading_the_script_in_process_leaves_the_bytecode_setting_alone(
+    script: Callable[[str], ModuleType], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The script turns bytecode writing off at import; a loader shared by many test modules must not leak that.
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+
+    script("check_ownership")
+
+    assert sys.dont_write_bytecode is False
 
 
 def test_ascii_only_output_encoding_never_turns_a_failure_into_a_pass(lab: Lab) -> None:

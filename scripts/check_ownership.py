@@ -7,7 +7,8 @@ CI's `ownership` job runs this from a checkout of `master`, with the pull reques
 
 The ownership map is read from the repository that contains this script (`.claude/ownership.json`, or `--map PATH`),
 never from the head revision, and the head is read only through `git diff`: nothing from it is checked out, imported,
-or run. A pull request therefore cannot change the rules or the code that judge it.
+or run. A pull request therefore cannot change the rules or the code that judge it. The script writes nothing into
+the checkout, not even a bytecode cache.
 
 In order, the script stops at the first failed group of checks:
 
@@ -39,7 +40,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
 
-from ownership_map import MapError, OwnershipMap, load_map
+# Importing the sibling module must not write a bytecode cache into the checkout being judged.
+sys.dont_write_bytecode = True
+
+from ownership_map import MapError, OwnershipMap, load_map  # noqa: E402
 
 REQUIRED_BASE_REF = "master"
 DEFAULT_MAP = Path(__file__).resolve().parents[1] / ".claude" / "ownership.json"

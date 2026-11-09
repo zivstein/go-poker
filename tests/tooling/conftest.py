@@ -2,7 +2,8 @@
 
 Git tests run only in temporary repositories with a local bare remote. Their environment drops every inherited
 `GIT_*` variable (a hook running the suite could otherwise point Git at the real repository) and replaces the global
-and system Git configuration with an empty one.
+and system Git configuration with an empty one. It also drops the Python variables that stop or redirect bytecode
+caching, so a script under test writes into its checkout exactly as it would in CI.
 """
 
 import importlib.util
@@ -16,6 +17,9 @@ from types import ModuleType
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+
+# A developer shell may set these; CI does not. Dropping them makes scripts under test write bytecode as they do in CI.
+PYTHON_CACHE_VARS = frozenset({"PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX"})
 
 FAKE_VERIFY = """\
 import os
@@ -36,7 +40,12 @@ def load_script(name: str) -> ModuleType:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    # A script may turn bytecode writing off for its own imports (check_ownership does); that must not outlive the load.
+    bytecode_setting = sys.dont_write_bytecode
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = bytecode_setting
     return module
 
 
@@ -99,10 +108,23 @@ class Repo:
 
 @pytest.fixture
 def git_env(tmp_path: Path) -> dict[str, str]:
+    return isolated_env(tmp_path)
+
+
+@pytest.fixture(scope="session")
+def make_git_env() -> Callable[[Path], dict[str, str]]:
+    """`isolated_env` for fixtures wider than one test, which cannot use the function-scoped `git_env`."""
+    return isolated_env
+
+
+def isolated_env(directory: Path) -> dict[str, str]:
+    """The test environment, with its empty Git configuration and home under `directory`."""
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-    empty_config = tmp_path / "empty-gitconfig"
+    for key in PYTHON_CACHE_VARS:
+        env.pop(key, None)
+    empty_config = directory / "empty-gitconfig"
     empty_config.write_text("")
-    home = tmp_path / "home"
+    home = directory / "home"
     home.mkdir()
     env.update(
         HOME=str(home),
