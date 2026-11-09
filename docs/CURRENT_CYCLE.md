@@ -19,9 +19,19 @@ Milestone status lives in `ROADMAP.md`. The milestone plan — each Cycle's purp
 | C2 | Partially explored | `docs/product/UX_FLOWS.md` not yet produced |
 | C3 | Design in progress | Creative direction recorded in `docs/design/`; final brand assets, `docs/design/BRAND.md` and trademark clearance pending |
 | C4 | Prototype in progress | `docs/design/DESIGN_SYSTEM.md` and `docs/design/MOTION_CONTRACTS.md` not yet produced |
-| C5 | In progress | The AI organization audit is complete (2026-11-09) and archived as historical analysis in [`docs/company/M8_C5_AI_ORGANIZATION_AUDIT.md`](company/M8_C5_AI_ORGANIZATION_AUDIT.md). C5.1, documentation reconciliation, is complete (2026-11-09). C5.2, the organization design, was approved (2026-11-09); its rationale is archived in [`docs/company/M8_C5_2_ORGANIZATION_DESIGN.md`](company/M8_C5_2_ORGANIZATION_DESIGN.md). C5.3, the organization specification, is complete (2026-11-09): the rules are in `ENGINEERING_PROCESS.md`, the lane map in `.claude/ownership.json` (`mode: single-team`), and the rationale in [ADR 0007](adr/0007-lane-ownership-and-cross-lane-contracts.md). Next: C5.4, the guard and ownership check; then C5.5, Work Order tooling; then C5.6, activation and dry run |
+| C5 | In progress | The AI organization audit is complete (2026-11-09) and archived as historical analysis in [`docs/company/M8_C5_AI_ORGANIZATION_AUDIT.md`](company/M8_C5_AI_ORGANIZATION_AUDIT.md). C5.1, documentation reconciliation, is complete (2026-11-09). C5.2, the organization design, was approved (2026-11-09); its rationale is archived in [`docs/company/M8_C5_2_ORGANIZATION_DESIGN.md`](company/M8_C5_2_ORGANIZATION_DESIGN.md). C5.3, the organization specification, is complete (2026-11-09): the rules are in `ENGINEERING_PROCESS.md`, the lane map in `.claude/ownership.json` (`mode: single-team`), and the rationale in [ADR 0007](adr/0007-lane-ownership-and-cross-lane-contracts.md). C5.4 is split in two (approved 2026-11-09): C5.4a, the ownership map resolver and the CI `ownership` check, is complete (2026-11-09). Next: C5.4b, the guard hook and committed settings; then C5.5, Work Order tooling; then C5.6, activation and dry run |
 | C6 | Not started | |
 | C7 | Not started | |
+
+## Pending Gates
+
+Approved on 2026-11-09 for later C5 Cycles; C5.4a does not implement them.
+
+- **C5.4b:**
+  - Before its Brief is Ready, capture real PreToolUse payloads, from the main session and from subagents, to fix how `agent_type`, `agent_id` and the main session are identified. Unknown identity fails closed in `multi-lane` mode.
+  - Verify the guard's fail-closed behavior, including hook timeouts and `onFailure` support.
+  - Record two approved decisions at closeout: the role mapping for agent names in `.claude/ownership.json` (D1), and the `M<n> | C<n>` commit message convention in `ENGINEERING_PROCESS.md` (D4).
+- **C5.6, before branch protection is enabled:** verify the public repository's `pull_request_target` policy, live `ownership` enforcement on a real PR, and the first mode-switch transition.
 
 ## Open Decisions
 

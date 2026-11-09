@@ -31,8 +31,13 @@ addopts = "-ra --import-mode=importlib"
 [tool.ruff]
 line-length = 120
 target-version = "py314"
-# The closeout runs these with the system python3, so they stay Python 3.9-compatible.
-per-file-target-version = { "scripts/finish_cycle.py" = "py39", "scripts/verify.py" = "py39" }
+
+# These run with the system python3 (the closeout, or CI's ownership job), so they stay Python 3.9-compatible.
+[tool.ruff.per-file-target-version]
+"scripts/finish_cycle.py" = "py39"
+"scripts/verify.py" = "py39"
+"scripts/ownership_map.py" = "py39"
+"scripts/check_ownership.py" = "py39"
 
 [tool.ruff.lint]
 select = [

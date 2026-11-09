@@ -500,11 +500,10 @@ In force for M8 C5, C6 and the Friends Alpha implementation, in both organizatio
 
 **Inactive.** Nothing in this section applies while `.claude/ownership.json` has `mode: single-team`, and roles skip it in that mode, except in Meta work that implements it.
 
-The exceptions are the rules marked **both modes**. They take effect in `single-team` mode too, once C5.4 builds them:
+The exceptions are the rules marked **both modes**. They apply in `single-team` mode too:
 
-- the guard's Git rule;
-- the Permit layer (see [Enforcement](#enforcement));
-- the `quality` push trigger limited to `master` (see [Git and integration](#git-and-integration)).
+- since C5.4a, the `quality` push trigger limited to `master`, and the `ownership` job's repository and base checks (see [Git and integration](#git-and-integration));
+- once C5.4b builds them, the guard's Git rule and the Permit layer (see [Enforcement](#enforcement)).
 
 How the section becomes active:
 
@@ -772,8 +771,11 @@ A `BLOCKED` entry states the trigger, the need, the options, a recommendation, a
   - squash merge only;
   - enforced for administrators.
 - **CI:**
-  - `quality` runs `verify.py` on pull requests and on pushes to `master` only (**both modes**, from C5.4).
-  - A separate `ownership` job runs on `pull_request_target`. It checks out `master`, fetches the PR head as data only, and runs `master`'s ownership check, so a PR never runs code that judges it.
+  - `quality` runs `verify.py` on pull requests and on pushes to `master` only (**both modes**).
+  - A separate `ownership` job runs on `pull_request_target`. It checks out `master`, fetches the PR head as data only, and runs `master`'s `scripts/check_ownership.py`, so a PR never runs code that judges it. It installs nothing and uses no cache.
+    - **Both modes:** it fails a PR whose head is in another repository or whose base is not `master`.
+    - In `single-team` mode it makes no path checks.
+    - The script's docstring is the home of its rules.
 
 **PR-mode closeout.** `/finish-cycle` stays user-only. In a Work Order worktree it keeps today's checks for:
 
@@ -801,13 +803,13 @@ The manifest keeps its format. Its `path:` lines list the whole merge-base diff.
 | --- | --- | --- |
 | Prevent | a PreToolUse guard hook that reads the map (see below) | best effort: command matching is not a security boundary |
 | Detect | the `ownership` CI job, run from `master`'s code. Every merge-base-diff path must be in the branch's lane or in a co-owned entry for it. Unmapped paths and unknown prefixes fail, and only `meta/` may touch control files. | authoritative for path ownership |
-| Permit (**both modes**, from C5.4) | committed `.claude/settings.json` (hook registration and deny rules); the Product Owner trims the machine-local allowlist | narrows routine risk |
+| Permit (**both modes**, from C5.4b) | committed `.claude/settings.json` (hook registration and deny rules); the Product Owner trims the machine-local allowlist | narrows routine risk |
 | Judge | the Reviewer's scope, contract and section-ownership checks | what tooling cannot decide |
 
 The guard hook:
 
 - **Scope:** this repository and its worktrees only. Scratch copies, mutation experiments and scratchpad files are outside it.
-- **Both modes**, once C5.4 builds it: it blocks raw state-changing Git and `gh` write subcommands, and allows the project scripts. This enforces only what `AGENTS.md` and this document already forbid.
+- **Both modes**, once C5.4b builds it: it blocks raw state-changing Git and `gh` write subcommands, and allows the project scripts. This enforces only what `AGENTS.md` and this document already forbid.
 - **`multi-lane` mode only:** it also blocks:
   - writes outside the branch's lane or the role's kinds;
   - writes in the main checkout;
