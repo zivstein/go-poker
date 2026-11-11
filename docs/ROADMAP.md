@@ -181,7 +181,7 @@ The boundaries between the engine, the application layer, and the server are in 
 | # | Milestone | Purpose | Ends with |
 | --- | --- | --- | --- |
 | 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; betting pre-actions | Scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see |
-| 8 | Multi-Agent Engineering Organization + Product Architecture | Product and UX design; the engineering organization and a native-first parallel workflow, proven by a Core + Backend proof of concept; the Backend/API and Web architecture with a shared Core–Backend–Web contract; replanning the road to the Friends Alpha | The [M8 exit gates](milestones/M8_PLAN.md#m8-exit-gates) |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | Product and UX design; the engineering organization and a native-first parallel workflow, proven by a Backend + Web proof of concept; the Backend/API and Web architecture with a shared Core–Backend–Web contract; replanning the road to the Friends Alpha | The [M8 exit gates](milestones/M8_PLAN.md#m8-exit-gates) |
 
 Milestone 7's implemented behavior is recorded in `ARCHITECTURE.md` and its Cycle history in Git. Milestone 8's Cycle split is in the [M8 Plan](milestones/M8_PLAN.md), and its Cycle status in `CURRENT_CYCLE.md`.
 
@@ -193,11 +193,34 @@ Approved on 2026-11-10, at M8 C5.4:
   1. Backend/API architecture planning.
   2. Web planning, coordinated with Core and Backend.
   3. A shared Core–Backend–Web contract.
-  4. A first parallel iteration with Core and Backend only.
+  4. A first parallel iteration with Backend and Web (amended 2026-11-11, below).
   5. Its measured evaluation.
-  6. Web joins in the following parallel iteration.
+  6. Later parallel iterations across Core, Backend and Web.
 
   The detail is in the [M8 Plan](milestones/M8_PLAN.md#c6-parallel-development-poc).
+
+Approved on 2026-11-11, at M8 C6.1 ([C6.1 plan](milestones/M8_C6_1_BACKEND_API_PLAN.md), [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md), accepted):
+
+- **Backend architecture.** FastAPI and uvicorn; a modular monolith; WebSocket with snapshots per player; one authoritative writer per table (`TableRuntime`). The Python Core and `TableSession` are preserved. The wire protocol is ADR 0009 (C6.3).
+- **POC.** C6.4 is Backend ∥ Web, small and local (one process, in memory, private tables), after a bounded preflight for dependencies and the Web toolchain.
+- **Seats.** The POC may join without a pre-join seat view. Friends Alpha shows the available seats before the player chooses one (Contract §2).
+- **Table categories.** Private tables now. Later, Quick Play public pools grouped by variant, stakes and table configuration, with partitioned matchmaking:
+  - fill suitable existing tables first;
+  - create a new table only when at least two players are waiting and no suitable capacity exists;
+  - no forced mid-hand transfers, and consolidation is deferred;
+  - a completely empty table may close after a configurable grace period (initially 60 s);
+  - a table is never closed only because one seated player remains.
+- **Recovery.** The public product requires full recovery of hands in progress. The Friends Alpha policy is in the [Product Contract](product/FRIENDS_ALPHA_PRODUCT_CONTRACT.md) §7.
+- **Scale.** A public launch requires validated multi-instance scale-out, recovery, monitoring and capacity planning. 10,000 concurrent connections is an initial load-test milestone, not a capacity claim or an architectural limit; final targets come from measurement. Scaling, matchmaking and recovery mechanisms are planned, not implemented.
+- **Dependencies.**
+  1. M8: C6.2 → C6.3 → preflight → C6.4 → C6.5 → C7.
+  2. Playable Preview: one instance, in memory.
+  3. Friends Alpha: durable state and ledger.
+  4. After it, Quick Play, in-hand recovery hardening and multi-instance, in parallel.
+  5. Load and recovery validation.
+  6. The public launch gate.
+
+  C7 assigns milestone numbers.
 
 #### Road to Friends Alpha after M8
 
@@ -209,7 +232,7 @@ To be replanned during Milestone 8. These are the remaining capability areas exp
 - **Reconnect and table-life policy:** rejoining after a transport drop, the next-hand pause and other timers, the action timer, and rebuy and top-up.
 - **Alpha hardening and playtests:** socket drops, logs (including completed-history JSON logs), limits, cleanup, and playtests ending in Friends Alpha v0.1.
 
-This work is delivered in parallel iterations across Core, Backend and Web against versioned shared contracts, building on the M8 C6 proof of concept. Web joins from the iteration after C6.
+This work is delivered in parallel iterations across Core, Backend and Web against versioned shared contracts, building on the M8 C6 proof of concept, in which Backend and Web are the first parallel pair.
 
 #### Approved decisions
 
@@ -219,9 +242,9 @@ Approved on 2026-11-02. Milestone references after 8 below follow the provisiona
   - The poker visibility boundary lives in the engine: `game/visibility.py` plus the Hold'em view layer.
   - Clients receive full per-viewer snapshots plus an allowlist-redacted log of the current hand. There is no diff protocol.
 - **Server.**
-  - Python with Starlette, uvicorn, and WebSocket.
+  - Python with FastAPI, uvicorn, and WebSocket (FastAPI replaced Starlette on 2026-11-11, [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md)).
   - Server dependencies stay outside the dependency-free engine.
-  - Python 3.14 compatibility, including Starlette and uvicorn, is confirmed before the server is implemented.
+  - Python 3.14 compatibility, including FastAPI, `pydantic-core` and uvicorn, is confirmed before the server is implemented.
 - **Client.** TypeScript with React and Vite.
 - **Repository.** `src/go_poker/app/` (application layer), `src/go_poker/server/` (server), and `web/` (client) in this repository.
 - **Identity.**

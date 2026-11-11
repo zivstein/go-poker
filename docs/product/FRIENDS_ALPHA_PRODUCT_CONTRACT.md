@@ -61,6 +61,7 @@ Build the actual product incrementally. A **Playable Preview** may expose a poli
 - Buy-in/top-up moves money from available Wallet into a table allocation. Winning changes table stacks. Settlement returns a player's remaining claim to Wallet. Two simultaneous table operations must not overspend a shared wallet.
 - Grants are explicit sources of virtual funds; normal in-table play conserves funds subject only to separately defined sources/sinks. Debits/credits are atomic, idempotent, auditable and authorized.
 - A crash must never silently lose or duplicate a wallet claim. Preserve sufficient durable transaction, stack, pot and unresolved-obligation records to settle or safely freeze ambiguous funds for reconciliation; do not invent winners. Full user-facing Hand History is not required in Friends Alpha.
+- **Interrupted hands (approved 2026-11-11, M8 C6.1 E16):** Friends Alpha may void a hand interrupted by a crash and restore every participant's hand-start stack, without awarding the hand. This is allowed only once the durable table state and ledger consistency it depends on are implemented and tested. Completed hands, buy-ins and cash-outs are never undone. Until then, no rollback or recovery support is claimed. Full recovery of hands in progress is required for the public product.
 - Server is authoritative for player identity, ownership, table permissions, join code validity, hole-card visibility, action legality, money, timers and state revisions. Guessing a player ID or table ID is not an authentication method.
 
 ## 8. Cross-platform product contract
@@ -94,6 +95,7 @@ Account linking / registered login flows (including email, Apple, Google); autom
 - **D36:** 30-minute anti-ratholing claim on same Session.
 - **D37:** **accounts linking deferred** from Friends Alpha to future Accounts feature; anonymous server accounts remain P0.
 - **D38:** recoverable settlement and no silent loss/duplication of virtual balances.
+- **M8 C6.1 E16 (2026-11-11):** the Friends Alpha interrupted-hand policy in §7; full in-progress recovery for the public product.
 - **D39:** real-user, multi-table, desktop/mobile-browser, accessibility and performance acceptance; numeric targets finalized before implementation.
 
 ## 12. Implementation decisions delegated to M8 C7

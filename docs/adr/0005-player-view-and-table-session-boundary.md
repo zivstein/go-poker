@@ -1,6 +1,6 @@
 # 0005: Player view, table session, and server boundary
 
-Status: Accepted (2026-11-02); partly superseded by [ADR 0006](0006-shared-table-revision-and-private-intents.md) (2026-11-03)
+Status: Accepted (2026-11-02); partly superseded by [ADR 0006](0006-shared-table-revision-and-private-intents.md) (2026-11-03) and by [ADR 0008](0008-fastapi-server-and-single-writer-tables.md) (2026-11-11: §12's single-instance and restart-loss clauses and §14's Starlette clause; §14's serializer clause refined)
 
 > **Supersession note (2026-11-03).** This record is kept as written. [ADR 0006](0006-shared-table-revision-and-private-intents.md) supersedes parts of it: decision 8's increment rule, including its example "an accepted leave or sit-out intent" (the revision is now the shared table-state revision, and private intents alone never increment it); decision 7's closed command list, extended by the pre-action command; and decision 13's "after every successful state change" (after a shared transition every connected viewer receives their own snapshot; after a private-only change, only the owner). Everything else stands, including `expected_revision` on every state-changing command, the revision guard before the engine, and timers re-checking the revision. Milestone numbers after 7 in this record use the roadmap numbering of 2026-11-02, which is being replanned (see `ROADMAP.md`).
 
