@@ -333,7 +333,7 @@ Hooks are useful when:
 
 Go! Poker currently uses no Hooks.
 
-That is intentional.
+That is intentional. A PreToolUse guard Hook was built and registered locally in M8 C5.4b. It caused a fail-closed lockout, was disabled and was removed. A smaller redesign was validated in scratch but not adopted: its cost and lockout risk outweighed what it added over native deny rules and CI. The committed `.claude/settings.json` holds deny rules only. The reasoning and the revisit criteria are in [`C5_4_ENFORCEMENT_RETROSPECTIVE.md`](C5_4_ENFORCEMENT_RETROSPECTIVE.md).
 
 A capability should be added because it solves a real problem, not because the platform supports it.
 
@@ -535,7 +535,8 @@ Control-plane files include:
 - `ENGINEERING_PROCESS.md`;
 - `.claude/agents/`;
 - `.claude/skills/`;
-- future Hooks/config.
+- `.claude/settings.json` and `.claude/ownership.json`;
+- the workflow scripts.
 
 Separating Meta work from feature work prevents an implementation agent from casually rewriting the rules that govern its own behavior.
 

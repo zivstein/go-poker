@@ -1,7 +1,7 @@
 """Load, validate and resolve the lane ownership map (`.claude/ownership.json`).
 
 This module is the single home of the map's meaning: strict loading, validation, path resolution, lane-from-branch and
-the "may this lane change this path" decision. `scripts/check_ownership.py` uses it, and so will the Git guard.
+the "may this lane change this path" decision. `scripts/check_ownership.py` uses it.
 
 Loading fails closed: every violation raises `MapError` with the offending location. The declared rules in the map
 (`patterns.precedence`, `patterns.unmapped`) must be exactly the ones implemented here.

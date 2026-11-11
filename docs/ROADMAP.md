@@ -31,7 +31,7 @@ AI-organization growth belongs in `docs/company/ORGANIZATION_ROADMAP.md`.
 | 19 | AI analysis/coaching/player assistant | Post-Alpha (provisional) |
 | 20 | Further variants, tournaments, and game modes | Post-Alpha (provisional) |
 
-Milestone 7 is complete (2026-11-03). Milestone 8 is in progress: its plan was approved on 2026-11-08 ([M8 Plan](milestones/M8_PLAN.md)), and its Cycle status is in `CURRENT_CYCLE.md`. The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
+Milestone 7 is complete (2026-11-03). Milestone 8 is in progress: its plan was approved on 2026-11-08 ([M8 Plan](milestones/M8_PLAN.md)) and amended on 2026-11-10, and its Cycle status is in `CURRENT_CYCLE.md`. The rest of the road to the Friends Alpha is an unnumbered planning section, [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8), replanned during Milestone 8. The milestones after 8 remain provisional future direction: their numbers and order are not authoritative until Milestone 8 replans the road to the Alpha, and they may be renumbered then. ADRs accepted before 2026-11-03 use the earlier numbering, in which Milestone 8 was "Private table online" and Milestone 9 was "Friends Alpha v0.1"; that work is now in the road to the Friends Alpha after Milestone 8.
 
 ## Product Direction
 
@@ -181,9 +181,23 @@ The boundaries between the engine, the application layer, and the server are in 
 | # | Milestone | Purpose | Ends with |
 | --- | --- | --- | --- |
 | 7 | Player view + local table | Engine player-view projection; transport-free `TableSession` application layer; betting pre-actions | Scripted multi-user `TableSession` tests play consecutive hands, including an engine-generation reset and pre-actions, and each user's views hold only what that user may see |
-| 8 | Multi-Agent Engineering Organization + Product Architecture | The multi-team engineering organization (see `docs/company/ORGANIZATION_ROADMAP.md`); the API architecture; product and UX design; replanning the road to the Friends Alpha | The [M8 exit gates](milestones/M8_PLAN.md#m8-exit-gates) |
+| 8 | Multi-Agent Engineering Organization + Product Architecture | Product and UX design; the engineering organization and a native-first parallel workflow, proven by a Core + Backend proof of concept; the Backend/API and Web architecture with a shared Core–Backend–Web contract; replanning the road to the Friends Alpha | The [M8 exit gates](milestones/M8_PLAN.md#m8-exit-gates) |
 
 Milestone 7's implemented behavior is recorded in `ARCHITECTURE.md` and its Cycle history in Git. Milestone 8's Cycle split is in the [M8 Plan](milestones/M8_PLAN.md), and its Cycle status in `CURRENT_CYCLE.md`.
+
+Approved on 2026-11-10, at M8 C5.4:
+
+- **Enforcement.** C5.4a (the ownership map and the CI `ownership` check) stays complete and in force. C5.4b (the custom guard hook) is stopped and superseded. Its guard was registered locally, caused a lockout and was removed, and it was never committed. The custom guard and mandatory multi-lane enforcement are not prerequisites for product development ([retrospective](company/C5_4_ENFORCEMENT_RETROSPECTIVE.md)).
+- **Workflow.** Development is native-first and manually coordinated by the Product Owner: separate Claude Code sessions in Git worktrees, focused Cycles with QA and Reviewer, and Owner approval and merge. No autonomous orchestrator is built.
+- **Sequence.**
+  1. Backend/API architecture planning.
+  2. Web planning, coordinated with Core and Backend.
+  3. A shared Core–Backend–Web contract.
+  4. A first parallel iteration with Core and Backend only.
+  5. Its measured evaluation.
+  6. Web joins in the following parallel iteration.
+
+  The detail is in the [M8 Plan](milestones/M8_PLAN.md#c6-parallel-development-poc).
 
 #### Road to Friends Alpha after M8
 
@@ -194,6 +208,8 @@ To be replanned during Milestone 8. These are the remaining capability areas exp
 - **Deployment and private tables:** the first remote deployment, hosting, and the private-table link or code flow.
 - **Reconnect and table-life policy:** rejoining after a transport drop, the next-hand pause and other timers, the action timer, and rebuy and top-up.
 - **Alpha hardening and playtests:** socket drops, logs (including completed-history JSON logs), limits, cleanup, and playtests ending in Friends Alpha v0.1.
+
+This work is delivered in parallel iterations across Core, Backend and Web against versioned shared contracts, building on the M8 C6 proof of concept. Web joins from the iteration after C6.
 
 #### Approved decisions
 
@@ -269,7 +285,7 @@ After the Friends Alpha:
 
 ### Add Clients
 
-The web client is built on the road to the Friends Alpha (see [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8)). Later mobile and desktop clients (Milestone 18) consume the same server protocol and engine contracts rather than recreating poker rules.
+The web client is built on the road to the Friends Alpha (see [Road to Friends Alpha after M8](#road-to-friends-alpha-after-m8)). Later mobile and desktop clients (Milestone 18) consume the same server protocol and engine contracts rather than recreating poker rules. The shared Core–Backend–Web contract from M8 C6 is designed so that a Mobile client can be added as another consumer, without changing Core or Backend ownership.
 
 ### Add Analytics and AI
 

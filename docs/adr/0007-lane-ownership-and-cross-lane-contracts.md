@@ -1,6 +1,13 @@
 # 0007: Lane ownership and cross-lane contracts
 
-Status: Accepted (2026-11-09)
+Status: Accepted (2026-11-09); activation deferred and its prevention layer withdrawn (2026-11-10)
+
+> **Status note (2026-11-10).** This record is kept as written. On 2026-11-10 the Product Owner stopped M8 C5.4b and deferred C5.5 and C5.6 ([retrospective](../company/C5_4_ENFORCEMENT_RETROSPECTIVE.md)). Two parts of this record are affected:
+>
+> - The prevention layer in decision 2 ("a guard hook") was withdrawn. The original C5.4b guard was implemented and registered locally. A broken edit to it locked sessions out, and it was disabled with the local override and removed. A smaller redesign (Option B) was implemented and validated in a scratch repository but never adopted. No guard hook is registered.
+> - The last Consequence's "M8 C5.6" no longer schedules activation. `multi-lane` mode now needs a new, approved Meta Cycle.
+>
+> The rest stands: the ownership map as the single home of ownership, the CI detection layer from C5.4a, the Reviewer's judgment, and contract-first parallelism through accepted contract ADRs. In `single-team` mode, parallel work follows Parallel Sessions in `ENGINEERING_PROCESS.md`.
 
 ## Context
 

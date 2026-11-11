@@ -1,12 +1,12 @@
 # Go! Poker — Milestone 8 Plan
 
-**Status:** Plan approved in M8 C0. Cycle status is in `docs/CURRENT_CYCLE.md`.  
+**Status:** Plan approved in M8 C0. Amended on 2026-11-10 at C5.4 (C5 closed, C6 replanned; see [C6 parallel-development POC](#c6-parallel-development-poc)). Cycle status is in `docs/CURRENT_CYCLE.md`.  
 **Date:** 2026-11-08  
 **Milestone:** M8 — Go! Product & Company Foundation
 
 ## Outcome and boundaries
 
-M8 defines the product/design identity, cross-platform experience contracts, AI-native team operating model, tooling benchmarks, and technical delivery architecture. **M8 is not the Friends Alpha release.** The next implementation milestones deliver Playable Preview and Friends Alpha in slices of the same product.
+M8 defines the product/design identity, cross-platform experience contracts, AI-native team operating model, a measured parallel-development proof of concept, and technical delivery architecture. **M8 is not the Friends Alpha release.** The next implementation milestones deliver Playable Preview and Friends Alpha in slices of the same product.
 
 The authoritative Friends Alpha scope and decisions are in `docs/product/FRIENDS_ALPHA_PRODUCT_CONTRACT.md`.
 
@@ -19,9 +19,9 @@ The authoritative Friends Alpha scope and decisions are in `docs/product/FRIENDS
 | C2 | Lobby, saved table, joining, wallet, seating, game and error/reconnect UX flows | `docs/product/UX_FLOWS.md` |
 | C3 | Visual brand directions, logo/wordmark selection, typography and table/motion art direction | `docs/design/BRAND.md` and visual references |
 | C4 | Cross-platform design tokens, component states, motion specifications and interactive prototype | `docs/design/DESIGN_SYSTEM.md`, `docs/design/MOTION_CONTRACTS.md`, prototype |
-| C5 | AI organization: an Orchestrator and short-lived per-Work-Order Cycle Leads over lanes Core, Backend/API, Design, Org and Meta (Web after C7), with shared Engineer/QA/Reviewer roles; Work Orders, handoffs, contract-first parallelism, escalation and budgets; ownership and closeout tooling; an activation dry run (C5.1–C5.6) | Rules in `docs/ENGINEERING_PROCESS.md`, the lane map `.claude/ownership.json`, ADR 0007; rationale in `docs/company/M8_C5_2_ORGANIZATION_DESIGN.md` |
-| C6 | Native Claude Code organization pilot: a feature-sized cross-lane task, measured for outcome, usage, performance and manual intervention, under the technology freeze in `docs/ENGINEERING_PROCESS.md` | `docs/company/TOOLING_EVALUATION.md` (pilot findings) |
-| C7 | Integrate product/design/org with identity, wallet, ledger, sessions, API, hosting, security, operational tradeoffs | Architecture ADRs + next milestone execution plan |
+| C5 | AI organization: an Orchestrator and short-lived per-Work-Order Cycle Leads over lanes Core, Backend/API, Design, Org and Meta (Web after C7), with shared Engineer/QA/Reviewer roles; Work Orders, handoffs, contract-first parallelism, escalation and budgets; ownership and closeout tooling (C5.1–C5.4a). Amended 2026-11-10: C5.4b (guard hook) stopped and superseded; C5.5 (Work Order tooling) and C5.6 (activation) not pursued in M8, so multi-lane activation is not a prerequisite for product work | Rules in `docs/ENGINEERING_PROCESS.md`, the lane map `.claude/ownership.json`, ADR 0007; rationale in `docs/company/M8_C5_2_ORGANIZATION_DESIGN.md`; `docs/company/C5_4_ENFORCEMENT_RETROSPECTIVE.md` |
+| C6 | Platform architecture, shared contract and parallel-development POC, native-first and manually coordinated, under the technology freeze in `docs/ENGINEERING_PROCESS.md` (C6.1–C6.5, [below](#c6-parallel-development-poc)) | Architecture plan and contract ADRs; POC code merged on `master`; `docs/company/TOOLING_EVALUATION.md` (POC findings) |
+| C7 | Integrate product/design/org with identity, wallet, ledger, sessions, the C6 API and Web plans, hosting, security, operational tradeoffs; plan the next parallel iteration, in which Web joins Core and Backend; keep the contracts consumable by a later Mobile client | Architecture ADRs + next milestone execution plan |
 
 ## Dependency graph
 
@@ -32,32 +32,70 @@ flowchart TD
     C2["C2: UX Flows"]
     C3["C3: Brand & Visual Identity"]
     C4["C4: Design System & Prototype"]
-    C5["C5: AI Organization"]
-    C6["C6: Native Org Pilot"]
-    A["Parallel Architecture Discovery"]
+    C5["C5: AI Organization (closed)"]
+    C61["C6.1: Backend/API Architecture"]
+    C62["C6.2: Web Plan"]
+    C63["C6.3: Shared Core–Backend–Web Contract"]
+    C64["C6.4: POC — Core ∥ Backend"]
+    C65["C6.5: POC Evaluation"]
     C7["C7: Architecture & Delivery Plan"]
     G["M8 Exit Gate"]
-    I["Implementation Milestones"]
+    I["Implementation Milestones (next iteration: Core ∥ Backend ∥ Web)"]
     P["Playable Preview"]
     F["Friends Alpha"]
     C0 --> C1
     C0 --> C5
-    C0 --> A
     C1 --> C2
     C1 --> C3
     C2 --> C4
     C3 --> C4
-    C5 --> C6
-    A --> C7
+    C5 --> C61
+    C61 --> C62
+    C61 --> C63
+    C62 --> C63
+    C63 --> C64
+    C64 --> C65
     C4 --> C7
-    C6 --> C7
+    C65 --> C7
     C7 --> G
     G --> I
     I --> P
     P --> F
 ```
 
-C1 unlocks parallel UX (C2) and visual identity (C3). The AI organization (C5→C6) and initial technical investigation proceed independently of visual design. Only the integrated final architecture/delivery cycle (C7) waits for those inputs.
+C1 unlocks parallel UX (C2) and visual identity (C3). The engineering track (C5, then C6) proceeds independently of visual design. C6.1 replaces the earlier, unscheduled "Parallel Architecture Discovery" track. C6.2 uses the C2–C4 design work available at the time and records what Web still waits on. Only the integrated final architecture/delivery cycle (C7) waits for all inputs.
+
+## C6 parallel-development POC
+
+Approved on 2026-11-10 with the C5.4 transition. The workflow rules are in `docs/ENGINEERING_PROCESS.md` ([Parallel Sessions](../ENGINEERING_PROCESS.md#parallel-sessions-native-single-team-mode)). No autonomous orchestrator, custom guard or Work Order tooling is built for it.
+
+| Part | Purpose | Completion artifact |
+| --- | --- | --- |
+| C6.1 | Backend/API architecture plan: the Core–Backend boundary (`TableSession` and the engine), the server's shape, transport, serialization of views and commands, and errors. Coordinated with Core, and designed so Web now and Mobile later are both clients of the same API | Plan document under `docs/` and ADRs for the durable decisions |
+| C6.2 | Web plan, coordinated with Core and Backend: client architecture, how it consumes the API, and the design handoff it needs from C2–C4 | Web plan document under `docs/` |
+| C6.3 | Shared Core–Backend–Web contract: signatures, wire schema, semantics, errors and versioning, plus the POC's functional slice and its two Briefs (Core and Backend, disjoint paths) | Accepted contract ADR; two approved Briefs |
+| C6.4 | POC iteration 1: Core and Backend in two isolated sessions and worktrees, built against the contract and integrated on `master`. Web joins in the next parallel iteration (C7 plans it) | Two merged PRs and a passing integration test on `master` |
+| C6.5 | POC evaluation against the success criteria below; keep or adjust the workflow | `docs/company/TOOLING_EVALUATION.md` |
+
+**Bounds.**
+
+- C6.1–C6.3 are documentation-only planning Cycles. Each produces only the documents and ADRs listed above: no scripts, CI, hooks, settings or other tooling changes.
+- They plan only what the C6.4 slice and its contract need. Identity, wallet, ledger, hosting and security wait for C7.
+- C6.4 is the next Cycle after C6.3 and the first that writes product code: Core in the Core lane, Backend in the Backend lane.
+
+**Success criteria.** The targets are proposals, confirmed or changed when the C6.3 Briefs are approved. Usage percentages are recorded per five-hour or weekly window, as read from the app, and are never summed across windows.
+
+| Dimension | Measure | Proposed target |
+| --- | --- | --- |
+| Contract stability | superseding contract ADRs and contract clarifications during C6.4 | no superseding ADR; at most one clarification, with no signature change |
+| Functional integration | an integration test on `master` drives Backend through Core's real implementation, with no doubles reachable from production code | passes; `quality` and `ownership` green on both PRs |
+| Tests | each Cycle's Definition of Done; `VERIFY: PASS` in each worktree and on `master` after both merges | all pass |
+| Path isolation | files changed outside each Brief's declared paths | none |
+| Elapsed time | wall-clock time from the first Brief approval to the second merge, against the sum of both Cycles' own elapsed times | at most 75% of the sum |
+| Session context | peak context per role and session (`scripts/usage_report.py`) | Engineer and QA under the 150k warning threshold; no session over 300k |
+| Usage | five-hour and weekly percentages at the start and end of each window; model calls per session | no window reaches its limit during C6.4 |
+| Rework | fix rounds per Cycle, and rework caused by the other session's work | at most two fix rounds per Cycle; no cross-session rework beyond the pre-merge update |
+| Owner intervention | each intervention, labelled planned (Brief approval, worktree setup, merge) or unplanned (unblocking, clarification, recovery) | at most two unplanned per Cycle |
 
 ## M8 exit gates
 
@@ -65,7 +103,7 @@ C1 unlocks parallel UX (C2) and visual identity (C3). The AI organization (C5→
 2. Lobby, table and settings UX prototype covers 2–9 seats, interaction states, error/reconnect, wallet and account flows.
 3. Brand, design-system tokens, reusable UI component definitions and cross-platform motion contracts are approved with reference imagery/prototypes.
 4. AI team roles, ownership, handoffs, autonomy/escalation rules, context strategy and budget controls are specified.
-5. A real feature-sized task goes through Orchestrator → Cycle Lead → Engineer → QA → Reviewer with documented outcome, usage, performance and manual intervention; the native workflow is kept or adjusted based on the results.
+5. A real feature-sized task runs as two parallel Cycles, Core and Backend, in separate sessions and worktrees against a shared contract. Each goes through Engineer → QA → Reviewer, and both integrate on `master`. The C6 success criteria are measured and documented, and the native workflow is kept or adjusted based on the results (amended 2026-11-10).
 6. Identity, Wallet, Ledger, Table/Session lifecycle and Core/API/client contract boundaries are reviewed, including recovery and security threat scenarios.
 7. Release architecture, test plan, performance targets, deployment/recovery path, implementation milestones, dependencies and owners are explicit.
 8. A NotebookLM Decision Pack accurately reflects approved decisions, with final sources suitable for explanatory video scripts.

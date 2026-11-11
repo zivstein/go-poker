@@ -289,11 +289,13 @@ Keep reports proportional to the work.
 
 The closeout manifest is the proposed commit message and every path the Cycle commit will contain, in the exact form `/finish-cycle` passes to `scripts/finish_cycle.py`:
 
-    message: feat: add continuous Hold'em game
-    path: src/go_poker/game/variants/texas_holdem/game.py
-    path: tests/game/variants/texas_holdem/test_holdem_game.py
+    message: M8 | C5.4a: add ownership map resolver and CI ownership check
+    path: scripts/ownership_map.py
+    path: tests/tooling/test_ownership_map.py
 
 It lists every changed path in the working tree, including deleted files and both sides of a rename. The script commits nothing unless the working tree's changes match it exactly.
+
+The `message:` line follows `M<milestone> | C<cycle>[.<part>]: <imperative summary>`, on one line of about 72 characters at most; a Work Order adds its id, as in `M8 | C6 | WO-01: <summary>`. Work outside a Cycle keeps the `fix:`, `chore:` or `docs:` prefixes. Earlier history is not rewritten.
 
 ## Ownership
 
@@ -496,6 +498,17 @@ In force for M8 C5, C6 and the Friends Alpha implementation, in both organizatio
 - **Not covered, and unchanged:** the development toolchain (uv, Ruff, mypy, pytest), the approved Figma MCP design workflow, and the product's own technology (revisited in M8 C7).
 - Usage and performance telemetry are preserved (see Usage Measurement and [Parallelism and budgets](#parallelism-and-budgets)).
 
+## Parallel Sessions (native, single-team mode)
+
+Approved on 2026-11-10 for the M8 C6 proof of concept and later parallel iterations. It runs in `single-team` mode with native Claude Code features only: separate sessions, Git worktrees, the normal agents, deny rules and CI. There is no orchestrator, guard or Work Order tooling. The Product Owner coordinates.
+
+- **Contract first.** Parallel work starts only after the shared contract it builds against is an accepted ADR. The ADR number is the contract version. A needed change stops the affected session and goes to the Product Owner. A superseding ADR means every dependent Brief is re-approved.
+- **One Cycle per session.** Each parallel task is a Cycle with its own approved Brief, run by its own Lead session in its own worktree and branch. Inside it, the normal Cycle Flow applies: Engineer, QA, Reviewer, final verification, Cycle Report, `/finish-cycle`.
+- **Declared paths.** Each Brief lists the paths it may change, using the lanes in `.claude/ownership.json` as the default. Parallel Briefs share no path, and none edits `CURRENT_CYCLE.md` or `ROADMAP.md`. A change needed outside the Brief's paths stops the session and goes to the Product Owner. The Reviewer checks the diff against the Brief's paths.
+- **Worktrees and branches.** The Product Owner creates each worktree outside the main checkout (for example in a sibling directory), its branch from the latest `master` with its lane prefix (`core/`, `backend/`, ...), and the branch's upstream. `scripts/finish_cycle.py` pushes only to an existing upstream. The main checkout stays on `master` with a clean tree. A worktree inside it would show up there as an untracked path.
+- **Integration.** Each branch reaches `master` through a pull request with green `quality` and `ownership` checks, merged by the Product Owner. Before the second merge, the Product Owner brings `master` into that branch, and its session re-runs verification. Status and any architecture changes are recorded after integration.
+- **Limits.** At most two parallel sessions. Each starts fresh from its Brief. Telemetry is per session, as in [Usage Measurement](#usage-measurement).
+
 ## Multi-lane organization (inactive until activation)
 
 **Inactive.** Nothing in this section applies while `.claude/ownership.json` has `mode: single-team`, and roles skip it in that mode, except in Meta work that implements it.
@@ -503,11 +516,11 @@ In force for M8 C5, C6 and the Friends Alpha implementation, in both organizatio
 The exceptions are the rules marked **both modes**. They apply in `single-team` mode too:
 
 - since C5.4a, the `quality` push trigger limited to `master`, and the `ownership` job's repository and base checks (see [Git and integration](#git-and-integration));
-- once C5.4b builds them, the guard's Git rule and the Permit layer (see [Enforcement](#enforcement)).
+- the Permit layer: the deny rules in the committed `.claude/settings.json` (see [Enforcement](#enforcement)).
 
 How the section becomes active:
 
-- **Activation.** In M8 C5.6, a Meta Work Order flips the mode and activates the Core, Backend/API, Design, Org and Meta lanes. Three things come first: the tooling from C5.4 and C5.5, the Product Owner's acceptance of the single-account risk, and branch protection on `master`.
+- **Activation: deferred** (2026-11-10). C5.4b was stopped, and C5.5 and C5.6 are not pursued in M8. This section, its Work Order tooling and its enforcement are not prerequisites for product development, which uses [Parallel Sessions](#parallel-sessions-native-single-team-mode). Activation needs a new, approved Meta Cycle, under the revisit criteria in [`docs/company/C5_4_ENFORCEMENT_RETROSPECTIVE.md`](company/C5_4_ENFORCEMENT_RETROSPECTIVE.md). The rules below stay as the specification for it.
 - **Supervised.** Until C5.6 has demonstrated the Work Order lifecycle, this is a **supervised multi-session** organization. Sessions are connected by the Work Order record and the Product Owner. A step is described as unattended only after C5.6 has shown it working without the Product Owner.
 - **Rationale** is in [ADR 0007](adr/0007-lane-ownership-and-cross-lane-contracts.md) and the archived [C5.2 design package](company/M8_C5_2_ORGANIZATION_DESIGN.md).
 
@@ -801,25 +814,18 @@ The manifest keeps its format. Its `path:` lines list the whole merge-base diff.
 
 | Layer | Mechanism | Strength |
 | --- | --- | --- |
-| Prevent | a PreToolUse guard hook that reads the map (see below) | best effort: command matching is not a security boundary |
+| Prevent | none: the C5.4b guard hook was stopped (2026-11-10) | — |
 | Detect | the `ownership` CI job, run from `master`'s code. Every merge-base-diff path must be in the branch's lane or in a co-owned entry for it. Unmapped paths and unknown prefixes fail, and only `meta/` may touch control files. | authoritative for path ownership |
-| Permit (**both modes**, from C5.4b) | committed `.claude/settings.json` (hook registration and deny rules); the Product Owner trims the machine-local allowlist | narrows routine risk |
+| Permit (**both modes**) | the deny rules in the committed `.claude/settings.json`; the Product Owner trims the machine-local allowlist | narrows routine risk |
 | Judge | the Reviewer's scope, contract and section-ownership checks | what tooling cannot decide |
 
-The guard hook:
-
-- **Scope:** this repository and its worktrees only. Scratch copies, mutation experiments and scratchpad files are outside it.
-- **Both modes**, once C5.4b builds it: it blocks raw state-changing Git and `gh` write subcommands, and allows the project scripts. This enforces only what `AGENTS.md` and this document already forbid.
-- **`multi-lane` mode only:** it also blocks:
-  - writes outside the branch's lane or the role's kinds;
-  - writes in the main checkout;
-  - work on an unmapped branch.
-
-  The Work Order's own git-ignored record files stay writable.
+- **Deny rules:** native Claude Code `Bash(...)` deny rules for state-changing `git` and `gh` commands. They are best effort, not an absolute barrier. They match the plain command text in every directory, and they do not stop Git or `gh` run indirectly: another spelling, a script, another runtime such as `python -c`, or a project script that runs Git itself. Instructions, review, CI and the Product Owner's merge control stay the real safeguards. `tests/tooling/test_settings.py` keeps them from covering the project's own commands.
+- **No hooks:** the committed settings register none. Adding a hook is Meta work. Why the guard was stopped, and when to revisit local enforcement, is in [`docs/company/C5_4_ENFORCEMENT_RETROSPECTIVE.md`](company/C5_4_ENFORCEMENT_RETROSPECTIVE.md).
+- **Activation:** a change to `.claude/settings.json` takes effect in sessions that are already running, not only in new ones.
 
 **Single-account limit.** Every session acts with the Product Owner's Git and GitHub credentials. GitHub cannot tell an agent from the Product Owner, and a required PR approval is impossible, because an author cannot approve their own PR.
 
 - Protection stops accidental direct pushes to `master`. It does not stop a deliberate agent, because the sessions hold administrator credentials.
-- Pushes of Work Order branches and merges rest on the guard, deny rules and instructions. That is the same class of risk as today.
-- The Product Owner accepts this residual risk explicitly before the C5.6 Brief is Ready; the decision is deferred until then (`CURRENT_CYCLE.md`).
+- Pushes of Work Order branches and merges rest on the deny rules and instructions. That is the same class of risk as today.
+- The Product Owner accepts this residual risk explicitly before any activation Brief is Ready; the decision is deferred until then (`CURRENT_CYCLE.md`).
 - Identity separation (a machine user or token, or a credential sandbox) is a deferred decision (`CURRENT_CYCLE.md`).

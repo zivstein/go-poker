@@ -18,9 +18,13 @@ Teams and roles are created only when the product creates a real independently o
 
 One Core Engineering Team currently owns the poker engine.
 
-## Planned: Multi-lane Organization (activates at M8 C5.6)
+## Now: Native Parallel Sessions
 
-Milestone 8 specifies a multi-lane organization. It stays inactive until M8 C5.6 switches the mode in `.claude/ownership.json`. Then an Orchestrator plans and integrates, and a short-lived Cycle Lead runs each Work Order in one lane, with the shared Engineer, QA and Reviewer roles.
+Since 2026-11-10, parallel work runs in `single-team` mode. The Product Owner coordinates separate Claude Code sessions, each running one Cycle in its own worktree against a shared contract ADR. The rules are in `docs/ENGINEERING_PROCESS.md` (Parallel Sessions). The first proof of concept is M8 C6, with Core and Backend; Web joins the next iteration.
+
+## Deferred: Multi-lane Organization
+
+Milestone 8 specified a multi-lane organization: an Orchestrator plans and integrates, and a short-lived Cycle Lead runs each Work Order in one lane, with the shared Engineer, QA and Reviewer roles. Its activation (M8 C5.5–C5.6) was deferred on 2026-11-10, when the C5.4b guard hook was stopped. It stays inactive until a new, approved Meta Cycle switches the mode in `.claude/ownership.json`, under the revisit criteria in [`C5_4_ENFORCEMENT_RETROSPECTIVE.md`](C5_4_ENFORCEMENT_RETROSPECTIVE.md).
 
 - The rules are in `docs/ENGINEERING_PROCESS.md` (Multi-lane organization).
 - The lanes and permissions are in `.claude/ownership.json`.
