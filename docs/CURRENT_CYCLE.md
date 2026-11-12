@@ -20,7 +20,7 @@ Milestone status lives in `ROADMAP.md`. The milestone plan — each Cycle's purp
 | C3 | Design in progress | Creative direction recorded in `docs/design/`; final brand assets, `docs/design/BRAND.md` and trademark clearance pending |
 | C4 | Prototype in progress | `docs/design/DESIGN_SYSTEM.md` and `docs/design/MOTION_CONTRACTS.md` not yet produced |
 | C5 | Closed (2026-11-10) | The AI organization audit is complete (2026-11-09) and archived as historical analysis in [`docs/company/M8_C5_AI_ORGANIZATION_AUDIT.md`](company/M8_C5_AI_ORGANIZATION_AUDIT.md). C5.1, documentation reconciliation, is complete (2026-11-09). C5.2, the organization design, was approved (2026-11-09); its rationale is archived in [`docs/company/M8_C5_2_ORGANIZATION_DESIGN.md`](company/M8_C5_2_ORGANIZATION_DESIGN.md). C5.3, the organization specification, is complete (2026-11-09): the rules are in `ENGINEERING_PROCESS.md`, the lane map in `.claude/ownership.json` (`mode: single-team`), and the rationale in [ADR 0007](adr/0007-lane-ownership-and-cross-lane-contracts.md). C5.4 is split in two (approved 2026-11-09): C5.4a, the ownership map resolver and the CI `ownership` check, is complete (2026-11-09). C5.4b, the guard hook, was stopped on 2026-11-10 and is superseded. It had been registered locally, caused a lockout, and was disabled and removed without being committed. Its code and the Option B redesign are archived, and the committed `.claude/settings.json` keeps the native deny rules only. C5.5 and C5.6 are not pursued in M8. The record is [`docs/company/C5_4_ENFORCEMENT_RETROSPECTIVE.md`](company/C5_4_ENFORCEMENT_RETROSPECTIVE.md) |
-| C6 | In progress | Replanned on 2026-11-10 as C6.1–C6.5 ([M8 Plan](milestones/M8_PLAN.md#c6-parallel-development-poc)). C6.1, the Backend/API architecture plan, is complete (2026-11-11): the [C6.1 plan](milestones/M8_C6_1_BACKEND_API_PLAN.md) (decisions E1–E18) and [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md), accepted. The POC is now Backend ∥ Web after a bounded preflight (E9-A). Next, on the Owner's instruction: C6.2, the Web plan |
+| C6 | In progress | Replanned on 2026-11-10 as C6.1–C6.5 ([M8 Plan](milestones/M8_PLAN.md#c6-parallel-development-poc)). C6.1, the Backend/API architecture plan, is complete (2026-11-11): the [C6.1 plan](milestones/M8_C6_1_BACKEND_API_PLAN.md) (decisions E1–E18) and [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md), accepted. The POC is now Backend ∥ Web after a bounded preflight (E9-A). C6.2, the Web architecture and design foundation plan, is complete (2026-11-11): the [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md) (decisions W1–W30), approved; the design references are recorded as concepts. Next, on the Owner's instruction: C6.3, the ADR 0009 wire contract, which must settle the plan's blockers B1–B7 |
 | C7 | Not started | |
 
 ## Pending Gates
@@ -32,6 +32,8 @@ None active. The C5.6 gates (the public repository's `pull_request_target` polic
 For C6:
 
 - **The POC's functional slice and its success targets:** C6.3, with the two Briefs. Decided on 2026-11-10 (OD17): the POC runs contract-first in two sessions and worktrees. Amended on 2026-11-11 (C6.1 E9): the pair is Backend and Web, not Core and Backend.
+- **ADR 0009 contract blockers from C6.2:** B1–B7 in the [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md#12-contract-blockers-for-c63): command outcome and delivery semantics, create and join, variant fields and hidden-card counts, the code catalogue, the committed fixture path, versioning and encodings.
+- **Deferred C6.2 items:** pot-based sizing presets (W21), defined in a later game/betting contract cycle before any preset button is built.
 - **Deferred C6.1 decisions:** E3, the showdown-timeout rule (with the action timer); E5, Host versus Table Owner (C7); the E14 Quick Play pool details (Quick Play design); the E16 recovery mechanism (C7).
 
 Deferred C5.2 organization decisions, each decided at its gate:
@@ -57,9 +59,8 @@ Stale `ROADMAP.md` product descriptions that the Friends Alpha Product Contract 
 
 Open for C7 or a Product Owner decision, not covered by the precedence rule:
 
-- The approved client decision in `ROADMAP.md` (TypeScript with React and Vite) against Product Contract §12, which delegates the Web framework to C7: open for C6.2. The server side was settled on 2026-11-11 (C6.1 E1, E6): FastAPI and uvicorn under ADR 0008, and the wire protocol as ADR 0009 v1, which C7 confirms or supersedes.
 - The application layer's host (the table's creator, succeeded by the earliest-joined member) and the contract's Table Owner (owner-only configuration; play continues without the Owner) have no defined relationship.
 - C6 is still described as an "AI teams and orchestration benchmark" in `docs/design/BRAND_ASSET_PRODUCTION_BRIEF.md`. The [M8 Plan](milestones/M8_PLAN.md) now describes it as a native-first parallel-development POC (2026-11-10).
 - The milestone name: "Multi-Agent Engineering Organization + Product Architecture" in `ROADMAP.md`, "Go! Product & Company Foundation" in the M8 Plan.
-- C4 is in progress although the M8 Plan's dependency graph places it after C2 and C3; `docs/design/DESIGN_INDEX.md` still has no Figma file link.
+- C4 is in progress although the M8 Plan's dependency graph places it after C2 and C3. (Since C6.2 W15, approved design specifications in the repository are the design source of truth, and Figma is optional tooling.)
 - The document pointers in `CLAUDE.md` and the Company Manual's operational context have no entries for `docs/milestones/`, `docs/product/` or `docs/design/`.

@@ -1,6 +1,6 @@
 # Go! — Figma + Claude Code Workflow
 
-**Status:** Working instructions for M8 design.
+**Status:** **Optional.** Superseded as a prerequisite on 2026-11-11 by the approved [C6.2 plan](../milestones/M8_C6_2_WEB_PLAN.md) (W15): approved design specifications in the repository are the design source of truth, and Web implements tokens as CSS custom properties. Figma may still be used as a design tool. The instructions below are kept as written for that optional use and as history; where they call Figma the source of truth or require a Figma frame before implementation, the repository specifications now take that role.
 
 ## Roles
 

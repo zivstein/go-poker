@@ -222,6 +222,14 @@ Approved on 2026-11-11, at M8 C6.1 ([C6.1 plan](milestones/M8_C6_1_BACKEND_API_P
 
   C7 assigns milestone numbers.
 
+Approved on 2026-11-11, at M8 C6.2 ([C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md)):
+
+- **Web stack.** A React + TypeScript (strict) + Vite single-page app, rendered with DOM, CSS and inline SVG; npm with a pinned Node LTS; Biome; minimal dependencies. ADR 0008 and the Python-first server are unchanged.
+- **Client authority.** The browser renders the server's per-viewer snapshots and implements no poker rules; it never infers hidden cards; animation never delays a decision; an uncertain command is never retried automatically.
+- **Visual foundation.** Emerald is the default Go! Poker accent and Deep Teal the Go! master-brand color. Semantic tokens as CSS custom properties; approved design specifications in the repository are the design source of truth, and Figma is optional tooling. The concept images in `docs/design/references/` are concept sources, not production assets.
+- **POC priority.** Two independent browser players complete a real Hold'em hand against the Python server; visual styling is required, while extensive motion and mobile polish do not block integration.
+- **Next.** C6.3 writes ADR 0009 and settles the plan's contract blockers B1–B7.
+
 #### Road to Friends Alpha after M8
 
 To be replanned during Milestone 8. These are the remaining capability areas expected on the way to the Friends Alpha. They have no milestone numbers yet, and their order and grouping are decided in Milestone 8 Cycle C7 ([M8 Plan](milestones/M8_PLAN.md)):
@@ -245,7 +253,7 @@ Approved on 2026-11-02. Milestone references after 8 below follow the provisiona
   - Python with FastAPI, uvicorn, and WebSocket (FastAPI replaced Starlette on 2026-11-11, [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md)).
   - Server dependencies stay outside the dependency-free engine.
   - Python 3.14 compatibility, including FastAPI, `pydantic-core` and uvicorn, is confirmed before the server is implemented.
-- **Client.** TypeScript with React and Vite.
+- **Client.** TypeScript with React and Vite: confirmed for the POC and the Friends Alpha on 2026-11-11 (M8 C6.2 W1, [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md)); C7 does not reopen it without new evidence.
 - **Repository.** `src/go_poker/app/` (application layer), `src/go_poker/server/` (server), and `web/` (client) in this repository.
 - **Identity.**
   - A server-issued guest token and an opaque engine `player_id` (refined on 2026-11-03, below).
