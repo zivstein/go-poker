@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "request_id": null,
+  "code": "AUTH_FAILED",
+  "message": "The credential is not valid for this table"
+}

@@ -1,0 +1,130 @@
+{
+  "type": "snapshot",
+  "revision": 5,
+  "cause": "pre_action",
+  "view": {
+    "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+    "join_code": "K7Q2XM",
+    "settings": {
+      "variant": "texas_holdem",
+      "betting_structure": "no_limit",
+      "small_blind": 5,
+      "big_blind": 10,
+      "buy_in": 1000,
+      "max_seats": 6
+    },
+    "phase": "hand_in_progress",
+    "seats": [
+      {
+        "seat": 1,
+        "occupant": {"display_name": "Alice", "is_host": true, "stack": 990, "status": null}
+      },
+      {
+        "seat": 2,
+        "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+      },
+      {"seat": 3, "occupant": null},
+      {"seat": 4, "occupant": null},
+      {"seat": 5, "occupant": null},
+      {"seat": 6, "occupant": null}
+    ],
+    "hand": {
+      "number": 1,
+      "street": "flop",
+      "board": ["Kc", "7d", "2s"],
+      "participants": [
+        {
+          "seat": 1,
+          "position": "btn",
+          "blind": "small",
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": true,
+          "hole_cards": null,
+          "hidden_card_count": 2,
+          "strength": null
+        },
+        {
+          "seat": 2,
+          "position": "bb",
+          "blind": "big",
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": true,
+          "hole_cards": ["Qs", "Qd"],
+          "hidden_card_count": 0,
+          "strength": {
+            "category": "one_pair",
+            "description": "Pair of Queens",
+            "cards": ["Qs", "Qd", "Kc", "7d", "2s"]
+          }
+        }
+      ],
+      "pots": [{"amount": 20, "eligible_seats": [1, 2]}],
+      "turn": {"seat": 2, "kind": "betting"},
+      "legal_actions": {
+        "can_fold": true,
+        "can_check": true,
+        "can_call": false,
+        "amount_owed": 0,
+        "call_amount": 0,
+        "call_is_all_in": false,
+        "can_bet": true,
+        "can_raise": false,
+        "min_full_target": 10,
+        "max_target": 990,
+        "short_all_in_target": null
+      },
+      "showdown_actions": null,
+      "showdown": null,
+      "settlement": null,
+      "log": [
+        {
+          "event": "hand_started",
+          "number": 1,
+          "participants": [
+            {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+            {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+          ]
+        },
+        {
+          "event": "blinds_posted",
+          "posts": [
+            {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+            {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+          ]
+        },
+        {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]},
+        {
+          "event": "action_taken",
+          "seat": 1,
+          "action": "call",
+          "target": null,
+          "chips": 5,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "check",
+          "target": null,
+          "chips": 0,
+          "all_in": false
+        },
+        {"event": "betting_round_completed", "street": "preflop"},
+        {"event": "street_dealt", "street": "flop", "cards": ["Kc", "7d", "2s"]},
+        {"event": "betting_round_started", "street": "flop"}
+      ]
+    },
+    "you": {
+      "seat": 2,
+      "is_host": false,
+      "pending_leave": false,
+      "pending_sit_out": false,
+      "pre_action": null,
+      "pre_action_options": []
+    }
+  }
+}

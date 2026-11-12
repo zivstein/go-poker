@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/tables/by-code/K7Q2XM/members",
+    "body": {"display_name": "ALICE", "seat": 2}
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "DISPLAY_NAME_TAKEN",
+        "message": "The display name is taken at this table",
+        "field": "display_name"
+      }
+    }
+  }
+}

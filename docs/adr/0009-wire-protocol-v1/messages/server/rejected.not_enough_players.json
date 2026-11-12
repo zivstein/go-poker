@@ -1,0 +1,6 @@
+{
+  "type": "rejected",
+  "request_id": "a-01",
+  "code": "NOT_ENOUGH_PLAYERS",
+  "message": "Player count must be between 2 and 9"
+}

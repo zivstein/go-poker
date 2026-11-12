@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/tables/by-code/K7Q2XM/members",
+    "body": {"display_name": "Bob", "seat": 2}
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+      "seat": 2,
+      "credential": "test-credential-bob"
+    }
+  }
+}

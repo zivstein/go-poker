@@ -1,0 +1,6 @@
+{
+  "type": "rejected",
+  "request_id": "a-02",
+  "code": "ILLEGAL_ACTION",
+  "message": "Action(type=<ActionType.RAISE: 'Raise'>, amount=15) is not legal for the current actor: LegalActions(can_fold=True, can_check=False, can_call=True, amount_owed=5, call_amount=5, call_is_all_in=False, can_bet=False, can_raise=True, min_full_target=20, max_target=1000, short_all_in_target=None)"
+}

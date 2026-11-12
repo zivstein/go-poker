@@ -1,0 +1,41 @@
+{
+  "type": "snapshot",
+  "revision": 5,
+  "cause": "hand_boundary",
+  "view": {
+    "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+    "join_code": "K7Q2XM",
+    "settings": {
+      "variant": "texas_holdem",
+      "betting_structure": "no_limit",
+      "small_blind": 5,
+      "big_blind": 10,
+      "buy_in": 1000,
+      "max_seats": 6
+    },
+    "phase": "waiting_for_players",
+    "seats": [
+      {
+        "seat": 1,
+        "occupant": {"display_name": "Alice", "is_host": true, "stack": 995, "status": "sitting_out"}
+      },
+      {
+        "seat": 2,
+        "occupant": {"display_name": "Bob", "is_host": false, "stack": 1005, "status": "sitting_out"}
+      },
+      {"seat": 3, "occupant": null},
+      {"seat": 4, "occupant": null},
+      {"seat": 5, "occupant": null},
+      {"seat": 6, "occupant": null}
+    ],
+    "hand": null,
+    "you": {
+      "seat": 1,
+      "is_host": true,
+      "pending_leave": false,
+      "pending_sit_out": false,
+      "pre_action": null,
+      "pre_action_options": []
+    }
+  }
+}

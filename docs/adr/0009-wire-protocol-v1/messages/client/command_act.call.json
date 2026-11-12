@@ -1,0 +1,7 @@
+{
+  "type": "command",
+  "request_id": "a-03",
+  "expected_revision": 3,
+  "name": "act",
+  "args": {"action": "call", "target": null}
+}

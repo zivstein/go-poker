@@ -1,0 +1,1257 @@
+{
+  "protocol": "go-poker.v1",
+  "scenario": "pre_action_private",
+  "summary": "Private intents: Bob selects, clears and replaces a pre-action at an unchanged revision (only Bob receives the update), a repeated selection is NO_CHANGE, and the selection executes as its own pre_action transition when Bob's turn arrives.",
+  "setup": {
+    "server_defaults": {"small_blind": 5, "big_blind": 10, "buy_in": 1000, "max_seats": 6, "host_seat": 1},
+    "ids": {
+      "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+      "join_code": "K7Q2XM",
+      "credentials": {"alice": "test-credential-alice", "bob": "test-credential-bob"}
+    },
+    "button": "lowest_starting_seat",
+    "hands": [
+      {
+        "button": 1,
+        "hole_cards": {"1": "Ah Kh", "2": "Qs Qd"},
+        "board": "Kc 7d 2s 9h 3c",
+        "draw_order": ["Qs", "Ah", "Qd", "Kh", "2c", "Kc", "7d", "2s", "2d", "9h", "2h", "3c"]
+      }
+    ]
+  },
+  "steps": [
+    {
+      "op": "http",
+      "actor": "alice",
+      "request": {"method": "POST", "path": "/tables", "body": {"display_name": "Alice"}},
+      "response": {
+        "status": 201,
+        "body": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "seat": 1,
+          "credential": "test-credential-alice"
+        }
+      }
+    },
+    {
+      "op": "http",
+      "actor": "bob",
+      "request": {
+        "method": "POST",
+        "path": "/tables/by-code/K7Q2XM/members",
+        "body": {"display_name": "Bob", "seat": 2}
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "seat": 2,
+          "credential": "test-credential-bob"
+        }
+      }
+    },
+    {
+      "op": "open",
+      "connection": "alice-1",
+      "actor": "alice",
+      "path": "/ws/tables/4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f"
+    },
+    {
+      "op": "send",
+      "connection": "alice-1",
+      "message": {"type": "hello", "protocol": "go-poker.v1", "credential": "test-credential-alice"}
+    },
+    {
+      "op": "receive",
+      "connection": "alice-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 2,
+        "cause": "connected",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "not_started",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 1000, "status": "waiting_to_join"}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 1000, "status": "waiting_to_join"}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": null,
+          "you": {
+            "seat": 1,
+            "is_host": true,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": []
+          }
+        }
+      }
+    },
+    {
+      "op": "open",
+      "connection": "bob-1",
+      "actor": "bob",
+      "path": "/ws/tables/4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f"
+    },
+    {
+      "op": "send",
+      "connection": "bob-1",
+      "message": {"type": "hello", "protocol": "go-poker.v1", "credential": "test-credential-bob"}
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 2,
+        "cause": "connected",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "not_started",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 1000, "status": "waiting_to_join"}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 1000, "status": "waiting_to_join"}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": null,
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": []
+          }
+        }
+      }
+    },
+    {
+      "op": "send",
+      "connection": "alice-1",
+      "message": {
+        "type": "command",
+        "request_id": "a-01",
+        "expected_revision": 2,
+        "name": "start_game",
+        "args": {}
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "alice-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 3,
+        "cause": "command",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 995, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 5,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Ah", "Kh"],
+                "hidden_card_count": 0,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 1, "kind": "betting"},
+            "legal_actions": {
+              "can_fold": true,
+              "can_check": false,
+              "can_call": true,
+              "amount_owed": 5,
+              "call_amount": 5,
+              "call_is_all_in": false,
+              "can_bet": false,
+              "can_raise": true,
+              "min_full_target": 20,
+              "max_target": 1000,
+              "short_all_in_target": null
+            },
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Ah", "Kh"]}
+            ]
+          },
+          "you": {
+            "seat": 1,
+            "is_host": true,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": []
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 3,
+        "cause": "command",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 995, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 5,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Qs", "Qd"],
+                "hidden_card_count": 0,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 1, "kind": "betting"},
+            "legal_actions": null,
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]}
+            ]
+          },
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": [{"kind": "check", "amount": null}, {"kind": "check_or_fold", "amount": null}]
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "alice-1",
+      "message": {"type": "accepted", "request_id": "a-01", "revision": 3}
+    },
+    {
+      "op": "send",
+      "connection": "bob-1",
+      "message": {
+        "type": "command",
+        "request_id": "b-01",
+        "expected_revision": 3,
+        "name": "select_pre_action",
+        "args": {"pre_action": {"kind": "check", "amount": null}}
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 3,
+        "cause": "private",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 995, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 5,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Qs", "Qd"],
+                "hidden_card_count": 0,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 1, "kind": "betting"},
+            "legal_actions": null,
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]}
+            ]
+          },
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": {"kind": "check", "amount": null},
+            "pre_action_options": [{"kind": "check", "amount": null}, {"kind": "check_or_fold", "amount": null}]
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {"type": "accepted", "request_id": "b-01", "revision": 3}
+    },
+    {
+      "op": "send",
+      "connection": "bob-1",
+      "message": {
+        "type": "command",
+        "request_id": "b-02",
+        "expected_revision": 3,
+        "name": "clear_pre_action",
+        "args": {}
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 3,
+        "cause": "private",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 995, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 5,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Qs", "Qd"],
+                "hidden_card_count": 0,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 1, "kind": "betting"},
+            "legal_actions": null,
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]}
+            ]
+          },
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": [{"kind": "check", "amount": null}, {"kind": "check_or_fold", "amount": null}]
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {"type": "accepted", "request_id": "b-02", "revision": 3}
+    },
+    {
+      "op": "send",
+      "connection": "bob-1",
+      "message": {
+        "type": "command",
+        "request_id": "b-03",
+        "expected_revision": 3,
+        "name": "select_pre_action",
+        "args": {"pre_action": {"kind": "check_or_fold", "amount": null}}
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 3,
+        "cause": "private",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 995, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 5,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Qs", "Qd"],
+                "hidden_card_count": 0,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 1, "kind": "betting"},
+            "legal_actions": null,
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]}
+            ]
+          },
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": {"kind": "check_or_fold", "amount": null},
+            "pre_action_options": [{"kind": "check", "amount": null}, {"kind": "check_or_fold", "amount": null}]
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {"type": "accepted", "request_id": "b-03", "revision": 3}
+    },
+    {
+      "op": "send",
+      "connection": "bob-1",
+      "message": {
+        "type": "command",
+        "request_id": "b-04",
+        "expected_revision": 3,
+        "name": "select_pre_action",
+        "args": {"pre_action": {"kind": "check_or_fold", "amount": null}}
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "rejected",
+        "request_id": "b-04",
+        "code": "NO_CHANGE",
+        "message": "That pre-action is already selected"
+      }
+    },
+    {
+      "op": "send",
+      "connection": "alice-1",
+      "message": {
+        "type": "command",
+        "request_id": "a-02",
+        "expected_revision": 3,
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "alice-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 4,
+        "cause": "command",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 990, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Ah", "Kh"],
+                "hidden_card_count": 0,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 2, "kind": "betting"},
+            "legal_actions": null,
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Ah", "Kh"]},
+              {
+                "event": "action_taken",
+                "seat": 1,
+                "action": "call",
+                "target": null,
+                "chips": 5,
+                "all_in": false
+              }
+            ]
+          },
+          "you": {
+            "seat": 1,
+            "is_host": true,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": [{"kind": "check", "amount": null}, {"kind": "check_or_fold", "amount": null}]
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 4,
+        "cause": "command",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 990, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "preflop",
+            "board": [],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 10,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Qs", "Qd"],
+                "hidden_card_count": 0,
+                "strength": null
+              }
+            ],
+            "pots": [],
+            "turn": {"seat": 2, "kind": "betting"},
+            "legal_actions": {
+              "can_fold": true,
+              "can_check": true,
+              "can_call": false,
+              "amount_owed": 0,
+              "call_amount": 0,
+              "call_is_all_in": false,
+              "can_bet": false,
+              "can_raise": true,
+              "min_full_target": 20,
+              "max_target": 1000,
+              "short_all_in_target": null
+            },
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]},
+              {
+                "event": "action_taken",
+                "seat": 1,
+                "action": "call",
+                "target": null,
+                "chips": 5,
+                "all_in": false
+              }
+            ]
+          },
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": []
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "alice-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 5,
+        "cause": "pre_action",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 990, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "flop",
+            "board": ["Kc", "7d", "2s"],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 0,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Ah", "Kh"],
+                "hidden_card_count": 0,
+                "strength": {
+                  "category": "one_pair",
+                  "description": "Pair of Kings",
+                  "cards": ["Kc", "Kh", "Ah", "7d", "2s"]
+                }
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 0,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              }
+            ],
+            "pots": [{"amount": 20, "eligible_seats": [1, 2]}],
+            "turn": {"seat": 2, "kind": "betting"},
+            "legal_actions": null,
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Ah", "Kh"]},
+              {
+                "event": "action_taken",
+                "seat": 1,
+                "action": "call",
+                "target": null,
+                "chips": 5,
+                "all_in": false
+              },
+              {
+                "event": "action_taken",
+                "seat": 2,
+                "action": "check",
+                "target": null,
+                "chips": 0,
+                "all_in": false
+              },
+              {"event": "betting_round_completed", "street": "preflop"},
+              {"event": "street_dealt", "street": "flop", "cards": ["Kc", "7d", "2s"]},
+              {"event": "betting_round_started", "street": "flop"}
+            ]
+          },
+          "you": {
+            "seat": 1,
+            "is_host": true,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": [{"kind": "check", "amount": null}, {"kind": "check_or_fold", "amount": null}]
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "bob-1",
+      "message": {
+        "type": "snapshot",
+        "revision": 5,
+        "cause": "pre_action",
+        "view": {
+          "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+          "join_code": "K7Q2XM",
+          "settings": {
+            "variant": "texas_holdem",
+            "betting_structure": "no_limit",
+            "small_blind": 5,
+            "big_blind": 10,
+            "buy_in": 1000,
+            "max_seats": 6
+          },
+          "phase": "hand_in_progress",
+          "seats": [
+            {
+              "seat": 1,
+              "occupant": {"display_name": "Alice", "is_host": true, "stack": 990, "status": null}
+            },
+            {
+              "seat": 2,
+              "occupant": {"display_name": "Bob", "is_host": false, "stack": 990, "status": null}
+            },
+            {"seat": 3, "occupant": null},
+            {"seat": 4, "occupant": null},
+            {"seat": 5, "occupant": null},
+            {"seat": 6, "occupant": null}
+          ],
+          "hand": {
+            "number": 1,
+            "street": "flop",
+            "board": ["Kc", "7d", "2s"],
+            "participants": [
+              {
+                "seat": 1,
+                "position": "btn",
+                "blind": "small",
+                "in_front": 0,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": null,
+                "hidden_card_count": 2,
+                "strength": null
+              },
+              {
+                "seat": 2,
+                "position": "bb",
+                "blind": "big",
+                "in_front": 0,
+                "folded": false,
+                "all_in": false,
+                "has_live_cards": true,
+                "hole_cards": ["Qs", "Qd"],
+                "hidden_card_count": 0,
+                "strength": {
+                  "category": "one_pair",
+                  "description": "Pair of Queens",
+                  "cards": ["Qs", "Qd", "Kc", "7d", "2s"]
+                }
+              }
+            ],
+            "pots": [{"amount": 20, "eligible_seats": [1, 2]}],
+            "turn": {"seat": 2, "kind": "betting"},
+            "legal_actions": {
+              "can_fold": true,
+              "can_check": true,
+              "can_call": false,
+              "amount_owed": 0,
+              "call_amount": 0,
+              "call_is_all_in": false,
+              "can_bet": true,
+              "can_raise": false,
+              "min_full_target": 10,
+              "max_target": 990,
+              "short_all_in_target": null
+            },
+            "showdown_actions": null,
+            "showdown": null,
+            "settlement": null,
+            "log": [
+              {
+                "event": "hand_started",
+                "number": 1,
+                "participants": [
+                  {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+                  {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+                ]
+              },
+              {
+                "event": "blinds_posted",
+                "posts": [
+                  {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+                  {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+                ]
+              },
+              {"event": "hole_cards_dealt", "own_cards": ["Qs", "Qd"]},
+              {
+                "event": "action_taken",
+                "seat": 1,
+                "action": "call",
+                "target": null,
+                "chips": 5,
+                "all_in": false
+              },
+              {
+                "event": "action_taken",
+                "seat": 2,
+                "action": "check",
+                "target": null,
+                "chips": 0,
+                "all_in": false
+              },
+              {"event": "betting_round_completed", "street": "preflop"},
+              {"event": "street_dealt", "street": "flop", "cards": ["Kc", "7d", "2s"]},
+              {"event": "betting_round_started", "street": "flop"}
+            ]
+          },
+          "you": {
+            "seat": 2,
+            "is_host": false,
+            "pending_leave": false,
+            "pending_sit_out": false,
+            "pre_action": null,
+            "pre_action_options": []
+          }
+        }
+      }
+    },
+    {
+      "op": "receive",
+      "connection": "alice-1",
+      "message": {"type": "accepted", "request_id": "a-02", "revision": 5}
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "request": {"method": "POST", "path": "/tables", "body": {"display_name": "Alice"}},
+  "response": {
+    "status": 201,
+    "body": {
+      "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+      "join_code": "K7Q2XM",
+      "seat": 1,
+      "credential": "test-credential-alice"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "type": "rejected",
+  "request_id": "b-04",
+  "code": "NO_CHANGE",
+  "message": "That pre-action is already selected"
+}

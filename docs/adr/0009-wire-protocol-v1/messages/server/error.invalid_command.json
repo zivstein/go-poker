@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "request_id": "a-04",
+  "code": "INVALID_COMMAND",
+  "message": "Unknown command 'rebuy'"
+}

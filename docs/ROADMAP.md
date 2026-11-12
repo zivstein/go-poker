@@ -230,6 +230,20 @@ Approved on 2026-11-11, at M8 C6.2 ([C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md))
 - **POC priority.** Two independent browser players complete a real Hold'em hand against the Python server; visual styling is required, while extensive motion and mobile polish do not block integration.
 - **Next.** C6.3 writes ADR 0009 and settles the plan's contract blockers B1–B7.
 
+Approved on 2026-11-12, at M8 C6.3 ([C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md), [ADR 0009](adr/0009-wire-protocol-v1.md), accepted):
+
+- **Wire contract.** Protocol `go-poker.v1`: JSON over HTTP (create, join) and one WebSocket per table connection, with `hello` version negotiation, full per-viewer snapshots per shared transition, private updates at an unchanged revision, and one correlated outcome per command. It is language-independent and needs no `TableSession`, Core or `app/` change.
+- **Command semantics.**
+  - A received command frame is executed at most once.
+  - `request_id` correlates and does not deduplicate.
+  - Exactly-once effects are not guaranteed.
+  - An uncertain command is never retransmitted; the client reconciles from a fresh snapshot.
+- **Canonical fixtures.** They are engine-generated, beside the ADR, and frozen for C6.4. After C6.4, a reviewed Core rules correction may update their values without a new protocol identifier, while the schema and field meanings stay compatible. Any incompatible change is a new, approved protocol version.
+- **Compatibility.** Strict `go-poker.v1` is frozen for C6.4. Before installed clients that cannot simply reload ship, C7 defines backward compatibility, multiple accepted versions and HTTP API versioning.
+- **Friends Alpha blocker.** A known Core correctness defect: equivalent pot layers with identical eligible seats can split odd chips differently from a merged pot (66 / 64 instead of 65 / 65 in a reproduced case). It is accepted for the C6.4 POC only, and fixed in Core before the Friends Alpha.
+- **Recovery** is unchanged: the public release requires full recovery of hands in progress (C6.1 E16).
+- **Next.** The bounded toolchain preflight, then C6.4 (Backend ∥ Web).
+
 #### Road to Friends Alpha after M8
 
 To be replanned during Milestone 8. These are the remaining capability areas expected on the way to the Friends Alpha. They have no milestone numbers yet, and their order and grouping are decided in Milestone 8 Cycle C7 ([M8 Plan](milestones/M8_PLAN.md)):

@@ -1,0 +1,6 @@
+{
+  "type": "rejected",
+  "request_id": "b-01",
+  "code": "NOT_HOST",
+  "message": "Only the host can start the game"
+}

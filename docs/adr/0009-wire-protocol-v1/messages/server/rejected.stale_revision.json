@@ -1,0 +1,6 @@
+{
+  "type": "rejected",
+  "request_id": "b-02",
+  "code": "STALE_REVISION",
+  "message": "Expected revision 3, but it is 4"
+}

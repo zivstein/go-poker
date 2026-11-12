@@ -1,0 +1,7 @@
+{
+  "type": "command",
+  "request_id": "a-07",
+  "expected_revision": 13,
+  "name": "showdown_decision",
+  "args": {"decision": "show"}
+}

@@ -20,19 +20,33 @@ Milestone status lives in `ROADMAP.md`. The milestone plan — each Cycle's purp
 | C3 | Design in progress | Creative direction recorded in `docs/design/`; final brand assets, `docs/design/BRAND.md` and trademark clearance pending |
 | C4 | Prototype in progress | `docs/design/DESIGN_SYSTEM.md` and `docs/design/MOTION_CONTRACTS.md` not yet produced |
 | C5 | Closed (2026-11-10) | The AI organization audit is complete (2026-11-09) and archived as historical analysis in [`docs/company/M8_C5_AI_ORGANIZATION_AUDIT.md`](company/M8_C5_AI_ORGANIZATION_AUDIT.md). C5.1, documentation reconciliation, is complete (2026-11-09). C5.2, the organization design, was approved (2026-11-09); its rationale is archived in [`docs/company/M8_C5_2_ORGANIZATION_DESIGN.md`](company/M8_C5_2_ORGANIZATION_DESIGN.md). C5.3, the organization specification, is complete (2026-11-09): the rules are in `ENGINEERING_PROCESS.md`, the lane map in `.claude/ownership.json` (`mode: single-team`), and the rationale in [ADR 0007](adr/0007-lane-ownership-and-cross-lane-contracts.md). C5.4 is split in two (approved 2026-11-09): C5.4a, the ownership map resolver and the CI `ownership` check, is complete (2026-11-09). C5.4b, the guard hook, was stopped on 2026-11-10 and is superseded. It had been registered locally, caused a lockout, and was disabled and removed without being committed. Its code and the Option B redesign are archived, and the committed `.claude/settings.json` keeps the native deny rules only. C5.5 and C5.6 are not pursued in M8. The record is [`docs/company/C5_4_ENFORCEMENT_RETROSPECTIVE.md`](company/C5_4_ENFORCEMENT_RETROSPECTIVE.md) |
-| C6 | In progress | Replanned on 2026-11-10 as C6.1–C6.5 ([M8 Plan](milestones/M8_PLAN.md#c6-parallel-development-poc)). C6.1, the Backend/API architecture plan, is complete (2026-11-11): the [C6.1 plan](milestones/M8_C6_1_BACKEND_API_PLAN.md) (decisions E1–E18) and [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md), accepted. The POC is now Backend ∥ Web after a bounded preflight (E9-A). C6.2, the Web architecture and design foundation plan, is complete (2026-11-11): the [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md) (decisions W1–W30), approved; the design references are recorded as concepts. Next, on the Owner's instruction: C6.3, the ADR 0009 wire contract, which must settle the plan's blockers B1–B7 |
+| C6 | In progress | Replanned on 2026-11-10 as C6.1–C6.5 ([M8 Plan](milestones/M8_PLAN.md#c6-parallel-development-poc)). C6.1, the Backend/API architecture plan, is complete (2026-11-11): the [C6.1 plan](milestones/M8_C6_1_BACKEND_API_PLAN.md) (decisions E1–E18) and [ADR 0008](adr/0008-fastapi-server-and-single-writer-tables.md), accepted. The POC is now Backend ∥ Web after a bounded preflight (E9-A). C6.2, the Web architecture and design foundation plan, is complete (2026-11-11): the [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md) (decisions W1–W30), approved; the design references are recorded as concepts. C6.3, the shared wire contract, is complete (2026-11-12): [ADR 0009](adr/0009-wire-protocol-v1.md) revision 2, protocol `go-poker.v1`, is accepted; its [canonical fixtures](adr/0009-wire-protocol-v1/README.md) are frozen for C6.4; the [C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) (P1–P17, Q1–Q5) and both C6.4 Briefs ([Backend](milestones/M8_C6_4_BACKEND_BRIEF.md), [Web](milestones/M8_C6_4_WEB_BRIEF.md)) are approved; B1–B7 are resolved. Next, on the Owner's instruction: the bounded toolchain preflight, then C6.4 |
 | C7 | Not started | |
 
 ## Pending Gates
 
-None active. The C5.6 gates (the public repository's `pull_request_target` policy, live `ownership` enforcement on a real PR, and the first mode switch) are deferred with C5.6. They apply only if multi-lane activation is approved later.
+None active for C6.
+
+**Friends Alpha blockers** (mandatory before the Friends Alpha):
+- **A known Core correctness defect: equivalent pot layers and odd chips.**
+  - `pots()` never merges adjacent pot layers with identical eligible-seat sets, and settlement splits each layer independently (ADR 0001 §1).
+  - With a tie, the odd chips can then differ from the merged pot. A reproduced five-player case pays 66 / 64 instead of 65 / 65 for an aggregate 130-chip pot. Chips are conserved and winner eligibility is correct.
+  - It is accepted for the C6.4 POC only.
+  - **The fix:** a Core Cycle after C6.4 that clarifies ADR 0001, merges equivalent adjacent layers in Core, and adds regression tests for ties, odd chips, eligibility and conservation. The affected fixtures are then updated under C6.3 P17.
+  - Detail: [C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) §7.
+
+The C5.6 gates (the public repository's `pull_request_target` policy, live `ownership` enforcement on a real PR, and the first mode switch) are deferred with C5.6. They apply only if multi-lane activation is approved later.
 
 ## Open Decisions
 
 For C6:
 
-- **The POC's functional slice and its success targets:** C6.3, with the two Briefs. Decided on 2026-11-10 (OD17): the POC runs contract-first in two sessions and worktrees. Amended on 2026-11-11 (C6.1 E9): the pair is Backend and Web, not Core and Backend.
-- **ADR 0009 contract blockers from C6.2:** B1–B7 in the [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md#12-contract-blockers-for-c63): command outcome and delivery semantics, create and join, variant fields and hidden-card counts, the code catalogue, the committed fixture path, versioning and encodings.
+- **The POC's functional slice and its success targets:** decided on 2026-11-12 (C6.3).
+  - The slice is in the two approved C6.4 Briefs.
+  - The M8 Plan's C6 success targets are confirmed unchanged (C6.3 P16).
+  - The POC runs contract-first in two sessions and worktrees (OD17, 2026-11-10), and the pair is Backend and Web (C6.1 E9, 2026-11-11).
+- **ADR 0009 contract blockers B1–B7** from C6.2: resolved by ADR 0009 (accepted 2026-11-12; [C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) §2).
+- **Long-term protocol compatibility:** C7, before any installed client that cannot simply reload ships. It covers backward compatibility, multiple accepted protocol versions and HTTP API versioning (ADR 0009 §1.6). `go-poker.v1` stays frozen for C6.4.
 - **Deferred C6.2 items:** pot-based sizing presets (W21), defined in a later game/betting contract cycle before any preset button is built.
 - **Deferred C6.1 decisions:** E3, the showdown-timeout rule (with the action timer); E5, Host versus Table Owner (C7); the E14 Quick Play pool details (Quick Play design); the E16 recovery mechanism (C7).
 

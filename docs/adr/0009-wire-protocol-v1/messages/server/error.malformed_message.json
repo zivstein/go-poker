@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "request_id": null,
+  "code": "MALFORMED_MESSAGE",
+  "message": "hello is accepted only as the first frame"
+}

@@ -1,6 +1,6 @@
 # Go! Poker — Milestone 8 Plan
 
-**Status:** Plan approved in M8 C0. Amended on 2026-11-10 at C5.4 (C5 closed, C6 replanned; see [C6 parallel-development POC](#c6-parallel-development-poc)). Amended on 2026-11-11 at C6.1 (the POC is Backend ∥ Web, with a bounded preflight; see the [C6.1 plan](M8_C6_1_BACKEND_API_PLAN.md)). C6.2 completed on 2026-11-11 (the [C6.2 plan](M8_C6_2_WEB_PLAN.md)). Cycle status is in `docs/CURRENT_CYCLE.md`.  
+**Status:** Plan approved in M8 C0. Amended on 2026-11-10 at C5.4 (C5 closed, C6 replanned; see [C6 parallel-development POC](#c6-parallel-development-poc)). Amended on 2026-11-11 at C6.1 (the POC is Backend ∥ Web, with a bounded preflight; see the [C6.1 plan](M8_C6_1_BACKEND_API_PLAN.md)). C6.2 completed on 2026-11-11 (the [C6.2 plan](M8_C6_2_WEB_PLAN.md)). C6.3 completed on 2026-11-12 ([ADR 0009](../adr/0009-wire-protocol-v1.md) accepted; the [C6.3 plan](M8_C6_3_WIRE_CONTRACT_PLAN.md)). Cycle status is in `docs/CURRENT_CYCLE.md`.  
 **Date:** 2026-11-08  
 **Milestone:** M8 — Go! Product & Company Foundation
 
@@ -75,7 +75,7 @@ Approved on 2026-11-10 with the C5.4 transition. The workflow rules are in `docs
 | --- | --- | --- |
 | C6.1 | Backend/API architecture plan: the Core–Backend boundary (`TableSession` and the engine), the server's shape, transport, serialization of views and commands, and errors. Coordinated with Core, and designed so Web now and Mobile later are both clients of the same API | [C6.1 plan](M8_C6_1_BACKEND_API_PLAN.md) (approved 2026-11-11; C6.1 complete) and [ADR 0008](../adr/0008-fastapi-server-and-single-writer-tables.md) |
 | C6.2 | Web plan, coordinated with Backend: client architecture, how it consumes the API, and the design handoff it needs from C2–C4 | [C6.2 plan](M8_C6_2_WEB_PLAN.md) (approved 2026-11-11; C6.2 complete): React + TypeScript + Vite for the POC and Friends Alpha, the visual foundation, and the ADR 0009 blockers B1–B7 |
-| C6.3 | Shared Core–Backend–Web contract: signatures, wire schema, semantics, errors and versioning, plus the POC's functional slice, the canonical example messages, and its two Briefs (Backend and Web, disjoint paths) | Accepted wire contract ADR 0009 with its example messages; two approved Briefs |
+| C6.3 | Shared Core–Backend–Web contract: signatures, wire schema, semantics, errors and versioning, plus the POC's functional slice, the canonical example messages, and its two Briefs (Backend and Web, disjoint paths) | Accepted wire contract ADR 0009 with its example messages; two approved Briefs. **Complete (2026-11-12):** [ADR 0009](../adr/0009-wire-protocol-v1.md) revision 2 (`go-poker.v1`) and its [canonical fixtures](../adr/0009-wire-protocol-v1/README.md), frozen for C6.4; the [C6.3 plan](M8_C6_3_WIRE_CONTRACT_PLAN.md) (P1–P17); the [Backend](M8_C6_4_BACKEND_BRIEF.md) and [Web](M8_C6_4_WEB_BRIEF.md) Briefs. Known Core pot-layer odd-chip defect recorded as a Friends Alpha blocker (plan §7) |
 | Preflight | One bounded Small-Change-Path Meta task before C6.4: the server dependencies (`fastapi`, `uvicorn`, `websockets`, dev `httpx`) with Python 3.14 confirmed, and the Web toolchain in `scripts/verify.py` and CI. No ownership-map change | Merged preflight; `VERIFY: PASS` |
 | C6.4 | POC iteration 1: Backend (`src/go_poker/server/`, `tests/server/`) and Web (`web/`) in two isolated sessions and worktrees, built against ADR 0009 and integrated on `master`. Core and `app/` are unchanged. Small and local: one process, in memory, private tables only | Two merged PRs, a passing Backend integration test on `master`, and a recorded two-browser demonstration |
 | C6.5 | POC evaluation against the success criteria below; keep or adjust the workflow | `docs/company/TOOLING_EVALUATION.md` |
@@ -86,7 +86,7 @@ Approved on 2026-11-10 with the C5.4 transition. The workflow rules are in `docs
 - They plan only what the C6.4 slice and its contract need. Identity, wallet, ledger, hosting and security wait for C7.
 - After C6.3 and the preflight, C6.4 is the first Cycle that writes product code: Backend in the Backend lane and Web in `web/`. Each Brief declares its paths.
 
-**Success criteria.** The targets are proposals, confirmed or changed when the C6.3 Briefs are approved. Usage percentages are recorded per five-hour or weekly window, as read from the app, and are never summed across windows.
+**Success criteria.** The targets are proposals, confirmed or changed when the C6.3 Briefs are approved. They were confirmed unchanged on 2026-11-12 (C6.3 P16). Usage percentages are recorded per five-hour or weekly window, as read from the app, and are never summed across windows.
 
 | Dimension | Measure | Proposed target |
 | --- | --- | --- |

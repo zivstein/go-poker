@@ -1,0 +1,7 @@
+{
+  "type": "command",
+  "request_id": "b-08",
+  "expected_revision": 14,
+  "name": "showdown_decision",
+  "args": {"decision": "muck"}
+}

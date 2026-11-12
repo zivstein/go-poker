@@ -1,0 +1,272 @@
+{
+  "about": "Frames a server must answer with the given error. After hello: the connection stays open. `raw` is a text frame sent as is; `message` is serialized as JSON. Only `type`, `code` and `request_id` of the expected error are normative.",
+  "after_hello": [
+    {
+      "case": "not_json",
+      "raw": "{\"type\": \"command\", ",
+      "expect": {"type": "error", "request_id": null, "code": "MALFORMED_MESSAGE"}
+    },
+    {
+      "case": "not_an_object",
+      "raw": "[1, 2]",
+      "expect": {"type": "error", "request_id": null, "code": "MALFORMED_MESSAGE"}
+    },
+    {
+      "case": "unknown_type",
+      "message": {"type": "chat", "text": "hi"},
+      "expect": {"type": "error", "request_id": null, "code": "MALFORMED_MESSAGE"}
+    },
+    {
+      "case": "missing_request_id",
+      "message": {
+        "type": "command",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": null, "code": "MALFORMED_MESSAGE"}
+    },
+    {
+      "case": "request_id_too_long",
+      "message": {
+        "type": "command",
+        "request_id": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": null, "code": "MALFORMED_MESSAGE"}
+    },
+    {
+      "case": "request_id_bad_characters",
+      "message": {
+        "type": "command",
+        "request_id": "r 1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": null, "code": "MALFORMED_MESSAGE"}
+    },
+    {
+      "case": "extra_envelope_field",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "call", "target": null},
+        "seat": 1
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "missing_expected_revision",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "expected_revision_float",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4.0,
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "expected_revision_string",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": "4",
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "unknown_command",
+      "message": {"type": "command", "request_id": "r-1", "expected_revision": 4, "name": "rebuy", "args": {}},
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "unknown_action",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "all_in", "target": null}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "raise_without_target",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "raise", "target": null}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "fold_with_target",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "fold", "target": 20}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "target_missing_field",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "call"}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "target_float",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "raise", "target": 60.0}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "target_boolean",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "raise", "target": true}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "target_zero",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "bet", "target": 0}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "target_above_safe_integer",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "raise", "target": 9007199254740992}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "action_uppercase",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "Call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "args_on_argless_command",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "start_game",
+        "args": {"seat": 1}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "call_current_without_amount",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "select_pre_action",
+        "args": {"pre_action": {"kind": "call_current", "amount": null}}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "check_with_amount",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "select_pre_action",
+        "args": {"pre_action": {"kind": "check", "amount": 10}}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    },
+    {
+      "case": "unknown_showdown_decision",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "showdown_decision",
+        "args": {"decision": "fold"}
+      },
+      "expect": {"type": "error", "request_id": "r-1", "code": "INVALID_COMMAND"}
+    }
+  ],
+  "first_frame": [
+    {
+      "case": "first_frame_not_hello",
+      "message": {
+        "type": "command",
+        "request_id": "r-1",
+        "expected_revision": 4,
+        "name": "act",
+        "args": {"action": "call", "target": null}
+      },
+      "expect": {"type": "error", "request_id": null, "code": "HELLO_REQUIRED", "close": 4400}
+    },
+    {
+      "case": "hello_missing_credential",
+      "message": {"type": "hello", "protocol": "go-poker.v1"},
+      "expect": {"type": "error", "request_id": null, "code": "HELLO_REQUIRED", "close": 4400}
+    },
+    {
+      "case": "hello_unknown_protocol",
+      "message": {"type": "hello", "protocol": "go-poker.v2", "credential": "test-credential-alice"},
+      "expect": {"type": "error", "request_id": null, "code": "PROTOCOL_MISMATCH", "close": 4400}
+    },
+    {
+      "case": "hello_unknown_credential",
+      "message": {"type": "hello", "protocol": "go-poker.v1", "credential": "test-credential-unknown"},
+      "expect": {"type": "error", "request_id": null, "code": "AUTH_FAILED", "close": 4401}
+    }
+  ]
+}

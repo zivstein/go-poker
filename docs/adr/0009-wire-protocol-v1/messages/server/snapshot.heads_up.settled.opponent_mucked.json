@@ -1,0 +1,206 @@
+{
+  "type": "snapshot",
+  "revision": 15,
+  "cause": "command",
+  "view": {
+    "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+    "join_code": "K7Q2XM",
+    "settings": {
+      "variant": "texas_holdem",
+      "betting_structure": "no_limit",
+      "small_blind": 5,
+      "big_blind": 10,
+      "buy_in": 1000,
+      "max_seats": 6
+    },
+    "phase": "hand_complete",
+    "seats": [
+      {
+        "seat": 1,
+        "occupant": {"display_name": "Alice", "is_host": true, "stack": 1170, "status": null}
+      },
+      {
+        "seat": 2,
+        "occupant": {"display_name": "Bob", "is_host": false, "stack": 830, "status": null}
+      },
+      {"seat": 3, "occupant": null},
+      {"seat": 4, "occupant": null},
+      {"seat": 5, "occupant": null},
+      {"seat": 6, "occupant": null}
+    ],
+    "hand": {
+      "number": 1,
+      "street": "river",
+      "board": ["Kc", "7d", "2s", "9h", "3c"],
+      "participants": [
+        {
+          "seat": 1,
+          "position": "btn",
+          "blind": "small",
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": true,
+          "hole_cards": ["Ah", "Kh"],
+          "hidden_card_count": 0,
+          "strength": {
+            "category": "one_pair",
+            "description": "Pair of Kings",
+            "cards": ["Kc", "Kh", "Ah", "9h", "7d"]
+          }
+        },
+        {
+          "seat": 2,
+          "position": "bb",
+          "blind": "big",
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": false,
+          "hole_cards": null,
+          "hidden_card_count": 0,
+          "strength": null
+        }
+      ],
+      "pots": [{"amount": 340, "eligible_seats": [1, 2]}],
+      "turn": null,
+      "legal_actions": null,
+      "showdown_actions": null,
+      "showdown": {
+        "kind": "interactive",
+        "order": [1, 2],
+        "decisions": [{"seat": 1, "decision": "show"}, {"seat": 2, "decision": "muck"}]
+      },
+      "settlement": {
+        "pot_awards": [{"amount": 340, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 340}]}],
+        "shown_ranks": [{"seat": 1, "category": "one_pair"}]
+      },
+      "log": [
+        {
+          "event": "hand_started",
+          "number": 1,
+          "participants": [
+            {"seat": 1, "position": "btn", "blind": "small", "starting_stack": 1000},
+            {"seat": 2, "position": "bb", "blind": "big", "starting_stack": 1000}
+          ]
+        },
+        {
+          "event": "blinds_posted",
+          "posts": [
+            {"seat": 1, "blind": "small", "chips": 5, "all_in": false},
+            {"seat": 2, "blind": "big", "chips": 10, "all_in": false}
+          ]
+        },
+        {"event": "hole_cards_dealt", "own_cards": ["Ah", "Kh"]},
+        {
+          "event": "action_taken",
+          "seat": 1,
+          "action": "call",
+          "target": null,
+          "chips": 5,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "check",
+          "target": null,
+          "chips": 0,
+          "all_in": false
+        },
+        {"event": "betting_round_completed", "street": "preflop"},
+        {"event": "street_dealt", "street": "flop", "cards": ["Kc", "7d", "2s"]},
+        {"event": "betting_round_started", "street": "flop"},
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "bet",
+          "target": 20,
+          "chips": 20,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 1,
+          "action": "raise",
+          "target": 60,
+          "chips": 60,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "call",
+          "target": null,
+          "chips": 40,
+          "all_in": false
+        },
+        {"event": "betting_round_completed", "street": "flop"},
+        {"event": "street_dealt", "street": "turn", "cards": ["9h"]},
+        {"event": "betting_round_started", "street": "turn"},
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "check",
+          "target": null,
+          "chips": 0,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 1,
+          "action": "check",
+          "target": null,
+          "chips": 0,
+          "all_in": false
+        },
+        {"event": "betting_round_completed", "street": "turn"},
+        {"event": "street_dealt", "street": "river", "cards": ["3c"]},
+        {"event": "betting_round_started", "street": "river"},
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "check",
+          "target": null,
+          "chips": 0,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 1,
+          "action": "bet",
+          "target": 100,
+          "chips": 100,
+          "all_in": false
+        },
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "call",
+          "target": null,
+          "chips": 100,
+          "all_in": false
+        },
+        {"event": "betting_round_completed", "street": "river"},
+        {"event": "showdown_started", "kind": "interactive", "order": [1, 2]},
+        {"event": "showdown_decided", "seat": 1, "decision": "show"},
+        {"event": "showdown_decided", "seat": 2, "decision": "muck"},
+        {
+          "event": "hand_settled",
+          "settlement": {
+            "pot_awards": [{"amount": 340, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 340}]}],
+            "shown_ranks": [{"seat": 1, "category": "one_pair"}]
+          }
+        }
+      ]
+    },
+    "you": {
+      "seat": 1,
+      "is_host": true,
+      "pending_leave": false,
+      "pending_sit_out": false,
+      "pre_action": null,
+      "pre_action_options": []
+    }
+  }
+}

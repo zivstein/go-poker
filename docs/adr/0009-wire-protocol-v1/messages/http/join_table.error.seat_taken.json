@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/tables/by-code/K7Q2XM/members",
+    "body": {"display_name": "Bob", "seat": 1}
+  },
+  "response": {
+    "status": 409,
+    "body": {"error": {"code": "SEAT_TAKEN", "message": "This seat is already occupied", "field": "seat"}}
+  }
+}

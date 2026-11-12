@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/tables/by-code/K7Q2XM/members",
+    "body": {"display_name": "Bob", "seat": 7}
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "INVALID_SEAT",
+        "message": "You have requested to get a seat that does not exist.",
+        "field": "seat"
+      }
+    }
+  }
+}

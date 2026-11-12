@@ -1,0 +1,6 @@
+{
+  "type": "rejected",
+  "request_id": "b-01",
+  "code": "NOT_YOUR_TURN",
+  "message": "Seat 2 acted, but it is seat 1's turn"
+}

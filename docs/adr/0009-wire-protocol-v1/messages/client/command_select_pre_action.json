@@ -1,0 +1,7 @@
+{
+  "type": "command",
+  "request_id": "b-03",
+  "expected_revision": 3,
+  "name": "select_pre_action",
+  "args": {"pre_action": {"kind": "check_or_fold", "amount": null}}
+}

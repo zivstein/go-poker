@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "request_id": null,
+  "code": "PROTOCOL_MISMATCH",
+  "message": "Unsupported protocol 'go-poker.v0'; this server supports go-poker.v1"
+}

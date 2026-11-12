@@ -1,0 +1,7 @@
+{
+  "type": "command",
+  "request_id": "b-03",
+  "expected_revision": 5,
+  "name": "act",
+  "args": {"action": "bet", "target": 20}
+}

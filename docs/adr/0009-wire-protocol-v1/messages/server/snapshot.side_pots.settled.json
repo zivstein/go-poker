@@ -1,0 +1,176 @@
+{
+  "type": "snapshot",
+  "revision": 19,
+  "cause": "command",
+  "view": {
+    "table_id": "4f9c2a1e-8d3b-4c5a-9e7f-1a2b3c4d5e6f",
+    "join_code": "K7Q2XM",
+    "settings": {
+      "variant": "texas_holdem",
+      "betting_structure": "no_limit",
+      "small_blind": 5,
+      "big_blind": 10,
+      "buy_in": 1000,
+      "max_seats": 6
+    },
+    "phase": "hand_complete",
+    "seats": [
+      {
+        "seat": 1,
+        "occupant": {"display_name": "Alice", "is_host": true, "stack": 420, "status": null}
+      },
+      {
+        "seat": 2,
+        "occupant": {"display_name": "Bob", "is_host": false, "stack": 1800, "status": null}
+      },
+      {
+        "seat": 3,
+        "occupant": {"display_name": "Carol", "is_host": false, "stack": 780, "status": null}
+      },
+      {"seat": 4, "occupant": null},
+      {"seat": 5, "occupant": null},
+      {"seat": 6, "occupant": null}
+    ],
+    "hand": {
+      "number": 2,
+      "street": "river",
+      "board": ["2c", "7h", "9d", "Jc", "4s"],
+      "participants": [
+        {
+          "seat": 2,
+          "position": "btn",
+          "blind": null,
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": true,
+          "hole_cards": ["Ac", "Ad"],
+          "hidden_card_count": 0,
+          "strength": {
+            "category": "one_pair",
+            "description": "Pair of Aces",
+            "cards": ["Ac", "Ad", "Jc", "9d", "7h"]
+          }
+        },
+        {
+          "seat": 3,
+          "position": "sb",
+          "blind": "small",
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": true,
+          "hole_cards": ["Kc", "Ks"],
+          "hidden_card_count": 0,
+          "strength": {
+            "category": "one_pair",
+            "description": "Pair of Kings",
+            "cards": ["Kc", "Ks", "Jc", "9d", "7h"]
+          }
+        },
+        {
+          "seat": 1,
+          "position": "bb",
+          "blind": "big",
+          "in_front": 0,
+          "folded": false,
+          "all_in": false,
+          "has_live_cards": true,
+          "hole_cards": ["Qh", "Qs"],
+          "hidden_card_count": 0,
+          "strength": {
+            "category": "one_pair",
+            "description": "Pair of Queens",
+            "cards": ["Qh", "Qs", "Jc", "9d", "7h"]
+          }
+        }
+      ],
+      "pots": [{"amount": 1800, "eligible_seats": [1, 2, 3]}, {"amount": 780, "eligible_seats": [1, 3]}],
+      "turn": null,
+      "legal_actions": null,
+      "showdown_actions": null,
+      "showdown": {"kind": "all_in", "order": [3, 1, 2], "decisions": []},
+      "settlement": {
+        "pot_awards": [
+          {"amount": 1800, "eligible_seats": [1, 2, 3], "shares": [{"seat": 2, "amount": 1800}]},
+          {"amount": 780, "eligible_seats": [1, 3], "shares": [{"seat": 3, "amount": 780}]}
+        ],
+        "shown_ranks": [
+          {"seat": 2, "category": "one_pair"},
+          {"seat": 3, "category": "one_pair"},
+          {"seat": 1, "category": "one_pair"}
+        ]
+      },
+      "log": [
+        {
+          "event": "hand_started",
+          "number": 2,
+          "participants": [
+            {"seat": 2, "position": "btn", "blind": null, "starting_stack": 600},
+            {"seat": 3, "position": "sb", "blind": "small", "starting_stack": 990},
+            {"seat": 1, "position": "bb", "blind": "big", "starting_stack": 1410}
+          ]
+        },
+        {
+          "event": "blinds_posted",
+          "posts": [
+            {"seat": 3, "blind": "small", "chips": 5, "all_in": false},
+            {"seat": 1, "blind": "big", "chips": 10, "all_in": false}
+          ]
+        },
+        {"event": "hole_cards_dealt", "own_cards": ["Ac", "Ad"]},
+        {
+          "event": "action_taken",
+          "seat": 2,
+          "action": "raise",
+          "target": 600,
+          "chips": 600,
+          "all_in": true
+        },
+        {
+          "event": "action_taken",
+          "seat": 3,
+          "action": "raise",
+          "target": 990,
+          "chips": 985,
+          "all_in": true
+        },
+        {
+          "event": "action_taken",
+          "seat": 1,
+          "action": "call",
+          "target": null,
+          "chips": 980,
+          "all_in": false
+        },
+        {"event": "betting_round_completed", "street": "preflop"},
+        {"event": "showdown_started", "kind": "all_in", "order": [3, 1, 2]},
+        {"event": "street_dealt", "street": "flop", "cards": ["2c", "7h", "9d"]},
+        {"event": "street_dealt", "street": "turn", "cards": ["Jc"]},
+        {"event": "street_dealt", "street": "river", "cards": ["4s"]},
+        {
+          "event": "hand_settled",
+          "settlement": {
+            "pot_awards": [
+              {"amount": 1800, "eligible_seats": [1, 2, 3], "shares": [{"seat": 2, "amount": 1800}]},
+              {"amount": 780, "eligible_seats": [1, 3], "shares": [{"seat": 3, "amount": 780}]}
+            ],
+            "shown_ranks": [
+              {"seat": 2, "category": "one_pair"},
+              {"seat": 3, "category": "one_pair"},
+              {"seat": 1, "category": "one_pair"}
+            ]
+          }
+        }
+      ]
+    },
+    "you": {
+      "seat": 2,
+      "is_host": false,
+      "pending_leave": false,
+      "pending_sit_out": false,
+      "pre_action": null,
+      "pre_action_options": []
+    }
+  }
+}
