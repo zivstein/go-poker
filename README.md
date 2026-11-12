@@ -111,13 +111,15 @@ Detailed ownership, state semantics, and invariants are documented in [`docs/ARC
 
 ## Development
 
-Requires Python 3.14+ and [`uv`](https://docs.astral.sh/uv/).
+Requires Python 3.14+ and [`uv`](https://docs.astral.sh/uv/), plus Node 26 LTS with npm for the Web toolchain in `web/` (the exact version is pinned in `web/.nvmrc`).
 
     uv sync
 
+    (cd web && npm ci)
+
     uv run scripts/verify.py
 
-This runs Ruff check, Ruff format check, mypy, and pytest, and ends with `VERIFY: PASS` or `VERIFY: FAIL`.
+This runs Ruff check, Ruff format check, mypy, and pytest, then the Web gates in `web/` (`tsc --noEmit`, `biome ci`, `vitest run`, `vite build`), and ends with `VERIFY: PASS` or `VERIFY: FAIL`. A missing Node or missing Web dependencies fail verification.
 
 Coverage:
 

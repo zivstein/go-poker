@@ -44,7 +44,7 @@ A FastAPI server that hosts private tables in memory. It implements ADR 0009 exa
 ## 3. Out of scope
 
 - Any change to `src/go_poker/core/`, `game/` or `app/`, or to `pyproject.toml` and `uv.lock`.
-- Dependencies beyond the preflight's (`fastapi`, `uvicorn`, `websockets`, dev `httpx`).
+- Dependencies beyond the preflight's (`fastapi`, `uvicorn`, `websockets`, dev `httpx2`). `httpx2` replaced the planned `httpx` as `TestClient`'s HTTP client (Owner, 2026-11-12); `httpx` is not installed.
 - Persistence, recovery, more than one instance, leases, matchmaking, capacity limits beyond the frame and outbox limits.
 - The seat summary (C6.1 L1), spectators, the action and disconnect timers, CORS, `Origin` checks, TLS, rate limits, serving the Web build.
 - Anything in ADR 0009 §16.

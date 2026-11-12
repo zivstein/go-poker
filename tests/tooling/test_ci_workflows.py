@@ -205,3 +205,28 @@ def test_quality_has_no_privileged_trigger_secrets_or_write_permissions() -> Non
 
     for forbidden in ("secrets.", "write", "pull_request_target", "workflow_run", "issue_comment"):
         assert forbidden not in text, forbidden
+
+
+def test_quality_installs_both_toolchains_from_their_pins_then_runs_the_one_verification() -> None:
+    steps = job_steps(CI)
+
+    assert [step_keys(step) for step in steps] == [
+        ["name", "uses"],
+        ["name", "uses", "with"],
+        ["name", "run"],
+        ["name", "run"],
+        ["name", "uses", "with"],
+        ["name", "working-directory", "run"],
+        ["name", "run"],
+    ]
+    assert run_values(CI) == ["uv python install 3.14", "uv sync --locked", "npm ci", "uv run scripts/verify.py"]
+    setup_node = steps[4]
+    assert uses_values("\n".join(setup_node)) == ["actions/setup-node@v7"]
+    assert step_mapping(setup_node, "with") == {
+        "node-version-file": "web/.nvmrc",
+        "cache": "npm",
+        "cache-dependency-path": "web/package-lock.json",
+    }
+    assert [line.strip() for line in steps[5] if line.strip().startswith("working-directory:")] == [
+        "working-directory: web"
+    ]

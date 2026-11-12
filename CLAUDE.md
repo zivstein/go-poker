@@ -27,8 +27,10 @@ For code or test changes, the standard verification is one command:
 
 - `uv run scripts/verify.py`
 
-It runs Ruff check, Ruff format check, mypy, and pytest, keeps their real exit codes, and ends with `VERIFY: PASS` or `VERIFY: FAIL`. Only `VERIFY: PASS` with exit code 0 passes. Run it directly; do not pipe or truncate it.
+It runs Ruff check, Ruff format check, mypy, and pytest, then the Web gates in `web/` (`tsc --noEmit`, `biome ci`, `vitest run`, `vite build`), keeps their real exit codes, and ends with `VERIFY: PASS` or `VERIFY: FAIL`. Only `VERIFY: PASS` with exit code 0 passes. Run it directly; do not pipe or truncate it.
 
-A gate's full run is made independently and without `--fix`. How often each role runs it is in `docs/ENGINEERING_PROCESS.md` (Verification Discipline); `/finish-cycle` always runs it. While implementing, the Engineer may run `uv run scripts/verify.py --fix`, which first rewrites files with Ruff's fixes and formatting.
+A checkout needs both toolchains before its first run: `uv sync --locked` at the root and `npm ci` in `web/`, with Node on the major line pinned in `web/.nvmrc`. Without Node or the installed Web dependencies, every Web gate fails and says why.
+
+A gate's full run is made independently and without `--fix`. How often each role runs it is in `docs/ENGINEERING_PROCESS.md` (Verification Discipline); `/finish-cycle` always runs it. While implementing, the Engineer may run `uv run scripts/verify.py --fix`, which first rewrites files with Ruff's and Biome's fixes and formatting.
 
 Never hide, weaken, or bypass failures.

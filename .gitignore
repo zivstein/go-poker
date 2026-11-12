@@ -35,3 +35,7 @@ htmlcov/
 # Machine-local Claude Code settings and usage metrics (never commit)
 .claude/settings.local.json
 .claude/usage/
+
+# Web toolchain (web/): installed dependencies and the production build
+web/node_modules/
+web/dist/
