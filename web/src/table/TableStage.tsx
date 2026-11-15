@@ -51,7 +51,7 @@ export function TableStage({ view }: TableStageProps) {
         .map((p) => {
           const anchor = anchorBySeat.get(p.seat);
           if (anchor === undefined) return null;
-          const chipAnchor = betChipAnchor(anchor);
+          const chipAnchor = betChipAnchor(anchor, p.seat === view.you.seat);
           return (
             <BetChips
               key={p.seat}

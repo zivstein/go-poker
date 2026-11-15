@@ -1,7 +1,16 @@
+/*
+ * Layout: the rank and suit index sits top-left, one pip bottom-right. The
+ * pip is smaller than the free area under the index at every size, so the two
+ * never share a pixel (checked by the browser audit and by PlayingCard.test).
+ */
 .card {
   display: inline-flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: flex-start;
+  flex: none;
+  width: var(--card-w, var(--card-w-md));
+  height: var(--card-h, var(--card-h-md));
+  padding: var(--card-pad, 4px);
   background: var(--card-face);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-1);
@@ -9,27 +18,34 @@
   font-weight: 700;
   position: relative;
   line-height: 1;
+  overflow: hidden;
 }
 
 .sm {
-  width: 28px;
-  height: 40px;
-  padding: 2px 3px;
-  font-size: 11px;
+  --card-w: var(--card-w-sm);
+  --card-h: var(--card-h-sm);
+  --card-pad: 3px;
+  --rank-size: 13px;
+  --suit-size: 11px;
+  --pip-size: 12px;
 }
 
 .md {
-  width: 40px;
-  height: 56px;
-  padding: 3px 4px;
-  font-size: 14px;
+  --card-w: var(--card-w-md);
+  --card-h: var(--card-h-md);
+  --card-pad: 4px;
+  --rank-size: 17px;
+  --suit-size: 14px;
+  --pip-size: 22px;
 }
 
 .lg {
-  width: 52px;
-  height: 74px;
-  padding: 4px 5px;
-  font-size: 18px;
+  --card-w: var(--card-w-lg);
+  --card-h: var(--card-h-lg);
+  --card-pad: 5px;
+  --rank-size: 22px;
+  --suit-size: 17px;
+  --pip-size: 26px;
 }
 
 .red {
@@ -44,18 +60,23 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 1px;
 }
 
 .rank {
+  font-size: var(--rank-size);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
 
-.centerSuit {
+.suit {
+  font-size: var(--suit-size);
+}
+
+.pip {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.4em;
+  right: var(--card-pad);
+  bottom: var(--card-pad);
+  font-size: var(--pip-size);
   opacity: 0.85;
 }

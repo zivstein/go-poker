@@ -41,6 +41,7 @@ export function Seat({ seatNumber, occupant, participant, isHero, isTurn, xPct, 
         role="group"
         aria-label={`Seat ${seatNumber}, open`}
       >
+        <div className={styles.tags} aria-hidden="true" />
         <div className={styles.empty}>Seat {seatNumber}</div>
       </div>
     );
@@ -48,6 +49,8 @@ export function Seat({ seatNumber, occupant, participant, isHero, isTurn, xPct, 
 
   const folded = participant?.folded ?? false;
   const accessibleLabel = `Seat ${seatNumber}, ${occupant.display_name}, ${occupant.stack} dollars`;
+  const status = statusLabel(occupant.status);
+  const cardSize = isHero ? "lg" : "sm";
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: a seat pod is not a form fieldset
@@ -57,46 +60,56 @@ export function Seat({ seatNumber, occupant, participant, isHero, isTurn, xPct, 
       role="group"
       aria-label={accessibleLabel}
     >
+      <div className={styles.tags}>
+        {occupant.is_host && <span className={`${styles.tag} ${styles.hostBadge}`}>Host</span>}
+        {participant?.position === "btn" && (
+          <span className={`${styles.tag} ${styles.dealerButton}`} title="Dealer button">
+            D
+          </span>
+        )}
+        {participant?.blind === "small" && (
+          <span className={styles.tag} title="Small blind">
+            SB
+          </span>
+        )}
+        {participant?.blind === "big" && (
+          <span className={styles.tag} title="Big blind">
+            BB
+          </span>
+        )}
+        {participant?.all_in && <span className={`${styles.tag} ${styles.allIn}`}>All-in</span>}
+        {status && <span className={`${styles.tag} ${styles.status}`}>{status}</span>}
+      </div>
       <div className={styles.pod}>
         <div className={styles.avatar} aria-hidden="true">
           {monogram(occupant.display_name)}
         </div>
         <div className={styles.info}>
-          <div className={styles.name}>
+          <div className={styles.name} title={occupant.display_name}>
             {occupant.display_name}
-            {occupant.is_host && <span className={styles.hostBadge}>Host</span>}
           </div>
           <div className={styles.stack}>
             <Amount value={occupant.stack} />
           </div>
-          {statusLabel(occupant.status) && (
-            <div className={styles.status}>{statusLabel(occupant.status)}</div>
-          )}
         </div>
-        {participant && (
-          <div className={styles.markers}>
-            {participant.position === "btn" && <span className={styles.dealerButton}>D</span>}
-            {participant.blind === "small" && <span className={styles.blindMarker}>SB</span>}
-            {participant.blind === "big" && <span className={styles.blindMarker}>BB</span>}
-          </div>
-        )}
       </div>
       {participant && (participant.hole_cards !== null || participant.hidden_card_count > 0) && (
         <div className={styles.cards}>
           {participant.hole_cards !== null
             ? participant.hole_cards.map((card) => (
-                <PlayingCard key={card} card={card} size={isHero ? "lg" : "sm"} />
+                <PlayingCard key={card} card={card} size={cardSize} />
               ))
             : Array.from({ length: participant.hidden_card_count }, (_, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: interchangeable face-down placeholders
-                <CardBack key={i} size={isHero ? "lg" : "sm"} />
+                <CardBack key={i} size={cardSize} />
               ))}
         </div>
       )}
       {participant?.strength && (
-        <div className={styles.strength}>{participant.strength.description}</div>
+        <div className={styles.strength} title={participant.strength.description}>
+          {participant.strength.description}
+        </div>
       )}
-      {participant?.all_in && <div className={styles.allIn}>All-in</div>}
     </div>
   );
 }

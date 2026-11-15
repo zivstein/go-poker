@@ -8,9 +8,11 @@
   z-index: var(--layer-table);
 }
 
+/* The same size as a board card: a card can never outgrow its slot. */
 .slot {
-  width: 40px;
-  height: 56px;
-  border: 1px dashed var(--table-felt-highlight);
+  width: var(--card-w-md);
+  height: var(--card-h-md);
+  outline: 1px dashed var(--table-felt-highlight);
+  outline-offset: -1px;
   border-radius: var(--radius-sm);
 }
