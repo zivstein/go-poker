@@ -1,0 +1,22 @@
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 72vh;
+  margin: 0 auto;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--table-rail-base);
+  border: 10px solid var(--table-rail-base);
+}
+
+.felt {
+  position: absolute;
+  inset: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    var(--table-felt-highlight),
+    var(--table-felt-base)
+  );
+}

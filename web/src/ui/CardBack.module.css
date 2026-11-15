@@ -1,0 +1,29 @@
+.back {
+  display: inline-block;
+  background-color: var(--card-back-base);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--card-back-pattern) 0,
+    var(--card-back-pattern) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--color-border-default);
+}
+
+.sm {
+  width: 28px;
+  height: 40px;
+}
+
+.md {
+  width: 40px;
+  height: 56px;
+}
+
+.lg {
+  width: 52px;
+  height: 74px;
+}
