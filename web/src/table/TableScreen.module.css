@@ -10,4 +10,7 @@
   display: flex;
   align-items: center;
   padding: var(--space-4);
+  /* A viewport narrower than the minimum stage scrolls sideways instead of
+     squeezing the table (TableStage.module.css). */
+  overflow-x: auto;
 }

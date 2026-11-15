@@ -19,7 +19,7 @@ export function PlayingCard({ card, size = "md" }: PlayingCardProps) {
         <span className={styles.rank}>{cardRankLabel(card)}</span>
         <span className={styles.suit}>{cardSuitSymbol(card)}</span>
       </span>
-      <span className={styles.centerSuit} aria-hidden="true">
+      <span className={styles.pip} aria-hidden="true">
         {cardSuitSymbol(card)}
       </span>
     </span>

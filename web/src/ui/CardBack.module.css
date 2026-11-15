@@ -1,5 +1,8 @@
 .back {
   display: inline-block;
+  flex: none;
+  width: var(--card-w, var(--card-w-md));
+  height: var(--card-h, var(--card-h-md));
   background-color: var(--card-back-base);
   background-image: repeating-linear-gradient(
     45deg,
@@ -14,16 +17,16 @@
 }
 
 .sm {
-  width: 28px;
-  height: 40px;
+  --card-w: var(--card-w-sm);
+  --card-h: var(--card-h-sm);
 }
 
 .md {
-  width: 40px;
-  height: 56px;
+  --card-w: var(--card-w-md);
+  --card-h: var(--card-h-md);
 }
 
 .lg {
-  width: 52px;
-  height: 74px;
+  --card-w: var(--card-w-lg);
+  --card-h: var(--card-h-lg);
 }

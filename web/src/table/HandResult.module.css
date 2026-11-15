@@ -1,25 +1,46 @@
+/*
+ * A compact panel under the board, between the side seats. Its largest box is
+ * --result-max-w x --result-max-h (RESULT_BOX in seatLayout.ts, which keeps
+ * the seats clear of it): it scrolls instead of growing past that, so it can
+ * never cover a seat, a badge or a card. Up to three shown hands show their
+ * best five; more than that switch to one text line per hand (the seats
+ * already show those hands' hole cards). The panel does sit over the pot
+ * display, whose amounts the awards repeat.
+ */
 .result {
   position: absolute;
   left: 50%;
-  bottom: 12%;
+  top: 46%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
+  width: max-content;
+  max-width: var(--result-max-w);
+  max-height: var(--result-max-h);
+  overflow-y: auto;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+  padding: 6px var(--space-3);
   z-index: var(--layer-overlay);
   box-shadow: var(--shadow-2);
 }
 
+.awards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 var(--space-4);
+}
+
 .award {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: baseline;
+  gap: var(--space-2);
   font-size: 13px;
+  line-height: 16px;
 }
 
 .potLabel {
@@ -33,27 +54,46 @@
 
 .shown {
   display: flex;
-  gap: var(--space-4);
+  justify-content: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* Four or more shown hands: a three-column text grid, one line per hand. */
+.compact {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
 }
 
 .shownHand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: 2px var(--space-2);
   font-size: 12px;
+  line-height: 14px;
+  min-width: 0;
 }
 
 .shownName {
+  justify-self: end;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
 }
 
 .shownCategory {
+  justify-self: start;
+  white-space: nowrap;
   color: var(--color-text-secondary);
   text-transform: capitalize;
 }
 
 .shownCards {
+  grid-column: 1 / -1;
   display: flex;
+  justify-content: center;
   gap: 2px;
 }

@@ -34,6 +34,29 @@
   --card-ink-red: #c81e3a;
   --card-ink-black: #16181a;
 
+  /* Card sizes: the one source for faces, backs and the board's reserved
+     slots, so a face never outgrows its slot. */
+  --card-w-sm: 32px;
+  --card-h-sm: 44px;
+  --card-w-md: 44px;
+  --card-h-md: 62px;
+  --card-w-lg: 56px;
+  --card-h-lg: 78px;
+
+  /* Seat footprint. The seat anchor is the pod's centre; the tags row sits
+     above the pod, cards and the hand label hang below it. Mirrored in
+     table/seatLayout.ts, whose test fails if the two drift apart. */
+  --stage-min-w: 1024px;
+  --seat-w: 144px;
+  --seat-pod-h: 46px;
+  --seat-tags-h: 16px;
+  --seat-gap: 4px;
+  --seat-note-h: 14px;
+
+  /* The hand-result panel's largest box (see RESULT_BOX in seatLayout.ts). */
+  --result-max-w: 560px;
+  --result-max-h: 96px;
+
   /* Fixed scales (8-pt spacing) */
   --space-1: 4px;
   --space-2: 8px;

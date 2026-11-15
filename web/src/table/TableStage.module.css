@@ -1,8 +1,13 @@
+/* The stage keeps a 16:9 shape at every viewport (C6.2 plan §4.5): a width
+ * cap, not a max-height, so the percent seat anchors never stretch. It never
+ * goes below 1024px wide (the minimum supported stage, REFERENCE_STAGE in
+ * seatLayout.ts): seats and chips keep their pixel size, so a smaller stage
+ * would make a 9-seat table overlap. Below that the body scrolls instead. */
 .stage {
   position: relative;
-  width: 100%;
+  flex: none;
+  width: clamp(var(--stage-min-w), calc(72vh * 16 / 9), 100%);
   aspect-ratio: 16 / 9;
-  max-height: 72vh;
   margin: 0 auto;
   border-radius: var(--radius-lg);
   overflow: hidden;
