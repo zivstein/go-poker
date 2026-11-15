@@ -1,0 +1,30 @@
+.dock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-elevated);
+  border-top: 1px solid var(--color-border-default);
+  flex-wrap: wrap;
+}
+
+.waiting {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.sizer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.slider {
+  width: 160px;
+}
+
+.numberInput {
+  width: 90px;
+  font-variant-numeric: tabular-nums;
+}

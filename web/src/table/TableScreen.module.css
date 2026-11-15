@@ -1,0 +1,13 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+}

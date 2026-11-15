@@ -1,0 +1,14 @@
+.chips {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: var(--layer-table);
+  font-size: 12px;
+  color: var(--table-pot-text);
+}
+
+.amount {
+  font-weight: 600;
+}

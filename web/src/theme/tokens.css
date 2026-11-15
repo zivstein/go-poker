@@ -1,0 +1,177 @@
+/*
+ * Design tokens (C6.2 plan §4.4): primitives, semantic tokens mapped per
+ * theme, and fixed scales. Values are provisional, checked for WCAG AA text
+ * contrast, pending the approved design specifications (C4).
+ */
+
+:root {
+  /* Primitives */
+  --p-emerald-500: #00e676;
+  --p-emerald-600: #00c853;
+  --p-teal-500: #00bfa5;
+  --p-sapphire-500: #1e88ff;
+  --p-ruby-500: #ff3d5c;
+  --p-neutral-900: #0b0f12;
+  --p-neutral-800: #11171c;
+  --p-neutral-700: #1a2228;
+  --p-neutral-600: #28333b;
+  --p-neutral-400: #5b6b74;
+  --p-neutral-200: #c7d1d6;
+  --p-neutral-050: #f4f7f8;
+
+  /* Master brand: never themed */
+  --brand-master: var(--p-teal-500);
+  --brand-master-on: #04211c;
+
+  /* Status: theme-independent (W11) */
+  --color-status-success: #22c55e;
+  --color-status-info: #38bdf8;
+  --color-status-warning: #f59e0b;
+  --color-status-error: #ff4d6d;
+
+  /* Cards: faces never themed */
+  --card-face: #f8f5ee;
+  --card-ink-red: #c81e3a;
+  --card-ink-black: #16181a;
+
+  /* Fixed scales (8-pt spacing) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --font-display: "Montserrat", system-ui, sans-serif;
+  --font-ui: "Inter", system-ui, sans-serif;
+
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.3, 0, 0.1, 1);
+
+  --layer-base: 0;
+  --layer-table: 10;
+  --layer-overlay: 20;
+  --layer-dialog: 30;
+  --layer-toast: 40;
+}
+
+/* Emerald: the default Go! Poker presentation (W9, W12) */
+:root,
+[data-theme="emerald"] {
+  --color-bg-canvas: #06090b;
+  --color-bg-surface: var(--p-neutral-900);
+  --color-bg-elevated: var(--p-neutral-800);
+  --color-bg-inverse: var(--p-neutral-050);
+
+  --color-text-primary: #eef3f2;
+  --color-text-secondary: #aab8bd;
+  --color-text-muted: #7c8a90;
+  --color-text-on-accent: #04210f;
+
+  --color-border-default: var(--p-neutral-600);
+  --color-border-strong: var(--p-neutral-400);
+
+  --color-accent: var(--p-emerald-500);
+  --color-action-primary-bg: var(--p-emerald-500);
+  --color-action-primary-text: #04210f;
+  --color-action-primary-hover: var(--p-emerald-600);
+  --color-action-primary-pressed: #00a648;
+  --color-action-secondary-bg: transparent;
+  --color-action-secondary-text: var(--color-text-primary);
+  --color-action-secondary-border: var(--color-border-strong);
+  --color-focus-ring: var(--p-emerald-500);
+
+  --table-felt-base: #0d2b22;
+  --table-felt-highlight: #124234;
+  --table-rail-base: #241a12;
+  --table-rail-highlight: #3a2a1b;
+  --table-active-seat-ring: var(--p-emerald-500);
+  --table-pot-text: #f4f7f8;
+
+  --chip-body: var(--p-emerald-500);
+  --chip-edge: #04210f;
+  --chip-marking: #eafff3;
+
+  --card-back-base: #0f3328;
+  --card-back-pattern: #124234;
+
+  --glow-tint: rgba(0, 230, 118, 0.35);
+  --glow-intensity: 0.6;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Sapphire: dev-only token proof (W12) so a hardcoded green is obvious */
+[data-theme="sapphire"] {
+  --color-accent: var(--p-sapphire-500);
+  --color-action-primary-bg: var(--p-sapphire-500);
+  --color-action-primary-text: #04142b;
+  --color-action-primary-hover: #1573d6;
+  --color-action-primary-pressed: #1163b8;
+  --color-focus-ring: var(--p-sapphire-500);
+
+  --table-felt-base: #0d1f33;
+  --table-felt-highlight: #123a5a;
+  --table-active-seat-ring: var(--p-sapphire-500);
+
+  --chip-body: var(--p-sapphire-500);
+  --chip-edge: #04142b;
+  --chip-marking: #eaf4ff;
+
+  --card-back-base: #0d1f33;
+  --card-back-pattern: #123a5a;
+
+  --glow-tint: rgba(30, 136, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-slow: 1ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+}
+
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible focus on every theme (C6.2 plan §4.6 Accessibility). */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
