@@ -1,30 +1,149 @@
+/*
+ * The Action Dock (A1, docs/design/ACTION_DOCK.md): a fixed two-row frame,
+ * --dock-h tall in every state (S0 Option B), so the stage never moves when a
+ * turn starts or ends. Top row: status and amount hints. Bottom row: Fold,
+ * Check/Call, the sizer and the commit button, in fixed slots that never wrap.
+ */
 .dock {
+  box-sizing: border-box;
+  flex: none;
+  height: var(--dock-h);
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  flex-direction: column;
+  gap: var(--dock-row-gap);
+  padding: var(--dock-pad-y) var(--space-4);
   background: var(--color-bg-elevated);
   border-top: 1px solid var(--color-border-default);
-  flex-wrap: wrap;
+  outline: none;
 }
 
-.waiting {
-  padding: var(--space-3) var(--space-4);
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: var(--dock-top-h);
+  font-size: 12px;
+  line-height: var(--dock-top-h);
+  white-space: nowrap;
+}
+
+.status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--color-text-secondary);
-  text-align: center;
 }
 
-.sizer {
+.aside {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.controls {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  height: var(--dock-controls-h);
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
-.slider {
-  width: 160px;
+/* Fixed slots: a label change ("Fold" → "Confirm fold", a longer amount)
+ * never moves a neighbouring control. */
+.foldSlot,
+.callSlot,
+.commitSlot {
+  flex: none;
+  display: flex;
 }
 
-.numberInput {
-  width: 90px;
-  font-variant-numeric: tabular-nums;
+.foldSlot {
+  width: 140px;
+  margin-right: var(--space-4);
 }
+
+.callSlot {
+  min-width: 128px;
+  margin-right: var(--space-4);
+}
+
+.commitSlot {
+  min-width: 176px;
+  margin-left: var(--space-4);
+}
+
+/* Start game sits mid-row, where the sizer will be once the hand starts, never
+ * where Fold or the commit button will appear under the pointer. */
+.startSlot {
+  margin: 0 auto;
+}
+
+.foldSlot > button,
+.callSlot > button,
+.commitSlot > button {
+  width: 100%;
+}
+
+.yourTurn {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--color-text-secondary);
+}
+
+.hintError,
+.rejection {
+  color: var(--color-status-error);
+}
+
+.warning,
+.notice {
+  color: var(--color-status-warning);
+}
+
+.rejection,
+.quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.quiet {
+  color: var(--color-text-secondary);
+}
+
+.dismiss {
+  min-width: 24px;
+  min-height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-pill);
+  color: var(--color-status-warning);
+  font-weight: 600;
+  line-height: 16px;
+}
+
+/* A pending command disables every control at once; the dim appears only
+ * after 150 ms, so a fast reply never flickers. */
+.dock[data-pending] button:disabled,
+.dock[data-pending] input:disabled {
+  transition: opacity 0s linear 150ms;
+}
+
+/* The arrival guard (`aria-disabled`, not `disabled`) keeps every control's
+ * normal appearance: nothing to restyle, and focus never moves. */

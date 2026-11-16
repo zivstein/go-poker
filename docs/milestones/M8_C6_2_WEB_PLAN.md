@@ -14,6 +14,7 @@ Tags, as in the [C6.1 plan](M8_C6_1_BACKEND_API_PLAN.md):
 | 1 | 2026-11-11 | Draft for Owner review |
 | 2 | 2026-11-11 | Owner decisions W1–W30 applied; Emerald as the default product accent; no Figma prerequisite; pot presets moved to the betting contract; the POC entry flow defined; command completion, presentation queue and identity corrections; C6.3 contract blockers (§12); closeout readiness (§13) |
 | 2 (approved) | 2026-11-11 | Approved. Final clarifications: B1 separates the server's one logical outcome from client-observed delivery; after a command timeout, actions stay disabled until the client has reconciled with a fresh authoritative snapshot (the 10 s value is provisional); side pots need three or more participants, so the heads-up demo does not cover them and canonical 3+ player fixtures do |
+| 3 (amended) | 2026-11-16 | Owner-approved A1 amendments (Betting and Action Safety, an M8 Web follow-up Cycle): AM1, Min and Max are draft selectors and never commit (§3.2, §4.6, W21); AM2, invalid or out-of-range typed amounts are never clamped and cannot commit (§2.3 rule 1); AM3, the provisional 350 ms turn-arrival guard (§2.3 rule 6). The Action Dock's component states are in [`ACTION_DOCK.md`](../design/ACTION_DOCK.md) (AM4) |
 
 ## 1. Inputs and their status
 
@@ -128,7 +129,7 @@ web/
 
 Rules:
 
-1. **No poker rules in the browser.** Buttons come only from `legal_actions` and `showdown_actions`; amounts only from server fields. The bet input clamps to the server's `[min_full_target, max_target]` as a convenience, and the server still validates. The client computes no pot, pot limit, call amount, eligibility, turn order or winner.
+1. **No poker rules in the browser.** Buttons come only from `legal_actions` and `showdown_actions`; amounts only from server fields. The bet input offers the server's `[min_full_target, max_target]`, and the server still validates. **Amended (A1, AM2, 2026-11-16):** typed text that is not a whole number, or lies outside that range, is never clamped, on blur or on submit; it cannot be committed, and stays invalid until the player corrects it or selects Min or Max. The commit label always shows exactly the target that would be sent. This replaces the earlier "clamps … as a convenience" behavior. The client computes no pot, pot limit, call amount, eligibility, turn order or winner.
 2. **No inference of hidden cards.** Card faces render only from the visible fields of the snapshot being displayed. Card backs render only from the server's hidden-card count (W29). Nothing in the client derives, remembers across hands, or guesses another player's cards from the log, earlier snapshots or timing.
 3. **No optimistic poker updates.** A sent command shows a pending state at once and is completed only by its correlated outcome (§12, B1): an acknowledgement, which for a private command may carry an **unchanged** revision (ADR 0006 §2), or a rejection. The client never waits for a revision increase. One poker command is in flight at a time.
 4. **No indefinite lock, and no action on uncertain state.** If no outcome arrives within a bounded time (provisionally 10 s), or the connection drops, the command's outcome is **uncertain**: the server may or may not have applied it. The client then:
@@ -139,7 +140,7 @@ Rules:
 
    An uncertain poker command is **never** retried automatically. The 10 s value is confirmed or changed in C6.4.
 5. **Snapshot ordering.** The store applies a snapshot whose revision is ≥ its current one (an equal revision is a private-intent update, ADR 0006 §4) and ignores an older one.
-6. **Presentation never delays the player.** Whenever the latest snapshot gives the hero a decision, presentation **fast-forwards to that snapshot at once**, skipping any remaining animation, and the dock opens from it. Commands carry the latest authoritative revision, which is then the one displayed. On reconnect or a revision gap, presentation jumps to the latest state with no animation.
+6. **Presentation never delays the player.** Whenever the latest snapshot gives the hero a decision, presentation **fast-forwards to that snapshot at once**, skipping any remaining animation, and the dock opens from it. Commands carry the latest authoritative revision, which is then the one displayed. On reconnect or a revision gap, presentation jumps to the latest state with no animation. **Amended (A1, AM3, 2026-11-16):** newly actionable decision controls ignore input for a short accidental-action guard, provisionally 350 ms and subject to browser usability validation. The decision is still displayed and announced at once; an ignored activation is dropped, never deferred or replayed.
 7. **Integers only.** Money is formatted, never computed beyond clamping.
 
 ### 2.4 Connection lifecycle
@@ -229,7 +230,7 @@ TableScreen
 │  └─ HandResult      awards per pot; shown hands' rank and best five
 ├─ ActionDock
 │  ├─ ActionPanel     from toActionOptions(legal_actions): Fold · Check | Call $x · Bet | Raise to $y · All-in $z
-│  ├─ BetSizer        Min · All-in · number input · slider (W21)
+│  ├─ BetSizer        Min · slider · Max · number input (W21; AM1: Min and Max select the draft only)
 │  ├─ ShowdownPrompt  Show · Muck
 │  ├─ PreActionBar    [FA] from you.pre_action_options
 │  └─ WaitingPanel    host Start · waiting messages
@@ -333,7 +334,7 @@ It is marked provisional in code. Approved vector assets replace this one compon
 - **Avatars (W22):** monogram initials.
 - **Icons (W25):** inline SVGs in the POC; one open-licensed set, license recorded, in the FA.
 - **Actions:** verb plus amount ("Call $40", "Raise to $120", "All-in $380"), using the engine's "to" semantics. Fold neutral, Check/Call outlined, Bet/Raise filled with the accent. All-in is a Call, Bet or Raise to `max_target`, labelled as such. When the server supplies only a short all-in target, the sizer collapses to that one choice.
-- **Sizing (W21):** the POC has Min, All-in, a number input and a slider. **Pot-based presets are game rules**, owned by the authoritative game/betting contract, not visual design. Before any preset button is built, a later cycle defines legal absolute preset targets in that contract, or the server provides them as data. The client never computes them.
+- **Sizing (W21):** the POC has Min, All-in, a number input and a slider. **Amended (A1, AM1, 2026-11-16):** the sizer's controls are **Min** and **Max**, quiet draft selectors that only set the draft amount and never commit; the separate commit button reads "All-in $X" when the draft equals `max_target` in No-Limit (ADR 0009 §11). **Pot-based presets are game rules**, owned by the authoritative game/betting contract, not visual design. Before any preset button is built, a later cycle defines legal absolute preset targets in that contract, or the server provides them as data. The client never computes them.
 - **Motion:**
 
 | Priority | Motion | Status |
@@ -463,7 +464,7 @@ All variant knowledge lives in `variant/` and `toActionOptions`. **Omaha and Pot
 | W18 | Seat layout | **Approved.** Hero at bottom; hand-tuned anchors for 2–9 per orientation |
 | W19 | Chat and Notes | **Approved.** Deferred, not in the FA |
 | W20 | Amounts | **Approved.** Whole dollars with grouping, no cents, no abbreviation |
-| W21 | Sizing presets | **Approved, amended:** POC Min, All-in, input, slider. Pot-based presets belong to the authoritative game/betting contract; a later cycle defines legal absolute targets or server-provided data before buttons are built |
+| W21 | Sizing presets | **Approved, amended:** POC Min, All-in, input, slider. Pot-based presets belong to the authoritative game/betting contract; a later cycle defines legal absolute targets or server-provided data before buttons are built. **A1 (AM1, 2026-11-16):** Min and Max are draft selectors only; "All-in" labels the commit button at `max_target` |
 | W22 | Avatars | **Approved.** Monograms |
 | W23 | Card faces | **Approved.** Code-drawn, two-color |
 | W24 | POC responsive bar | **Approved.** Desktop ≥ 1024 polished; narrower usable |

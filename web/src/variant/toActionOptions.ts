@@ -3,7 +3,7 @@
  * No poker rule lives here: every bound comes straight from the server.
  */
 
-import type { LegalActions } from "../protocol/types";
+import type { BettingStructure, LegalActions } from "../protocol/types";
 
 export interface BetSizerRange {
   kind: "bet" | "raise";
@@ -22,7 +22,13 @@ export function betSizerRange(legal: LegalActions): BetSizerRange | null {
   return { kind, min, max, shortAllInTarget: legal.short_all_in_target };
 }
 
-/** In `no_limit`, `max_target` is the actor's all-in target (ADR 0009 §11). */
-export function isAllInTarget(legal: LegalActions, target: number): boolean {
-  return legal.max_target !== null && target === legal.max_target;
+/** In `no_limit`, `max_target` is the actor's all-in target. For any other
+ * betting structure the client never labels `max_target` as all-in (ADR 0009
+ * §11). */
+export function isAllInTarget(
+  legal: LegalActions,
+  target: number,
+  structure: BettingStructure,
+): boolean {
+  return structure === "no_limit" && legal.max_target !== null && target === legal.max_target;
 }

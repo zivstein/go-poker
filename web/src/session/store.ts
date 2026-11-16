@@ -54,11 +54,16 @@ export class TableStore {
    * ignores an older one. */
   applySnapshot(event: SnapshotEvent): void {
     if (this.state.view !== null && event.revision < this.state.revision) return;
+    // A newer shared state supersedes the last rejection (A1): it described a
+    // decision that no longer exists. A STALE_REVISION rejection arrives after
+    // the newer snapshot it refers to (ADR 0009 §9.4), so it still shows.
+    const newer = this.state.view !== null && event.revision > this.state.revision;
     this.setState({
       ...this.state,
       revision: event.revision,
       cause: event.cause,
       view: event.view,
+      lastRejection: newer ? null : this.state.lastRejection,
     });
   }
 

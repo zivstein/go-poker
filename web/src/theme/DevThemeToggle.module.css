@@ -1,7 +1,10 @@
+/* Dev only. Top centre, in the header's free space: the bottom corners belong
+ * to the Action Dock's Fold and commit buttons (A1). */
 .toggle {
   position: fixed;
-  bottom: var(--space-2);
-  right: var(--space-2);
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
   z-index: var(--layer-toast);
   background: var(--color-bg-elevated);
   color: var(--color-text-secondary);

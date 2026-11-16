@@ -9,8 +9,17 @@
   flex: 1;
   display: flex;
   align-items: center;
-  padding: var(--space-4);
+  /* 8px vertically (A1): with the fixed 70px dock, the 576px minimum stage
+     still fits a 1280x720 viewport. */
+  padding: var(--space-2) var(--space-4);
   /* A viewport narrower than the minimum stage scrolls sideways instead of
      squeezing the table (TableStage.module.css). */
   overflow-x: auto;
+}
+
+/* Reconnecting or reconciling: the table stays visible, dimmed, while every
+ * action is disabled (C6.2 §2.4). */
+.body[data-dimmed] {
+  opacity: 0.55;
+  transition: opacity var(--motion-base) var(--motion-ease-standard);
 }

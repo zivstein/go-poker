@@ -24,9 +24,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
     render(
       <StatusLayer
         status={status({ phase: "closed", reason: "protocol_mismatch" })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
@@ -40,9 +38,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
     render(
       <StatusLayer
         status={status({ phase: "closed", reason: "superseded" })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={onUseHere}
         onBackToEntry={noop}
       />,
@@ -55,9 +51,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
     render(
       <StatusLayer
         status={status({ phase: "closed", reason: "left_table" })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
@@ -69,9 +63,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
     render(
       <StatusLayer
         status={status({ phase: "closed", reason: "auth_failed" })}
-        lastRejection={null}
         wasLeaving={true}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
@@ -83,9 +75,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
     render(
       <StatusLayer
         status={status({ phase: "closed", reason: "auth_failed" })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
@@ -98,9 +88,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
     render(
       <StatusLayer
         status={status({ phase: "closed", reason: "table_failed" })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
@@ -113,9 +101,7 @@ describe("StatusLayer terminal states (ADR 0009 §12)", () => {
       const { unmount } = render(
         <StatusLayer
           status={status({ phase: "closed", reason })}
-          lastRejection={null}
           wasLeaving={false}
-          onDismissRejection={noop}
           onUseHere={noop}
           onBackToEntry={noop}
         />,
@@ -131,9 +117,7 @@ describe("StatusLayer live-phase banners and rejections", () => {
     render(
       <StatusLayer
         status={status({ phase: "reconnecting", attempt: 2 })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
@@ -145,45 +129,11 @@ describe("StatusLayer live-phase banners and rejections", () => {
     render(
       <StatusLayer
         status={status({ phase: "live", reconciling: true })}
-        lastRejection={null}
         wasLeaving={false}
-        onDismissRejection={noop}
         onUseHere={noop}
         onBackToEntry={noop}
       />,
     );
     expect(screen.getByRole("status").textContent).toBe("No response — reconnecting");
-  });
-
-  it("shows STALE_REVISION as a quiet status notice, not an alert", () => {
-    render(
-      <StatusLayer
-        status={status({ phase: "live" })}
-        lastRejection={{ code: "STALE_REVISION", message: "x" }}
-        wasLeaving={false}
-        onDismissRejection={noop}
-        onUseHere={noop}
-        onBackToEntry={noop}
-      />,
-    );
-    expect(screen.getByText("Table updated.")).toBeDefined();
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("shows a non-stale rejection as an alert toast, dismissible", async () => {
-    const onDismiss = vi.fn();
-    render(
-      <StatusLayer
-        status={status({ phase: "live" })}
-        lastRejection={{ code: "NOT_YOUR_TURN", message: "x" }}
-        wasLeaving={false}
-        onDismissRejection={onDismiss}
-        onUseHere={noop}
-        onBackToEntry={noop}
-      />,
-    );
-    expect(screen.getByRole("alert").textContent).toContain("It isn't your turn.");
-    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(onDismiss).toHaveBeenCalledOnce();
   });
 });

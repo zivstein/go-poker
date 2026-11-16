@@ -36,3 +36,14 @@
 .status[data-phase="connecting"] {
   color: var(--color-status-warning);
 }
+
+.leaving {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-pill);
+  color: var(--color-status-warning);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+}
