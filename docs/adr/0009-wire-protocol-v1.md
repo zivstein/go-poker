@@ -352,6 +352,8 @@ Several guarantees are often confused here. They are stated separately:
 - **No fixture presents it as correct.** The one canonical split (`split_pot_and_all_in_calls`) is a single pot with one eligible-seat set.
 - **The client renders pots and awards exactly as given.** It never merges or re-splits them.
 
+> **Supersession note (2026-11-17, Core pot-settlement correctness, GitHub issue #2).** The "Pots are the engine's" text above is the accepted 2026-11-12 wording, kept as written; the behavior they describe has been replaced. The correction approved in C6.3 plan §7 is implemented: the engine now merges adjacent pot layers with identical eligible seats (the [ADR 0001](0001-showdown-settlement-contract.md) clarification note), so no two pots of a hand share an eligible-seat set and odd chips are split once per pot. The known Core defect above is fixed: the reproduced five-player tie pays 65 / 65. Under the C6.3 plan's P17, the canonical `three_way_side_pots` hand 1 now shows one pot of 810 for seats 1 and 2, where it showed 30 and 780. The web client continues to render the pots exactly as the server sends them, without merging or recalculating them. The `Pot` shape, every field meaning and `go-poker.v1` are unchanged.
+
 **Turn**
 - `seat`: integer.
 - `kind`: turn kind enum.

@@ -1,9 +1,10 @@
 """Pot awarding fed with pots derived from real betting.
 
 The pots here come from `pots(hand)` after real betting operations, not from hand-written pots, so they have the shapes
-the engine really produces: a short all-in level, folded players' dead money, and adjacent pots whose eligible seats are
-identical. Ranks are chosen by the test (hand strength is not what is under test). The awarding rules are also checked
-on seeded random hands by the one seeded hand driver, in tests/game/betting/test_hand_stress.py.
+the engine really produces: a short all-in level, and folded players' dead money, which is part of the pot of the
+seats that contest it and never a pot of its own. Ranks are chosen by the test (hand strength is not what is under
+test). The awarding rules are also checked on seeded random hands by the one seeded hand driver, in
+tests/game/betting/test_hand_stress.py.
 
 Contender subsets model showdown mucks. `_settle` is driven directly here because it is internal and takes the final
 contenders as given; the Hold'em-level tests reach the same awards through the public operations.
@@ -71,7 +72,7 @@ def pot(amount: int, *eligible_seats: int) -> Pot:
 
 
 # =============================================================================
-# REAL-BETTING SCENARIO: short all-in, dead money, adjacent identical pots
+# REAL-BETTING SCENARIO: short all-in, dead money merged into the pot its seats contest
 # =============================================================================
 
 
@@ -88,49 +89,35 @@ def short_all_in_with_dead_money() -> PokerHand:
     return hand
 
 
-def test_real_pots_have_adjacent_pots_with_identical_eligible_seats() -> None:
-    """The scenario's premise: the collected levels 5, 10, 25 and 30 give three pots seats 1, 3 and 9 all contest, and
-    a last pot only seats 1 and 9 can win."""
-    assert pots(short_all_in_with_dead_money()) == (
-        pot(25, 1, 3, 9),
-        pot(20, 1, 3, 9),
-        pot(45, 1, 3, 9),
-        pot(10, 1, 9),
-    )
+def test_real_pots_merge_the_folded_levels_into_the_pot_their_eligible_seats_contest() -> None:
+    """The scenario's premise: of the collected levels 5, 10, 25 and 30, the folded blinds' 5 and 10 change nobody's
+    eligibility, so everything up to 25 is one main pot of 90 that seats 1, 3 and 9 contest, and the 10 above it a side
+    pot only seats 1 and 9 can win."""
+    assert pots(short_all_in_with_dead_money()) == (pot(90, 1, 3, 9), pot(10, 1, 9))
 
 
-def test_two_tied_winners_split_every_identical_pot_with_odd_chips_wrapping_past_the_button() -> None:
-    """Seats 9 and 1 tie for the best hand and the short stack, seat 3 (the button), is weakest. Seat 9 is the first
-    seat left of the button among the winners, although seat 1 has the lower number, so it takes each pot's odd chip;
-    odd chips are decided per pot, not carried from one pot to the next."""
+def test_two_tied_winners_split_the_merged_main_pot_evenly() -> None:
+    """Seats 9 and 1 tie for the best hand and the short stack, seat 3 (the button), is weakest. The merged main pot
+    of 90 splits 45 / 45, with no odd chip: split layer by layer (25, 20 and 45), seat 9, the first winner left of the
+    button, took two odd chips and the hand paid 51 / 49 for 100 chips the two seats contested alike."""
     hand = short_all_in_with_dead_money()
     ranks = {1: BEST, 3: WEAK, 9: BEST}
 
     awards = _award_pots(pots(hand), ranks, ALL_LIVE, [state.seat_number for state in hand.players])
 
-    assert [award.shares for award in awards] == [
-        ((9, 13), (1, 12)),
-        ((9, 10), (1, 10)),
-        ((9, 23), (1, 22)),
-        ((9, 5), (1, 5)),
-    ]
-    assert Settlement(awards, ()).payouts == {9: 51, 1: 49}
+    assert [award.shares for award in awards] == [((9, 45), (1, 45)), ((9, 5), (1, 5))]
+    assert Settlement(awards, ()).payouts == {9: 50, 1: 50}
 
 
-def test_a_three_way_tie_in_the_odd_pots_gives_the_button_the_last_odd_chip() -> None:
-    """With the button, seat 3, tied in too, the order is 9, 1, 3: the 25-chip pot's one odd chip goes to seat 9, and
-    the 20-chip pot's two to seats 9 and 1. The last pot is not open to seat 3, which is all-in for less."""
+def test_a_three_way_tie_splits_the_merged_main_pot_evenly_and_the_side_pot_without_the_short_stack() -> None:
+    """With the button, seat 3, tied in too, the order is 9, 1, 3 and the merged main pot of 90 splits 30 each; split
+    layer by layer it paid 31 / 30 / 29. The side pot is not open to seat 3, which is all-in for less."""
     hand = short_all_in_with_dead_money()
     ranks = {1: BEST, 3: BEST, 9: BEST}
 
     awards = _award_pots(pots(hand), ranks, ALL_LIVE, [state.seat_number for state in hand.players])
 
-    assert [award.shares for award in awards] == [
-        ((9, 9), (1, 8), (3, 8)),
-        ((9, 7), (1, 7), (3, 6)),
-        ((9, 15), (1, 15), (3, 15)),
-        ((9, 5), (1, 5)),
-    ]
+    assert [award.shares for award in awards] == [((9, 30), (1, 30), (3, 30)), ((9, 5), (1, 5))]
 
 
 def test_the_best_short_stack_wins_only_the_pots_it_reaches_with_the_dead_money() -> None:
@@ -158,7 +145,7 @@ def stacks_and_all_in(hand: PokerHand) -> dict[int, tuple[int, bool]]:
 
 
 def test_dead_money_is_in_the_pots_but_folded_seats_are_never_eligible() -> None:
-    """Seats 5 and 7 folded after putting chips in: they fund the first pots yet are eligible for none."""
+    """Seats 5 and 7 folded after putting chips in: they fund the main pot yet are eligible for no pot."""
     hand = short_all_in_with_dead_money()
     folded = {seat for seat, state in players_by_seat(hand).items() if state.folded}
 
@@ -167,34 +154,29 @@ def test_dead_money_is_in_the_pots_but_folded_seats_are_never_eligible() -> None
     assert all(not (folded & real_pot.eligible_seats) for real_pot in pots(hand))
 
 
-def test_a_muck_gives_the_remaining_contenders_the_main_pots_and_a_sole_contender_the_last_side_pot() -> None:
-    """Seat 1 mucks, leaving seats 3 and 9. They tie for the three pots both reach, seat 9 taking each odd chip. The
-    last pot is eligible only to seats 1 and 9, so seat 9 is its sole final contender and takes it without a rank;
-    seat 1 holds no rank. Each pot is still the pot as derived, seat 1 eligible, and the all-in seat 3 is paid and
-    stops being all-in."""
+def test_a_muck_gives_the_remaining_contenders_the_main_pot_and_a_sole_contender_the_side_pot() -> None:
+    """Seat 1 mucks, leaving seats 3 and 9. They tie for the main pot both reach and split it evenly. The side pot is
+    eligible only to seats 1 and 9, so seat 9 is its sole final contender and takes it without a rank; seat 1 holds no
+    rank. Each pot is still the pot as derived, seat 1 eligible, and the all-in seat 3 is paid and stops being
+    all-in."""
     hand = short_all_in_with_dead_money()
     pots_before = pots(hand)
 
     _settle(hand, {3: BEST, 9: BEST}, {3, 9})
 
     assert hand.settlement is not None
-    assert [award.shares for award in hand.settlement.pot_awards] == [
-        ((9, 13), (3, 12)),
-        ((9, 10), (3, 10)),
-        ((9, 23), (3, 22)),
-        ((9, 10),),
-    ]
+    assert [award.shares for award in hand.settlement.pot_awards] == [((9, 45), (3, 45)), ((9, 10),)]
     assert tuple(award.pot for award in hand.settlement.pot_awards) == pots_before == pots(hand)
     assert 1 in hand.settlement.pot_awards[-1].pot.eligible_seats
-    assert hand.settlement.payouts == {9: 56, 3: 44}
+    assert hand.settlement.payouts == {9: 55, 3: 45}
     assert hand.settlement.showdown_ranks == ((3, BEST), (9, BEST))
-    assert stacks_and_all_in(hand) == {1: (70, False), 3: (44, False), 5: (95, False), 7: (90, False), 9: (126, False)}
+    assert stacks_and_all_in(hand) == {1: (70, False), 3: (45, False), 5: (95, False), 7: (90, False), 9: (125, False)}
     assert sum(state.player.stack for state in hand.players) == 100 + 25 + 100 + 100 + 100
 
 
 def test_a_muck_by_the_short_stack_leaves_it_all_in_and_unpaid_while_the_others_split_every_pot() -> None:
     """Seat 3 mucks. Its chips stay in the pots, which are still eligible to it, but it takes nothing and, unpaid, keeps
-    all_in with its zero stack. Seat 9 wins all four pots against seat 1."""
+    all_in with its zero stack. Seat 9 wins both pots against seat 1."""
     hand = short_all_in_with_dead_money()
 
     _settle(hand, {1: MIDDLE, 9: BEST}, {1, 9})
@@ -202,29 +184,29 @@ def test_a_muck_by_the_short_stack_leaves_it_all_in_and_unpaid_while_the_others_
     assert hand.settlement is not None
     assert hand.settlement.payouts == {9: 100}
     assert stacks_and_all_in(hand)[3] == (0, True)
-    assert all(3 in award.pot.eligible_seats for award in hand.settlement.pot_awards[:3])
+    assert 3 in hand.settlement.pot_awards[0].pot.eligible_seats
 
 
 def test_a_pot_only_one_contender_is_eligible_for_goes_to_it_while_a_better_rank_wins_the_shared_pots() -> None:
-    """Seats 1 and 3 are the contenders; seat 9 mucked. Seat 3 holds the best rank and wins the pots both reach, but is
-    not eligible for the last pot, which seat 1 takes as its only final contender."""
+    """Seats 1 and 3 are the contenders; seat 9 mucked. Seat 3 holds the best rank and wins the main pot both reach,
+    but is not eligible for the side pot, which seat 1 takes as its only final contender."""
     hand = short_all_in_with_dead_money()
 
     _settle(hand, {1: MIDDLE, 3: BEST}, {1, 3})
 
     assert hand.settlement is not None
-    assert [award.shares for award in hand.settlement.pot_awards] == [((3, 25),), ((3, 20),), ((3, 45),), ((1, 10),)]
+    assert [award.shares for award in hand.settlement.pot_awards] == [((3, 90),), ((1, 10),)]
     assert stacks_and_all_in(hand)[1] == (80, False)
 
 
 def test_a_last_contender_takes_every_layered_pot_without_any_rank() -> None:
-    """Seats 1 and 3 muck: seat 9 wins all four pots unshown, and the settlement holds no ranks."""
+    """Seats 1 and 3 muck: seat 9 wins both pots unshown, and the settlement holds no ranks."""
     hand = short_all_in_with_dead_money()
 
     _settle(hand, {}, {9})
 
     assert hand.settlement is not None
-    assert [award.shares for award in hand.settlement.pot_awards] == [((9, 25),), ((9, 20),), ((9, 45),), ((9, 10),)]
+    assert [award.shares for award in hand.settlement.pot_awards] == [((9, 90),), ((9, 10),)]
     assert hand.settlement.showdown_ranks == ()
     assert stacks_and_all_in(hand)[9] == (170, False)
     assert stacks_and_all_in(hand)[3] == (0, True)
@@ -250,8 +232,8 @@ def assert_violation_changes_nothing(hand: PokerHand, ranks: dict[int, HandRank]
 
 
 def test_a_pot_without_a_final_contender_is_raised_before_any_change() -> None:
-    """Seat 3 is the only contender, but the last pot is eligible only to seats 1 and 9. The first three pots would be
-    payable, and none of them is paid."""
+    """Seat 3 is the only contender, but the side pot is eligible only to seats 1 and 9. The main pot would be
+    payable, and it is not paid."""
     assert_violation_changes_nothing(short_all_in_with_dead_money(), {3: BEST}, {3})
 
 
@@ -261,7 +243,7 @@ def test_contenders_who_are_eligible_for_no_pot_are_raised_before_any_change() -
 
 
 def test_a_pot_with_two_final_contenders_one_of_them_unranked_is_raised_before_any_change() -> None:
-    """Seats 3 and 9 contest the first pots but only seat 3 has a rank."""
+    """Seats 3 and 9 contest the main pot but only seat 3 has a rank."""
     assert_violation_changes_nothing(short_all_in_with_dead_money(), {3: BEST}, {3, 9})
 
 

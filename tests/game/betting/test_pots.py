@@ -75,12 +75,24 @@ def test_folded_chips_are_dead_money_in_every_layer_they_reach(make_hand: HandFa
     assert pots(hand) == (pot(300, 1, 3), pot(100, 3))
 
 
-def test_folded_contribution_adds_a_layer_without_changing_the_eligible_seats(make_hand: HandFactory) -> None:
-    """Seats 1 and 2 are live with 200 each and seat 3 folded with 150. The folded 150 still mark a layer boundary, so
-    the two layers stay separate even though the same seats are eligible for both."""
+def test_a_folded_level_between_live_levels_adds_no_pot_for_the_same_eligible_seats(make_hand: HandFactory) -> None:
+    """Seats 1 and 2 are live with 200 each and seat 3 folded with 150. The folded 150 change nobody's eligibility,
+    so the chips below and above that level are one pot of 550 that seats 1 and 2 contest (ADR 0001 §1: a pot is the
+    chips one eligible-seat set contests)."""
     hand = collected_hand(make_hand, {1: 200, 2: 200, 3: 150}, folded={3})
 
-    assert pots(hand) == (pot(450, 1, 2), pot(100, 1, 2))
+    assert pots(hand) == (pot(550, 1, 2),)
+
+
+def test_pot_boundaries_are_only_the_live_levels_where_the_eligible_seats_change(make_hand: HandFactory) -> None:
+    """Seat 1 is all-in for 50 and seats 2 and 3 live with 300; seat 5 folded with 20, below every live level, and
+    seat 4 with 120, between the live levels. Only the all-in's 50 changes who can win, so there are exactly two pots,
+    each with its own eligible seats: the main pot of 220 (four 50s and the folded 20) and the side pot of 570 (two
+    250s and the folded 70 above 50). Both folded seats' chips are in, and the pots add up to the middle pot."""
+    hand = collected_hand(make_hand, {1: 50, 2: 300, 3: 300, 4: 120, 5: 20}, folded={4, 5}, all_in={1})
+
+    assert pots(hand) == (pot(220, 1, 2, 3), pot(570, 2, 3))
+    assert middle_pot(hand) == 790
 
 
 def test_all_in_players_are_eligible_for_every_layer_they_reach(make_hand: HandFactory) -> None:

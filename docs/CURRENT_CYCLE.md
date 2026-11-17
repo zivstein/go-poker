@@ -38,11 +38,12 @@ M8 Web follow-up Cycles after C6.4. They improve the playable table without chan
 None active for C6.
 
 **Friends Alpha blockers** (mandatory before the Friends Alpha):
-- **A known Core correctness defect: equivalent pot layers and odd chips.**
-  - `pots()` never merges adjacent pot layers with identical eligible-seat sets, and settlement splits each layer independently (ADR 0001 §1).
-  - With a tie, the odd chips can then differ from the merged pot. A reproduced five-player case pays 66 / 64 instead of 65 / 65 for an aggregate 130-chip pot. Chips are conserved and winner eligibility is correct.
-  - It is accepted for the C6.4 POC only.
+- **A known Core correctness defect: equivalent pot layers and odd chips.** Fix implemented on `core/pot-settlement-correctness`, awaiting Owner review (2026-11-17, GitHub issue #2).
+  - `pots()` never merged adjacent pot layers with identical eligible-seat sets, and settlement split each layer independently (ADR 0001 §1).
+  - With a tie, the odd chips could then differ from the merged pot. A reproduced five-player case paid 66 / 64 instead of 65 / 65 for an aggregate 130-chip pot. Chips were conserved and winner eligibility was correct.
+  - It was accepted for the C6.4 POC only.
   - **The fix:** a Core Cycle after C6.4 that clarifies ADR 0001, merges equivalent adjacent layers in Core, and adds regression tests for ties, odd chips, eligibility and conservation. The affected fixtures are then updated under C6.3 P17.
+  - **Implemented:** the ADR 0001 clarification note; `pots()` merges adjacent layers with identical eligible seats, so the reproduced case pays 65 / 65; regression tests; `three_way_side_pots` hand 1 regenerated under P17 (one 810 pot instead of 30 + 780), with notes in ADR 0009 §10 and the fixtures README.
   - Detail: [C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) §7.
 
 The C5.6 gates (the public repository's `pull_request_target` policy, live `ownership` enforcement on a real PR, and the first mode switch) are deferred with C5.6. They apply only if multi-lane activation is approved later.

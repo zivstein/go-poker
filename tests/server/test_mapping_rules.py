@@ -195,7 +195,7 @@ def test_an_all_in_showdown_has_no_decisions() -> None:
 
 def _settlement(tiebreakers: Sequence[int]) -> SettlementView:
     return SettlementView(
-        pot_awards=(PotAwardView(pot=Pot(amount=130, eligible_seats=frozenset({2, 1})), shares=((2, 66), (1, 64))),),
+        pot_awards=(PotAwardView(pot=Pot(amount=131, eligible_seats=frozenset({2, 1})), shares=((2, 66), (1, 65))),),
         showdown_ranks=((1, HandRank(HandCategory.TWO_PAIR, tuple(tiebreakers))),),
     )
 
@@ -203,8 +203,8 @@ def _settlement(tiebreakers: Sequence[int]) -> SettlementView:
 def test_a_settlement_keeps_the_engines_pot_and_share_order_and_sorts_the_eligible_seats() -> None:
     settlement = mapping.settlement(_settlement((9, 7, 5)))
     award = settlement.pot_awards[0]
-    assert (award.amount, award.eligible_seats) == (130, [1, 2])
-    assert [(share.seat, share.amount) for share in award.shares] == [(2, 66), (1, 64)]
+    assert (award.amount, award.eligible_seats) == (131, [1, 2])
+    assert [(share.seat, share.amount) for share in award.shares] == [(2, 66), (1, 65)]
 
 
 def test_a_shown_rank_carries_the_category_only_and_never_a_tiebreaker() -> None:

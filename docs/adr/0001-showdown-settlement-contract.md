@@ -4,6 +4,8 @@ Status: Accepted (2026-10-30); partly superseded by [ADR 0003](0003-interactive-
 
 > **Supersession note (2026-10-31).** This record is kept as written. [ADR 0003](0003-interactive-showdown-and-muck.md) §11 supersedes parts of it: decision 2 (all live hands compete, with no muck) now holds only for an all-in showdown, and its "which hands are revealed, and in what order" is now decided by ADR 0003; decision 5's showdown ranks cover shown players only; decision 6's settle readiness also needs a complete showdown; and the rejected alternative of conceding at showdown is reversed. Everything else stands.
 
+> **Clarification note (2026-11-17, Core pot-settlement correctness, GitHub issue #2).** Planned in the [C6.3 plan](../milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) §7. In decision 1, "each pot" means each set of chips that one eligible-seat set contests, not each contribution level. A folded player's contribution can be a level that changes nobody's eligibility. `pots(hand)` therefore merges adjacent layers with identical eligible seats, so no two pots of a hand share an eligible-seat set, and the odd chips of a split are decided once per set. Eligibility only shrinks as the level rises, so equal sets are always adjacent. The odd-chip rule and its order are unchanged. In the reproduced case, two tied seats contesting 130 chips over the folded levels 5, 10 and 25 were paid 66 / 64 as four layers; as the one pot of 130 they are paid 65 / 65.
+
 ## Context
 
 Milestone 3 derives the main and side pots (`pots(hand)`, `middle_pot(hand)`) from preserved player contributions, but nothing decides who wins them or pays anyone. Milestone 4 adds showdown and settlement.

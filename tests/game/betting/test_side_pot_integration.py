@@ -243,8 +243,8 @@ def test_fold_after_funding_three_layers_keeps_the_chips_in_them_but_leaves_ever
     (F) raises and the button (D) and the cutoff (C) call. Before the turn F contests all three pots. On the turn F
     bets 300, C raises to 800, D calls, and F folds instead of calling. None of F's 1500 come back, its 300 turn bet
     included: they stay in every pot they reach as dead money, while F leaves every eligible set. A and B stay
-    eligible for the pots their all-ins reach, the second side pot is now contested only by C and D, and F's folded
-    1500 still mark a layer boundary, so the last two pots stay separate although C and D are eligible for both."""
+    eligible for the pots their all-ins reach, and everything above B's 700 is now contested only by C and D. F's
+    folded 1500 change nobody's eligibility, so they mark no pot boundary: the chips from 700 to 2000 are one pot."""
     d, b, f, a, c = 1, 2, 3, 4, 5
     h = checked(make_hand({d: 3000, b: 700, f: 3000, a: 200, c: 3000}, button_seat_number=SEAT_ONE_BUTTON))
     h.start(STAKES)
@@ -272,8 +272,7 @@ def test_fold_after_funding_three_layers_keeps_the_chips_in_them_but_leaves_ever
     assert pots(h.hand) == (
         pot(1000, d, b, a, c),  # 5 x 200
         pot(2000, d, b, c),  # 4 x 500, from 200 to 700
-        pot(2400, d, c),  # 3 x 800, from 700 to F's folded 1500
-        pot(1000, d, c),  # 2 x 500, from 1500 to 2000
+        pot(3400, d, c),  # 3 x 800 from 700 to F's folded 1500, then 2 x 500 from 1500 to 2000
     )
 
 

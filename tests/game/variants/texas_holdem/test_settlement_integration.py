@@ -207,9 +207,11 @@ def test_two_short_all_ins_tie_the_main_pot_and_a_third_player_wins_the_side_pot
 def test_odd_chips_go_clockwise_from_the_button_in_every_pot_they_occur_in(new_hand: NewHand) -> None:
     """Seven seats with the button on seat 3, so the order for odd chips is 4, 5, 6, 7, 1, 2, 3. Seats 5, 7, 1 and 3
     (the button) each hold a ten and play the board's broadway straight, tying wherever they are eligible; seats 6 and
-    2 are weaker. Seat 4 folds the small blind. The pots are 35, 186, 65, 52, 63 and 74 chips, split 4-, 4-, 4-, 3-, 3-
-    and 2-ways with 3, 2, 1, 1, 0 and 0 odd chips: the first seats in the order (5, then 7, then 1) take them, so seat
-    5 comes before seat 1 although it has the higher number, and the button is always last."""
+    2 are weaker. Seat 4 folds the small blind, whose 5 dead chips sit inside the main pot with no level of their own.
+    The pots are 221, 65, 52, 63 and 74 chips, split 4-, 4-, 3-, 3- and 2-ways with 1, 1, 1, 0 and 0 odd chips: seat
+    5, the first winner in the order, takes each one, although it has a higher number than seat 1, and the button is
+    always last. Split as two layers below and above the folded 5 (35 and 186), the main pot gave seats 5 and 7 an odd
+    chip each from both, seat 7 ending with 72 instead of 71."""
     holes = {
         5: "Th 4c",
         7: "Td 5c",
@@ -237,22 +239,20 @@ def test_odd_chips_go_clockwise_from_the_button_in_every_pot_they_occur_in(new_h
     settle_and_assert(
         hand,
         layers=[
-            pot(35, 1, 2, 3, 5, 6, 7),
-            pot(186, 1, 2, 3, 5, 6, 7),
+            pot(221, 1, 2, 3, 5, 6, 7),
             pot(65, 1, 2, 3, 5, 7),
             pot(52, 1, 2, 3, 5),
             pot(63, 1, 3, 5),
             pot(74, 3, 5),
         ],
         shares=[
-            ((5, 9), (7, 9), (1, 9), (3, 8)),
-            ((5, 47), (7, 47), (1, 46), (3, 46)),
+            ((5, 56), (7, 55), (1, 55), (3, 55)),
             ((5, 17), (7, 16), (1, 16), (3, 16)),
             ((5, 18), (1, 17), (3, 17)),
             ((5, 21), (1, 21), (3, 21)),
             ((5, 37), (3, 37)),
         ],
-        stacks={1: 109, 2: 0, 3: 225, 4: 95, 5: 149, 6: 0, 7: 72},
+        stacks={1: 109, 2: 0, 3: 226, 4: 95, 5: 149, 6: 0, 7: 71},
         all_in={2, 6},
     )
 
@@ -262,11 +262,11 @@ def test_odd_chips_go_clockwise_from_the_button_in_every_pot_they_occur_in(new_h
 # =============================================================================
 
 
-def test_dead_money_goes_to_the_winners_of_the_layers_it_was_put_into(new_hand: NewHand) -> None:
+def test_dead_money_goes_to_the_winners_of_the_pots_it_was_put_into(new_hand: NewHand) -> None:
     """Seat 4 is all-in for 100 with the best hand; seat 3 has kings. Seats 5, 1 and 2 fold after putting in 30, 150
-    and 250, so their chips sit in four layers: seat 4 wins the two layers up to its 100 chips with the dead money in
-    them, and seat 3, the only live player contributing above that, wins the two layers above, which hold the rest of
-    the dead money. Seat 3's 200 unmatched turn chips go back to it before any of this."""
+    and 250. Their levels change nobody's eligibility, so there are only two pots: seat 4 wins the main pot up to its
+    100 chips with the dead money in it, and seat 3, the only live player contributing above that, wins the side pot,
+    which holds the rest of the dead money. Seat 3's 200 unmatched turn chips go back to it before any of this."""
     holes = {1: "6h 6d", 2: "5h 5d", 3: "Kh Kd", 4: "Ah Ad", 5: "3h 3d"}
     hand = new_hand(holes, DRY_BOARD, stacks={4: 100})
     play(hand, (4, raise_to(30)), (5, CALL), (1, CALL), (2, CALL), (3, CALL))
@@ -287,8 +287,8 @@ def test_dead_money_goes_to_the_winners_of_the_layers_it_was_put_into(new_hand: 
 
     settle_and_assert(
         hand,
-        layers=[pot(150, 3, 4), pot(280, 3, 4), pot(150, 3), pot(200, 3)],
-        shares=[((4, 150),), ((4, 280),), ((3, 150),), ((3, 200),)],
+        layers=[pot(430, 3, 4), pot(350, 3)],
+        shares=[((4, 430),), ((3, 350),)],
         stacks={1: 850, 2: 750, 3: 1100, 4: 430, 5: 970},
         all_in=set(),
     )
@@ -309,7 +309,7 @@ def test_dead_money_goes_to_the_winners_of_the_layers_it_was_put_into(new_hand: 
 def test_an_uncontested_win_after_a_returned_unmatched_bet_pays_only_the_matched_pot(new_hand: NewHand) -> None:
     """Seat 1 raises to 40, the small blind folds its 5 and the big blind calls. On the flop seat 3 bets 60, seat 1
     raises to 200 and seat 3 folds: 60 of the raise is matched by seat 3's bet, the other 140 comes back to seat 1 at
-    collection. The board is still the flop, and seat 1 wins only the 205 in the pots."""
+    collection. The board is still the flop, and seat 1 wins only the 205 in the one pot it alone contests."""
     holes = {1: "Ah Ad", 2: "Kh Kd", 3: "Qh Qd"}
     hand = new_hand(holes, DRY_BOARD)
     play(hand, (1, raise_to(40)), (2, FOLD), (3, CALL))
@@ -321,8 +321,8 @@ def test_an_uncontested_win_after_a_returned_unmatched_bet_pays_only_the_matched
 
     settle_and_assert(
         hand,
-        layers=[pot(15, 1), pot(190, 1)],
-        shares=[((1, 15),), ((1, 190),)],
+        layers=[pot(205, 1)],
+        shares=[((1, 205),)],
         stacks={1: 1105, 2: 995, 3: 900},
         all_in=set(),
     )

@@ -75,9 +75,9 @@ After C6.4, a reviewed Core rules correction may change fixture *values* under i
 - **Backend:** replays every scenario through the real server (FastAPI test client, the real `TableSession` and engine) with the setup's ids, defaults, button rule and draw orders, and compares each connection's received messages and each HTTP response. Its own decoder answers every `invalid/client_to_server.json` case as stated. Its exported JSON Schema validates every server message here.
 - **Web:** decodes every server message here and rejects every `invalid/server_to_client.json` case; encodes the `messages/client/` frames exactly; renders the snapshots (including nine seats, side pots and card backs from `hidden_card_count`); and replays the scenarios through the mock transport, one actor at a time.
 
-## Known engine defect in the values
+## Value changes after C6.4
 
-`three_way_side_pots` hand 1 shows two pots with identical eligible seats (30 and 780). This is the engine's current layering. With a tie it can distribute odd chips differently from a merged pot: a known Core defect, accepted for C6.4 only and fixed before the Friends Alpha (C6.3 plan §7). No fixture presents that outcome as correct. The canonical split, `split_pot_and_all_in_calls` hand 2, is a single pot with one eligible-seat set.
+**2026-11-17, Core pot-settlement correctness (GitHub issue #2).** The engine now merges adjacent pot layers with identical eligible seats (the [ADR 0001](../0001-showdown-settlement-contract.md) clarification note), fixing the known Core defect of C6.3 plan §7. Under P17, `three_way_side_pots` was regenerated from the real engine: hand 1 shows one pot of 810 for seats 1 and 2 where it showed 30 and 780, in the snapshots' `pots` and in the settlement's and the log's `pot_awards`. No other fixture changed, and no shape, field meaning or protocol identifier changed. The canonical split, `split_pot_and_all_in_calls` hand 2, is unchanged.
 
 ## Provenance
 

@@ -272,9 +272,9 @@ def test_an_uncontested_win_on_the_river_still_has_no_showdown_ranks(new_hand: N
     assert settlement.showdown_ranks == ()
 
 
-def test_folded_dead_money_in_several_pots_all_goes_to_the_sole_live_player(new_hand: NewHand) -> None:
-    """Seat 2 folds with 30 collected, seat 1 with 70, and seat 3 wins: dead money at two levels makes two pots, both
-    awarded to seat 3, whose own unmatched chips above 70 have been returned."""
+def test_folded_dead_money_at_several_levels_all_goes_to_the_sole_live_player(new_hand: NewHand) -> None:
+    """Seat 2 folds with 30 collected, seat 1 with 70, and seat 3 wins: dead money at two levels, all of it contested
+    by seat 3 alone, is one pot awarded to seat 3, whose own unmatched chips above 70 have been returned."""
     hand = new_hand()
     call_preflop(hand)
     next_street(hand)
@@ -282,7 +282,7 @@ def test_folded_dead_money_in_several_pots_all_goes_to_the_sole_live_player(new_
 
     settlement = settle_and_check(hand)
 
-    assert [award.shares for award in settlement.pot_awards] == [((3, 90),), ((3, 80),)]
+    assert [award.shares for award in settlement.pot_awards] == [((3, 170),)]
     assert settlement.payouts == {3: 170}
     assert [state.player.stack for state in hand.players] == [930, 970, 1100]
 
@@ -395,9 +395,9 @@ def test_a_facing_all_in_player_who_has_not_yet_acted_blocks_settlement_even_wit
     settle_and_check(hand)
 
 
-def test_ties_split_the_pots_and_the_odd_chips_go_clockwise_from_the_button(new_hand: NewHand) -> None:
-    """Seat 1 raises to 25, seat 2 folds its 5 and seat 3 calls: the pots are 15 and 40, tied between seats 1 and 3.
-    Seat 3 is first left of the button, so it takes the 15-chip pot's odd chip."""
+def test_ties_split_the_pot_and_the_odd_chip_goes_clockwise_from_the_button(new_hand: NewHand) -> None:
+    """Seat 1 raises to 25, seat 2 folds its 5 and seat 3 calls: the folded 5 are dead money inside the one pot of 55
+    that seats 1 and 3 contest and tie. Seat 3 is first left of the button, so it takes the odd chip."""
     hand = new_hand(holes={1: "As Qh", 2: "9c 9d", 3: "Ac Qd"}, board="Kc Kd 7h 4s 2d")
     play(hand, (1, raise_to(25)), (2, FOLD), (3, CALL))
     check_to(hand, Street.RIVER)
@@ -405,14 +405,15 @@ def test_ties_split_the_pots_and_the_odd_chips_go_clockwise_from_the_button(new_
 
     settlement = settle_and_check(hand)
 
-    assert [award.shares for award in settlement.pot_awards] == [((3, 8), (1, 7)), ((3, 20), (1, 20))]
+    assert [award.shares for award in settlement.pot_awards] == [((3, 28), (1, 27))]
     assert settlement.payouts == {3: 28, 1: 27}
 
 
 def test_odd_chips_follow_the_hands_clockwise_order_not_ascending_seat_numbers(new_hand: NewHand) -> None:
     """With the button on seat 2 the seats run 3, 1, 2 clockwise from it. Seat 2 raises to 25, the small blind (seat 3)
-    folds its 5 and the big blind (seat 1) calls; seats 1 and 2 tie. Seat 1 is the first tied winner left of the button,
-    so it takes the 15-chip pot's odd chip, though the button (seat 2) sits first in the hand's player order."""
+    folds its 5 and the big blind (seat 1) calls; seats 1 and 2 tie for the one pot of 55. Seat 1 is the first tied
+    winner left of the button, so it takes the odd chip, though the button (seat 2) sits first in the hand's player
+    order."""
     hand = new_hand(holes={1: "As Qh", 2: "Ac Qd", 3: "9c 9d"}, board="Kc Kd 7h 4s 2d", button=2)
     play(hand, (2, raise_to(25)), (3, FOLD), (1, CALL))
     check_to(hand, Street.RIVER)
@@ -420,7 +421,7 @@ def test_odd_chips_follow_the_hands_clockwise_order_not_ascending_seat_numbers(n
 
     settlement = settle_and_check(hand)
 
-    assert [award.shares for award in settlement.pot_awards] == [((1, 8), (2, 7)), ((1, 20), (2, 20))]
+    assert [award.shares for award in settlement.pot_awards] == [((1, 28), (2, 27))]
 
 
 @pytest.mark.parametrize(

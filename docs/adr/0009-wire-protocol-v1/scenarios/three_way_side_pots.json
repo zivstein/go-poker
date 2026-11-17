@@ -1554,7 +1554,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -1700,7 +1700,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": {
               "can_fold": true,
@@ -1858,7 +1858,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -2020,7 +2020,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": {
               "can_fold": true,
@@ -2186,7 +2186,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -2340,7 +2340,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -2510,7 +2510,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -2675,7 +2675,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": {
               "can_fold": true,
@@ -2852,7 +2852,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -3033,7 +3033,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": {
               "can_fold": true,
@@ -3218,7 +3218,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -3391,7 +3391,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -3580,7 +3580,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -3764,7 +3764,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": {
               "can_fold": true,
@@ -3960,7 +3960,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -4160,7 +4160,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": {
               "can_fold": true,
@@ -4364,7 +4364,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -4556,7 +4556,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "betting"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -4764,7 +4764,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "showdown"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -4966,7 +4966,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "showdown"},
             "legal_actions": null,
             "showdown_actions": ["show", "muck"],
@@ -5168,7 +5168,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 2, "kind": "showdown"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -5390,7 +5390,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "showdown"},
             "legal_actions": null,
             "showdown_actions": ["show", "muck"],
@@ -5593,7 +5593,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "showdown"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -5800,7 +5800,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": {"seat": 1, "kind": "showdown"},
             "legal_actions": null,
             "showdown_actions": null,
@@ -6023,7 +6023,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": null,
             "legal_actions": null,
             "showdown_actions": null,
@@ -6034,8 +6034,7 @@
             },
             "settlement": {
               "pot_awards": [
-                {"amount": 30, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 30}]},
-                {"amount": 780, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 780}]}
+                {"amount": 810, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 810}]}
               ],
               "shown_ranks": [{"seat": 1, "category": "one_pair"}, {"seat": 2, "category": "high_card"}]
             },
@@ -6146,12 +6145,7 @@
                 "event": "hand_settled",
                 "settlement": {
                   "pot_awards": [
-                    {"amount": 30, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 30}]},
-                    {
-                      "amount": 780,
-                      "eligible_seats": [1, 2],
-                      "shares": [{"seat": 1, "amount": 780}]
-                    }
+                    {"amount": 810, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 810}]}
                   ],
                   "shown_ranks": [{"seat": 1, "category": "one_pair"}, {"seat": 2, "category": "high_card"}]
                 }
@@ -6255,7 +6249,7 @@
                 "strength": null
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": null,
             "legal_actions": null,
             "showdown_actions": null,
@@ -6266,8 +6260,7 @@
             },
             "settlement": {
               "pot_awards": [
-                {"amount": 30, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 30}]},
-                {"amount": 780, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 780}]}
+                {"amount": 810, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 810}]}
               ],
               "shown_ranks": [{"seat": 1, "category": "one_pair"}, {"seat": 2, "category": "high_card"}]
             },
@@ -6378,12 +6371,7 @@
                 "event": "hand_settled",
                 "settlement": {
                   "pot_awards": [
-                    {"amount": 30, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 30}]},
-                    {
-                      "amount": 780,
-                      "eligible_seats": [1, 2],
-                      "shares": [{"seat": 1, "amount": 780}]
-                    }
+                    {"amount": 810, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 810}]}
                   ],
                   "shown_ranks": [{"seat": 1, "category": "one_pair"}, {"seat": 2, "category": "high_card"}]
                 }
@@ -6491,7 +6479,7 @@
                 }
               }
             ],
-            "pots": [{"amount": 30, "eligible_seats": [1, 2]}, {"amount": 780, "eligible_seats": [1, 2]}],
+            "pots": [{"amount": 810, "eligible_seats": [1, 2]}],
             "turn": null,
             "legal_actions": null,
             "showdown_actions": null,
@@ -6502,8 +6490,7 @@
             },
             "settlement": {
               "pot_awards": [
-                {"amount": 30, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 30}]},
-                {"amount": 780, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 780}]}
+                {"amount": 810, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 810}]}
               ],
               "shown_ranks": [{"seat": 1, "category": "one_pair"}, {"seat": 2, "category": "high_card"}]
             },
@@ -6614,12 +6601,7 @@
                 "event": "hand_settled",
                 "settlement": {
                   "pot_awards": [
-                    {"amount": 30, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 30}]},
-                    {
-                      "amount": 780,
-                      "eligible_seats": [1, 2],
-                      "shares": [{"seat": 1, "amount": 780}]
-                    }
+                    {"amount": 810, "eligible_seats": [1, 2], "shares": [{"seat": 1, "amount": 810}]}
                   ],
                   "shown_ranks": [{"seat": 1, "category": "one_pair"}, {"seat": 2, "category": "high_card"}]
                 }

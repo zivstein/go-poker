@@ -501,21 +501,19 @@ Pots are derived values rather than mutable stored state.
 
 `middle_pot(hand)` contains collected chips only. For `pots(hand)` and `middle_pot(hand)` after settlement, see [After Settlement](#after-settlement).
 
-`pots(hand)` derives layers from each participant's collected contribution.
+`pots(hand)` derives the pots from each participant's collected contribution. A pot is the set of chips one eligible-seat set contests ([ADR 0001](adr/0001-showdown-settlement-contract.md) clarification note).
 
-For every distinct positive contribution level:
+Every distinct positive contribution level bounds a band of chips:
 
 - folded and live contributions both fund the amount;
 - folded players are never eligible;
-- live/all-in players are eligible for every layer their contribution reaches.
+- live/all-in players are eligible for every band their contribution reaches.
 
-Folded contributions may introduce a layer boundary without changing the eligible seats.
-
-Adjacent pots may therefore have identical eligible sets.
+A folded contribution can add a level without changing the eligible seats. Adjacent bands with identical eligible seats are merged into one pot, so pot boundaries fall only where eligibility changes, at a live player's level, and no two pots of a hand share an eligible-seat set. Settlement therefore splits a tie, and its odd chips, once per eligible-seat set.
 
 Every pot has at least one eligible seat.
 
-Eligibility is nested by depth: each later pot's eligible seats are a subset, not necessarily strict, of the previous pot's.
+Eligibility is nested by depth: each later pot's eligible seats are a strict subset of the previous pot's.
 
 Pot depth is generic and does not encode a fixed number of side pots.
 
@@ -911,7 +909,7 @@ Other invariants:
 - `acted_at_bet` contains exactly players who acted this round;
 - `last_aggressor` is `None` until someone bets or raises in the round, then the last bettor or raiser;
 - folded players are never pot-eligible;
-- every pot has at least one eligible seat, and each pot's eligible seats are a subset of the previous pot's;
+- every pot has at least one eligible seat, and each pot's eligible seats are a strict subset of the previous pot's;
 - rejected operations do not partially mutate state.
 
 ## Variant and Betting-Structure Strategy
