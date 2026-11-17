@@ -7,7 +7,7 @@ from go_poker.game.poker_hand import PokerHand
 
 @dataclass(frozen=True)
 class Pot:
-    """One pot layer: its chips and the live seats that can win it.
+    """One pot: its chips and the live seats that can win them. No two pots of a hand have the same eligible seats.
 
     The first pot of a hand is the main pot and any later ones are side pots. Who contributed to a layer is derived
     from the players' contributions when needed, so it is not stored here.
@@ -37,21 +37,26 @@ def middle_pot(hand: PokerHand) -> int:
 def pots(hand: PokerHand) -> tuple[Pot, ...]:
     """The main pot and side pots, in order, derived from the players' collected contributions. Never stored.
 
-    The layer boundaries (levels) are the distinct positive collected contributions of every participant, folded
-    players included, in ascending order. Each level, with the previous level (0 for the first) below it, defines one
-    pot: its amount is every participant's collected chips between the two levels, folded players' dead money
-    included, and its eligible seats are the players who have not folded and whose collected contribution reaches the
-    level. Adjacent pots may have the same eligible seats and are not merged. Chips still in front are not part of any
-    pot, so before anything is collected there are none, and the pots always add up to the middle pot.
+    Each pot is the set of chips one eligible-seat set contests (ADR 0001 §1). The candidate layer boundaries (levels)
+    are the distinct positive collected contributions of every participant, folded players included, in ascending
+    order. Each level, with the previous level (0 for the first) below it, bounds one band of chips: every
+    participant's collected chips between the two levels, folded players' dead money included, contested by the
+    players who have not folded and whose collected contribution reaches the level. Adjacent bands with the same
+    eligible seats are one pot: a folded contribution can add a level without changing who can win the chips above
+    it. Eligibility only shrinks as the level rises, so equal eligible seats are always adjacent and no two pots have
+    the same eligible seats. Chips still in front are not part of any pot, so before anything is collected there are
+    none, and the pots always add up to the middle pot.
     """
     collected = [(hand_player, _collected_contribution(hand_player)) for hand_player in hand.players]
     levels = sorted({chips for _, chips in collected if chips > 0})
-    return tuple(
-        Pot(
-            amount=sum(min(chips, level) - min(chips, previous) for _, chips in collected),
-            eligible_seats=frozenset(
-                hand_player.seat_number for hand_player, chips in collected if not hand_player.folded and chips >= level
-            ),
+    merged: list[Pot] = []
+    for previous, level in pairwise((0, *levels)):
+        amount = sum(min(chips, level) - min(chips, previous) for _, chips in collected)
+        eligible_seats = frozenset(
+            hand_player.seat_number for hand_player, chips in collected if not hand_player.folded and chips >= level
         )
-        for previous, level in pairwise((0, *levels))
-    )
+        if merged and merged[-1].eligible_seats == eligible_seats:
+            merged[-1] = Pot(merged[-1].amount + amount, eligible_seats)
+        else:
+            merged.append(Pot(amount, eligible_seats))
+    return tuple(merged)

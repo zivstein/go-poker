@@ -357,7 +357,7 @@ def test_a_player_with_chips_facing_an_all_in_goes_to_an_all_in_showdown(stacked
 
     run.assert_settled({1: 990, 2: 210, 3: 900}, {2: 210}, {2, 3})
     assert run.hand.showdown is not None and run.hand.showdown.order == (2, 3)
-    assert [pot.amount for pot in hand_pots(run.hand)] == [30, 180]
+    assert [pot.amount for pot in hand_pots(run.hand)] == [210]  # the folded limper's 10 are inside the one pot
     assert run.hand.betting is not None and run.hand.betting.street is Street.FLOP
 
 

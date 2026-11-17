@@ -791,7 +791,7 @@ def test_no_viewer_ever_sees_a_card_or_rank_it_may_not_across_seeded_games() -> 
         "muck": 35,
         "uncontested": 80,
         "last_contender_unshown": 25,
-        "side_pots": 60,
+        "side_pots": 35,
         "short_blind_all_in": 30,
         "settled_at_start": 10,
         "heads_up": 100,

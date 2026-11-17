@@ -376,9 +376,10 @@ def test_odd_chips_among_the_shown_contenders_follow_the_odd_chip_order(stacked_
 
 @pytest.fixture
 def dead_money_hand(new_hand: NewHand, stacked_hand: NewHand) -> PokerHand:
-    """Seat 2 folds on the flop after putting 30 in, leaving seats 3 and 1 with 70 each: dead money at one level and a
-    second level above it make two pots with the same eligible seats. The river is checked down; the showdown has
-    started and the decision order is seat 3, then seat 1. Seat 1 holds a pair of aces, seat 3 only king high."""
+    """Seat 2 folds on the flop after putting 30 in, leaving seats 3 and 1 with 70 each: the dead money's level changes
+    nobody's eligibility, so the chips below and above it are one pot of 170 for seats 1 and 3. The river is checked
+    down; the showdown has started and the decision order is seat 3, then seat 1. Seat 1 holds a pair of aces, seat 3
+    only king high."""
     hand = stacked_hand(HOLES, BOARD)
     initialize_betting(hand, STAKES)
     deal_hole_cards(hand)
@@ -400,7 +401,7 @@ def test_folded_dead_money_funds_the_pots_but_the_folded_seat_is_never_eligible(
 
     assert folded.folded
     assert folded.total_contribution == 30
-    assert pots(hand) == (Pot(90, frozenset({1, 3})), Pot(80, frozenset({1, 3})))
+    assert pots(hand) == (Pot(170, frozenset({1, 3})),)
     assert all(2 not in pot.eligible_seats for pot in pots(hand))
     assert sum(pot.amount for pot in pots(hand)) == middle_pot(hand) == 170
     assert showdown_of(hand) == Showdown(INTERACTIVE, (3, 1))
@@ -409,8 +410,8 @@ def test_folded_dead_money_funds_the_pots_but_the_folded_seat_is_never_eligible(
 def test_a_player_who_reaches_showdown_and_mucks_stays_in_the_pots_as_originally_contested(
     dead_money_hand: PokerHand,
 ) -> None:
-    """Seat 1 reaches the showdown live, so it is eligible for both pots, and then mucks. The muck changes nothing about
-    the pots as derived: seat 1 is still in their eligible seats, before the settlement and in each award's pot."""
+    """Seat 1 reaches the showdown live, so it is eligible for the pot, and then mucks. The muck changes nothing about
+    the pot as derived: seat 1 is still in its eligible seats, before the settlement and in the award's pot."""
     hand = dead_money_hand
     pots_before = pots(hand)
     assert all(1 in pot.eligible_seats for pot in pots_before)
@@ -429,17 +430,17 @@ def test_a_player_who_reaches_showdown_and_mucks_stays_in_the_pots_as_originally
     assert pots(hand) == pots_before
 
 
-def test_the_mucked_player_is_excluded_only_by_the_final_contenders_and_the_contender_takes_both_pots(
+def test_the_mucked_player_is_excluded_only_by_the_final_contenders_and_the_contender_takes_the_pot(
     dead_money_hand: PokerHand,
 ) -> None:
-    """Seat 1's pair of aces beats seat 3's king high, but seat 1 mucked: it gets no share of either pot, seat 3 takes
-    both whole, and the folded seat 2's dead money goes to seat 3 as well."""
+    """Seat 1's pair of aces beats seat 3's king high, but seat 1 mucked: it gets no share of the pot, seat 3 takes it
+    whole, and the folded seat 2's dead money goes to seat 3 as well."""
     hand = dead_money_hand
     decide(hand, (3, SHOW), (1, MUCK))
 
     settlement = settle_and_check(hand)
 
-    assert [award.shares for award in settlement.pot_awards] == [((3, 90),), ((3, 80),)]
+    assert [award.shares for award in settlement.pot_awards] == [((3, 170),)]
     assert settlement.payouts == {3: 170}
     assert settlement.showdown_ranks == ((3, KING_HIGH),)
     assert [seat_state(hand, seat).player.stack for seat in (1, 2, 3)] == [930, 970, 1100]
@@ -452,17 +453,17 @@ def test_when_the_first_decider_mucks_the_remaining_seat_wins_every_pot_unshown(
 
     settlement = settle_and_check(hand)
 
-    assert [award.shares for award in settlement.pot_awards] == [((1, 90),), ((1, 80),)]
+    assert [award.shares for award in settlement.pot_awards] == [((1, 170),)]
     assert settlement.showdown_ranks == ()
 
 
-def test_the_better_shown_hand_wins_both_dead_money_pots_when_both_show(dead_money_hand: PokerHand) -> None:
+def test_the_better_shown_hand_wins_the_pot_with_the_dead_money_when_both_show(dead_money_hand: PokerHand) -> None:
     hand = dead_money_hand
     decide(hand, (3, SHOW), (1, SHOW))
 
     settlement = settle_and_check(hand)
 
-    assert [award.shares for award in settlement.pot_awards] == [((1, 90),), ((1, 80),)]
+    assert [award.shares for award in settlement.pot_awards] == [((1, 170),)]
     assert settlement.showdown_ranks == ((1, PAIR_OF_ACES), (3, KING_HIGH))
 
 

@@ -297,7 +297,7 @@ def test_the_flow_and_the_matching_low_level_calls_give_equal_histories(stacked_
 
     assert flow.history == low.history
     assert flow.history.events[-3:-1] == (ChipsReturned(2, 40), BettingRoundCompleted(Street.FLOP))
-    assert flow.history.events[-1] == settled((30, {2}, ((2, 30),)), (40, {2}, ((2, 40),)))
+    assert flow.history.events[-1] == settled((70, {2}, ((2, 70),)))
 
 
 def test_the_flow_and_the_low_level_calls_give_equal_histories_for_an_all_in_runout(

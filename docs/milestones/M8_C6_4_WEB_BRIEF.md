@@ -1,5 +1,7 @@
 # M8 C6.4 — Web Cycle Brief (Work Order)
 
+> **Supersession note (2026-11-17, GitHub issue #2).** This Brief is kept as approved. Its statements that hand 1 of `three_way_side_pots` has two layers with identical eligible seats (§4 rendering list and the risk table) described the engine before the Core correction of C6.3 plan §7. The engine now merges such layers and hand 1 shows one pot of 810 ([ADR 0009](../adr/0009-wire-protocol-v1.md) §10). The client still renders pots exactly as given and never merges them.
+
 **Status:** **Approved** by the Product Owner on 2026-11-12 (revision 2, M8 C6.3), together with ADR 0009. Execution starts only on the Owner's instruction, after the preflight. This Brief is for a fresh Lead session in its own worktree. The parallel Backend Brief is [M8_C6_4_BACKEND_BRIEF.md](M8_C6_4_BACKEND_BRIEF.md). The shared dependencies are in the [C6.3 plan](M8_C6_3_WIRE_CONTRACT_PLAN.md) §4.
 
 **Contract:** [ADR 0009](../adr/0009-wire-protocol-v1.md), `go-poker.v1`, and its fixtures. **Architecture:** the approved [C6.2 plan](M8_C6_2_WEB_PLAN.md), W1–W30. Neither is restated here.

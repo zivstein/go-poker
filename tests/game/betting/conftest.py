@@ -191,17 +191,18 @@ class CheckedHand:
         layers = pots(self.hand)
         assert sum(pot.amount for pot in layers) == middle
         collected = {hp.seat_number: hp.total_contribution - hp.street_contribution for hp in players}
-        folded = {hp.seat_number for hp in players if hp.folded}
-        levels = sorted({chips for chips in collected.values() if chips > 0})
-        assert len(layers) == len(levels)
-        previous_eligible = {hp.seat_number for hp in players}
-        for pot, (previous, level) in zip(layers, pairwise([0, *levels]), strict=True):
+        live = {hp.seat_number for hp in players if not hp.folded}
+        # Who can win changes only at a live player's collected level, so each such level bounds exactly one pot, and
+        # every pot has fewer eligible seats than the one before: equivalent layers are merged.
+        live_levels = sorted({collected[seat_number] for seat_number in live if collected[seat_number] > 0})
+        assert len(layers) == len(live_levels)
+        previous_eligible: set[int] | None = None
+        for pot, (previous, level) in zip(layers, pairwise([0, *live_levels]), strict=True):
             assert sum(chips > previous for chips in collected.values()) >= 2  # never a one-contributor pot
-            assert pot.amount > 0
+            assert pot.amount == sum(min(chips, level) - min(chips, previous) for chips in collected.values()) > 0
+            assert pot.eligible_seats == {seat_number for seat_number in live if collected[seat_number] >= level}
             assert pot.eligible_seats
-            assert not pot.eligible_seats & folded
-            assert all(collected[seat_number] >= level for seat_number in pot.eligible_seats)
-            assert pot.eligible_seats <= previous_eligible
+            assert previous_eligible is None or pot.eligible_seats < previous_eligible
             previous_eligible = set(pot.eligible_seats)
 
         # What a live player can win: from each participant, as many collected chips as the player has collected.

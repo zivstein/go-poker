@@ -332,7 +332,7 @@ def participant(participant_view: ParticipantView) -> dto.Participant:
 
 
 def pot(value: Pot) -> dto.Pot:
-    """One pot layer, exactly as the engine derived it: the server never merges or re-splits pots (ADR 0009 §10)."""
+    """One pot, exactly as the engine derived it: the server never merges or re-splits pots (ADR 0009 §10)."""
     return dto.Pot(amount=value.amount, eligible_seats=ascending_seats(value.eligible_seats))
 
 

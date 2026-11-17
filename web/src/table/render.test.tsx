@@ -58,7 +58,7 @@ describe("TableStage rendering", () => {
     expect(within(pots).getAllByText(/Pot$|Side pot/)).toHaveLength(2);
   });
 
-  it("renders pots exactly as given, including two layers with identical eligible seats", () => {
+  it("renders pots exactly as given: a folded blind's dead money inside one pot (three_way_side_pots hand 1)", () => {
     const scenario = readScenario("three_way_side_pots");
     const step = scenario.steps.find(
       (s) =>
@@ -72,9 +72,32 @@ describe("TableStage rendering", () => {
     const message = step.message as { view: TableView };
     render(<TableStage view={message.view} />);
     const pots = screen.getByLabelText("Pots");
+    expect(within(pots).getByText("$810")).toBeDefined();
+    expect(within(pots).getAllByText(/Pot$|Side pot/)).toHaveLength(1);
+  });
+
+  it("keeps two server-provided pots with the same eligible seats, in order, unmerged", () => {
+    // Hand-built: the engine no longer sends this shape, but the client must never merge or reorder pots itself.
+    const settled = view("snapshot.side_pots.settled.json");
+    const hand = settled.hand;
+    if (hand === null) throw new Error("fixture has no hand");
+    const built: TableView = {
+      ...settled,
+      hand: {
+        ...hand,
+        pots: [
+          { amount: 30, eligible_seats: [1, 2] },
+          { amount: 780, eligible_seats: [1, 2] },
+        ],
+      },
+    };
+    render(<TableStage view={built} />);
+    const pots = screen.getByLabelText("Pots");
+    const labels = within(pots).getAllByText(/Pot$|Side pot/);
+    expect(labels.map((label) => label.textContent)).toEqual(["Pot", "Side pot"]);
     expect(within(pots).getByText("$30")).toBeDefined();
     expect(within(pots).getByText("$780")).toBeDefined();
-    expect(within(pots).getAllByText(/Pot$|Side pot/)).toHaveLength(2);
+    expect(pots.textContent).toMatch(/\$30.*\$780/);
   });
 
   it("splits a single pot with its odd chip, not merged or averaged", () => {

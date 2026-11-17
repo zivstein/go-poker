@@ -125,7 +125,8 @@ def test_short_all_in_call_leaves_the_current_bet_and_returns_the_raiser_s_uncal
     assert stacks(h) == {1: 900, 2: 0, 3: 650}
     assert totals(h) == {1: 100, 2: 350, 3: 350}
     assert middle_pot(h.hand) == 800
-    assert pots(h.hand) == (pot(300, 2, 3), pot(500, 2, 3))  # the folded button's 100 is a layer boundary
+    # The folded button's 100 sit inside the one pot both live seats contest: no separate layer for the same seats.
+    assert pots(h.hand) == (pot(800, 2, 3),)
 
     h.next_street()  # the turn round starts complete, with nothing to collect
     assert (h.betting.current_actor, h.betting.pending_actors) == (None, set())
@@ -308,7 +309,7 @@ def test_short_big_blind_multiway_keeps_the_nominal_big_blind_and_is_never_pendi
     h.act((3, CALL), (5, raise_to(300)), (8, FOLD), (3, CALL))
     assert is_round_complete(h.betting)
     assert totals(h) == {5: 300, 8: 50, 1: 30, 3: 300}
-    assert pots(h.hand) == (pot(120, 5, 1, 3), pot(60, 5, 3), pot(500, 5, 3))
+    assert pots(h.hand) == (pot(120, 5, 1, 3), pot(560, 5, 3))  # the folded small blind's 50 are inside the side pot
 
     h.next_street()
     assert (h.betting.current_actor, h.betting.pending_actors) == (3, {3, 5})
@@ -407,8 +408,9 @@ def test_short_all_in_player_is_skipped_while_deeper_players_keep_betting(
     """UTG raises all-in to 150 preflop, below the minimum raise to 200. The big blind, yet to act, makes a full raise
     to 400 and the others call. On the flop, turn and river the deeper players keep betting and raising, and the
     small blind folds on the flop; UTG is never pending or to act again. Each street's betting grows only the side
-    pots: UTG stays eligible for the main pot its 150 reach, of 600, and for no side pot, while the folded small
-    blind's chips stay in both pots they reached and it is eligible for none. On the river two players can still act,
+    pot: UTG stays eligible for the main pot its 150 reach, of 600, and for no side pot, while the folded small
+    blind's chips stay in both pots they reached and it is eligible for none. Its fold leaves the two deeper players
+    contesting everything above 150, which is one side pot. On the river two players can still act,
     so betting is not closed even with the round complete."""
     h = checked(make_hand({5: 2000, 8: 2000, 1: 2000, 3: 150}, button_seat_number=FOUR_HANDED_BUTTON))
     h.start(STAKES)
@@ -429,13 +431,13 @@ def test_short_all_in_player_is_skipped_while_deeper_players_keep_betting(
     h.act((8, CHECK), (1, bet(300)), (5, raise_to(900)), (8, FOLD), (1, CALL))
     assert totals(h) == {5: 1300, 8: 400, 1: 1300, 3: 150}
     assert middle_pot(h.hand) == 3150
-    assert pots(h.hand) == (pot(600, 5, 1, 3), pot(750, 5, 1), pot(1800, 5, 1))
+    assert pots(h.hand) == (pot(600, 5, 1, 3), pot(2550, 5, 1))
 
     h.next_street()
     assert (h.betting.current_actor, h.betting.pending_actors) == (1, {1, 5})
     h.act((1, CHECK), (5, bet(500)), (1, CALL))
     assert middle_pot(h.hand) == 4150
-    turn_pots = (pot(600, 5, 1, 3), pot(750, 5, 1), pot(2800, 5, 1))
+    turn_pots = (pot(600, 5, 1, 3), pot(3550, 5, 1))
     assert pots(h.hand) == turn_pots
 
     h.next_street()
@@ -457,8 +459,8 @@ def test_short_all_in_player_is_skipped_while_deeper_players_keep_betting(
 @pytest.mark.parametrize(
     "big_blind_chips, called_in_front, returned, middle_after, pots_after",
     [
-        pytest.param(1000, 100, 0, 500, (pot(300, 2, 3), pot(200, 2, 3)), id="matched-call"),
-        pytest.param(170, 70, 30, 440, (pot(300, 2, 3), pot(140, 2, 3)), id="short-all-in-call"),
+        pytest.param(1000, 100, 0, 500, (pot(500, 2, 3),), id="matched-call"),
+        pytest.param(170, 70, 30, 440, (pot(440, 2, 3),), id="short-all-in-call"),
     ],
 )
 def test_chips_in_front_join_the_middle_pot_only_when_their_round_is_collected(
@@ -474,7 +476,8 @@ def test_chips_in_front_join_the_middle_pot_only_when_their_round_is_collected(
     stack drops to 400 and the 100 sit in front of it, outside the middle pot. The big blind calls, either the full
     100 or all-in for its last 70, and both stay in front while the button still has to act. Once the button folds,
     the round is collected: the 30 of the bet that the short call could not match go back to the small blind, nothing
-    is left in front, and the matched chips join the middle pot (300 + 200, or 300 + 140)."""
+    is left in front, and the matched chips join the middle pot (300 + 200, or 300 + 140). The folded button's 100
+    mark no layer of their own: the two live seats contest all of it as one pot."""
     h = called_around_to_the_flop(
         checked, make_hand({1: 1000, 2: 600, 3: big_blind_chips}, button_seat_number=THREE_HANDED_BUTTON)
     )

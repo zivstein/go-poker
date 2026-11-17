@@ -479,12 +479,12 @@ def test_two_side_pots_with_different_winners_replay_to_the_live_stacks(
     assert {state.seat_number: state.player.stack for state in hand.players} == {1: 800, 2: 300, 3: 200}
 
 
-def test_a_three_way_odd_chip_split_with_dead_money_in_two_pots_goes_clockwise_from_the_button(
+def test_a_three_way_odd_chip_split_of_a_pot_with_dead_money_goes_clockwise_from_the_button(
     stacked_hand: NewHand, fold_history: FoldHistory, replay_facts: ReplayFacts
 ) -> None:
-    """Seats 1, 3 and 4 call 10 and play the royal flush on the board, tied; the small blind (seat 2) folds its 5. The
-    pots are 20 and 15, dead money in both. Odd chips go first to the seat left of the button, so seat 3 and seat 4 take
-    the 20-chip pot's two odd chips, and the button is last."""
+    """Seats 1, 3 and 4 call 10 and play the royal flush on the board, tied; the small blind (seat 2) folds its 5, which
+    sit inside the one pot of 35 the three contest. Odd chips go first to the seat left of the button, so seat 3 and
+    seat 4 take the pot's two odd chips, and the button is last."""
     holes = {1: "2c 3d", 2: "2d 3h", 3: "4h 5c", 4: "6d 7h"}
     hand = stacked_hand(holes, ROYAL_FLUSH_BOARD)
     initialize_betting(hand, STAKES)
@@ -499,8 +499,7 @@ def test_a_three_way_odd_chip_split_with_dead_money_in_two_pots_goes_clockwise_f
     settle_hand(hand)
 
     assert hand.history.events[-1] == settled_event(
-        (20, {1, 3, 4}, ((3, 7), (4, 7), (1, 6))),
-        (15, {1, 3, 4}, ((3, 5), (4, 5), (1, 5))),
+        (35, {1, 3, 4}, ((3, 12), (4, 12), (1, 11))),
         ranks={1: ROYAL, 3: ROYAL, 4: ROYAL},
     )
     assert_final_stacks_replay(hand, fold_history, replay_facts)
@@ -539,12 +538,12 @@ def test_unpaid_all_in_seats_replay_with_zero_stacks_and_stay_all_in(
     assert_final_stacks_replay(hand, fold_history, replay_facts)
 
 
-def test_folded_dead_money_replays_into_every_pot_of_an_uncontested_hand(
+def test_folded_dead_money_replays_into_the_pot_of_an_uncontested_hand(
     new_hand: NewHand, fold_history: FoldHistory, replay_facts: ReplayFacts
 ) -> None:
     """Seat 1 raises to 30 and both call. On the flop seat 3 bets 40, seat 1 raises to 100, seat 2 folds its 30 and seat
-    3 calls; on the turn seat 1 bets 50 and seat 3 folds. Seat 1 wins both layers, which hold seat 2's and seat 3's
-    folded chips, unshown: the 30-level pot of 90 and the 100-chip layer above it of 200."""
+    3 calls; on the turn seat 1 bets 50 and seat 3 folds. Seat 1 wins, unshown, the one pot of 290 that holds seat 2's
+    and seat 3's folded chips: their levels at 30 and 100 change nobody's eligibility."""
     hand = new_hand()
     play(hand, (1, raise_to(30)), (2, CALL), (3, CALL))
     next_street(hand)
@@ -557,7 +556,7 @@ def test_folded_dead_money_replays_into_every_pot_of_an_uncontested_hand(
 
     assert hand.history.events == (
         *before.events,
-        settled_event((90, {1}, ((1, 90),)), (200, {1}, ((1, 200),))),
+        settled_event((290, {1}, ((1, 290),))),
     )
     assert_final_stacks_replay(hand, fold_history, replay_facts)
     assert {state.seat_number: state.player.stack for state in hand.players} == {1: 1160, 2: 970, 3: 870}

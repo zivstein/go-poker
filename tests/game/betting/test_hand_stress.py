@@ -21,7 +21,6 @@ import copy
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, fields
-from itertools import pairwise
 from typing import Any
 
 import pytest
@@ -108,7 +107,7 @@ class Exercised:
     # From the chosen-rank awards on the hand's pots (see `check_chosen_rank_awards`):
     odd_chip_splits: int = 0  # pots whose winners did not all get the same chips
     tied_pots: int = 0  # pots with several winners
-    identical_adjacent_pots: int = 0  # neighbouring pots with the same eligible seats
+    merged_layers: int = 0  # pots holding a folded player's dead-money level inside them (equivalent layers merged)
     multi_odd_chip_pots: int = 0  # pots with several winners and two or more odd chips
     contender_subsets: int = 0  # chosen-rank awards where some live seat was not a contender
     sole_contender_side_pots: int = 0  # pots with several eligible seats but one final contender, won unranked
@@ -215,7 +214,7 @@ def check_end_of_hand(h: CheckedHand, exercised: Exercised) -> PokerHand | None:
     assert layers[0].eligible_seats == live
     assert len(layers) <= len(players) - 1
 
-    main_pot_level = min(hp.total_contribution for hp in players if hp.total_contribution > 0)
+    main_pot_level = min(hp.total_contribution for hp in players if not hp.folded and hp.total_contribution > 0)
     exercised.side_pots = len(layers) >= 3
     exercised.folded_dead_money = any(hp.folded and hp.total_contribution > main_pot_level for hp in players)
     exercised.deepest_layering = len(layers)
@@ -417,7 +416,8 @@ def check_chosen_rank_awards(h: CheckedHand, exercised: Exercised, seed: int) ->
     awards = _award_pots(layers, ranks, set(live), [hp.seat_number for hp in hand.players])
 
     check_awards(hand, awards, ranks, layers, set(live))
-    exercised.identical_adjacent_pots = sum(a.eligible_seats == b.eligible_seats for a, b in pairwise(layers))
+    collected_levels = {hp.total_contribution for hp in hand.players if hp.total_contribution > 0}
+    exercised.merged_layers = len(collected_levels) - len(layers)
     exercised.tied_pots = sum(len(award.winners) > 1 for award in awards)
     exercised.odd_chip_splits = sum(len({chips for _, chips in award.shares}) > 1 for award in awards)
     exercised.multi_odd_chip_pots = sum(
@@ -651,8 +651,8 @@ def test_random_hands_keep_reaching_the_rules_they_stress(
     bets and raises, pending players a short all-in did not let raise, returned chips, river betting, all-in run-outs,
     folded players' dead money in side pots, and a nine-handed hand with a main pot and seven side pots. Settlement is
     reached both contested and uncontested, with different winners for different pots, with paid all-in players who stop
-    being all-in and unpaid ones who keep it; and the chosen ranks reach odd-chip splits, tied pots, identical adjacent
-    pots and pots with several odd chips."""
+    being all-in and unpaid ones who keep it; and the chosen ranks reach odd-chip splits, tied pots, pots merged
+    across a folded player's level and pots with several odd chips."""
     seen = Exercised()
     for seed in SEEDS:
         exercised = play_random_hand(seed, checked, make_hand)

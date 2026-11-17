@@ -166,16 +166,21 @@ def _replay_facts(hand: PokerHand) -> ReplayedFacts:
 
 def _layers(facts: ReplayedFacts) -> list[tuple[int, frozenset[int]]]:
     """The pots as layered from the replayed contributions alone: one (amount, eligible seats) per distinct positive
-    contribution, folded players' dead money included and adjacent layers not merged."""
+    contribution of a live player, folded players' dead money included in each band it reaches. Who can win changes
+    only at a live player's level, so these are the bands with distinct eligible seats; any dead money above the top
+    live level would be a last pot with no eligible seat."""
     contributions = {seat: seat_facts.total_contribution for seat, seat_facts in facts.seats.items()}
-    levels = sorted({chips for chips in contributions.values() if chips > 0})
-    return [
+    live = {seat for seat, seat_facts in facts.seats.items() if not seat_facts.folded}
+    levels = sorted({contributions[seat] for seat in live if contributions[seat] > 0})
+    layers = [
         (
             sum(min(chips, level) - min(chips, previous) for chips in contributions.values()),
-            frozenset(seat for seat, chips in contributions.items() if chips >= level and not facts.seats[seat].folded),
+            frozenset(seat for seat in live if contributions[seat] >= level),
         )
         for previous, level in pairwise((0, *levels))
     ]
+    above = sum(max(chips - (levels[-1] if levels else 0), 0) for chips in contributions.values())
+    return [*layers, (above, frozenset())] if above else layers
 
 
 def _assert_settlement_facts(history: HandHistory, facts: ReplayedFacts) -> None:
