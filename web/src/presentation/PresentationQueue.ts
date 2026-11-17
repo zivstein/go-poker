@@ -10,10 +10,18 @@
 
 import type { SnapshotCause, TableView } from "../protocol/types";
 
-export interface DisplayedFrame {
+export interface IncomingFrame {
   revision: number;
   cause: SnapshotCause;
   view: TableView;
+}
+
+export interface DisplayedFrame extends IncomingFrame {
+  /** How many `hand_boundary` and `resume` snapshots this queue has received
+   * up to this frame (ADR 0009 §6: a new hand is recognized from the cause and
+   * the log). Part of the hero's decision identity. It counts received
+   * snapshots, not displayed ones, so a fast-forward never hides a boundary. */
+  handEpoch: number;
 }
 
 /** `legal_actions`/`showdown_actions` are set only in the decider's own view. */
@@ -28,6 +36,7 @@ export class PresentationQueue {
   private queue: DisplayedFrame[] = [];
   private displayed: DisplayedFrame | null = null;
   private animating = false;
+  private handEpoch = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly listeners = new Set<() => void>();
 
@@ -46,7 +55,9 @@ export class PresentationQueue {
     return () => this.listeners.delete(listener);
   };
 
-  push(frame: DisplayedFrame): void {
+  push(incoming: IncomingFrame): void {
+    if (incoming.cause === "hand_boundary" || incoming.cause === "resume") this.handEpoch += 1;
+    const frame: DisplayedFrame = { ...incoming, handEpoch: this.handEpoch };
     const isJump =
       this.displayed === null ||
       frame.cause === "connected" ||

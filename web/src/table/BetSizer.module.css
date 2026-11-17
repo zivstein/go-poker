@@ -1,0 +1,66 @@
+/* Amount selection: subordinate to the action buttons (D2). Min and Max are
+ * quiet text controls at the slider's ends, not betting buttons. */
+.sizer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.end {
+  flex: none;
+  min-width: 32px;
+  min-height: 28px;
+  padding: 0 var(--space-1);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.end:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.end:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.slider {
+  flex: 1 1 96px;
+  min-width: 96px;
+  max-width: 280px;
+  accent-color: var(--color-accent);
+}
+
+.field {
+  flex: none;
+  width: 84px;
+  height: 32px;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.field[aria-invalid="true"] {
+  border-color: var(--color-status-error);
+}
+
+.field:disabled {
+  opacity: 0.5;
+}

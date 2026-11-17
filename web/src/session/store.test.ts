@@ -74,6 +74,27 @@ describe("TableStore", () => {
     expect(store.getSnapshot().lastRejection).toEqual({ code: "INVALID_COMMAND", message: "y" });
   });
 
+  it("clears the last rejection on a newer revision only (A1)", () => {
+    const store = new TableStore();
+    const actor = view("snapshot.heads_up.preflop.actor.json");
+    store.applySnapshot({ revision: 5, cause: "command", view: actor });
+    // STALE_REVISION arrives after the newer snapshot it refers to (ADR 0009
+    // §9.4), so it is still shown.
+    store.applyOutcome({
+      kind: "rejected",
+      requestId: "r-1",
+      code: "STALE_REVISION",
+      message: "x",
+    });
+    expect(store.getSnapshot().lastRejection?.code).toBe("STALE_REVISION");
+    // An equal revision (a private update) keeps it.
+    store.applySnapshot({ revision: 5, cause: "private", view: actor });
+    expect(store.getSnapshot().lastRejection?.code).toBe("STALE_REVISION");
+    // A newer shared state supersedes it.
+    store.applySnapshot({ revision: 6, cause: "command", view: actor });
+    expect(store.getSnapshot().lastRejection).toBeNull();
+  });
+
   it("wires a ConnectionController's events into the store", () => {
     const store = new TableStore();
     const transport = new MockTransport();

@@ -84,3 +84,35 @@ describe("PresentationQueue", () => {
     expect(seen).toEqual([2, 3, 3]);
   });
 });
+
+describe("PresentationQueue hand epoch (decision identity)", () => {
+  it("counts hand_boundary and resume snapshots, and nothing else", () => {
+    const queue = new PresentationQueue();
+    const push = (revision: number, cause: Parameters<PresentationQueue["push"]>[0]["cause"]) =>
+      queue.push({ revision, cause, view: actorTurn });
+    push(1, "connected");
+    expect(queue.getDisplayed()?.handEpoch).toBe(0);
+    push(2, "command");
+    push(2, "private");
+    push(3, "pre_action");
+    push(4, "leave_auto_action");
+    expect(queue.getDisplayed()?.handEpoch).toBe(0);
+    push(5, "hand_boundary");
+    expect(queue.getDisplayed()?.handEpoch).toBe(1);
+    push(6, "resume");
+    expect(queue.getDisplayed()?.handEpoch).toBe(2);
+    push(6, "connected"); // a reconnect repeats a revision; it is not a boundary
+    expect(queue.getDisplayed()?.handEpoch).toBe(2);
+  });
+
+  it("counts a boundary even when presentation fast-forwards past it", () => {
+    const queue = new PresentationQueue(1000);
+    queue.push({ revision: 1, cause: "connected", view: waitingViewer });
+    queue.push({ revision: 2, cause: "command", view: waitingViewer }); // displayed; the hold starts
+    queue.push({ revision: 3, cause: "hand_boundary", view: waitingViewer }); // queued, not shown
+    expect(queue.getDisplayed()?.revision).toBe(2);
+    queue.push({ revision: 4, cause: "command", view: actorTurn }); // the hero's decision: jump
+    expect(queue.getDisplayed()?.revision).toBe(4);
+    expect(queue.getDisplayed()?.handEpoch).toBe(1);
+  });
+});

@@ -1,225 +1,237 @@
-import { useEffect, useState } from "react";
-import { formatMoney } from "../format/money";
-import type { ActArgs, LegalActions, ShowdownDecision, TableView } from "../protocol/types";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import type { ConnectionStatus } from "../connection/ConnectionController";
+import type { ActArgs, ShowdownDecision, TableView } from "../protocol/types";
+import type { LastRejection } from "../session/store";
 import { Button } from "../ui/Button";
-import { betSizerRange, isAllInTarget } from "../variant/toActionOptions";
 import styles from "./ActionDock.module.css";
+import { BettingControls } from "./BettingControls";
+import { DockRows, type PressedAction, pickStatus } from "./DockRows";
+import { decisionIdentity } from "./decisionIdentity";
+import { connectionStatusText, dockState, modeStatusText } from "./dockState";
+import { isQuietRejection, rejectionText } from "./rejectionText";
+import { GUARD_MS, useArrivalGuard } from "./useDecisionGuard";
 
 export interface ActionDockProps {
+  /** The displayed frame's view: the only source of legal actions. */
   view: TableView;
-  disabled: boolean;
-  onAct: (args: ActArgs) => void;
-  onShowdownDecision: (decision: ShowdownDecision) => void;
-  onStartGame: () => void;
+  /** The command lifecycle (live, pending, reconciling). */
+  status: ConnectionStatus;
+  lastRejection: LastRejection | null;
+  /** The count of hand-boundary snapshots received, part of the decision's
+   * identity ({@link decisionIdentity}). */
+  handEpoch?: number;
+  /** The turn-arrival guard; tests other than the guard's own pass 0. */
+  guardMs?: number;
+  /** Each returns whether the command was actually sent (the connection can
+   * refuse it). `false` leaves no pressed state behind. */
+  onAct: (args: ActArgs) => boolean;
+  onShowdownDecision: (decision: ShowdownDecision) => boolean;
+  onStartGame: () => boolean;
+  onDismissRejection: () => void;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function callLabel(legal: LegalActions): string {
-  const amount = formatMoney(legal.call_amount);
-  return legal.call_is_all_in ? `Call ${amount} (All-in)` : `Call ${amount}`;
-}
-
-/** The amount the draft text stands for, clamped to the server's range, or
- * `null` when the text is not a whole number (empty, `-`, `1.5`, ...). Nothing
- * is guessed for text that is not a whole number. */
-function parseDraft(text: string, min: number, max: number): number | null {
-  return /^\d+$/.test(text) ? clamp(Number(text), min, max) : null;
-}
-
-function betOrRaiseLabel(legal: LegalActions, target: number | null): string {
-  if (target === null) return legal.can_bet ? "Bet" : "Raise to";
-  if (isAllInTarget(legal, target)) return `All-in ${formatMoney(target)}`;
-  return legal.can_bet ? `Bet ${formatMoney(target)}` : `Raise to ${formatMoney(target)}`;
-}
-
-function BettingControls({
-  legal,
-  disabled,
-  onAct,
-}: {
-  legal: LegalActions;
-  disabled: boolean;
-  onAct: (a: ActArgs) => void;
-}) {
-  const sizer = betSizerRange(legal);
-  // The draft is the raw text of the exact-amount field, so typing is never
-  // rewritten mid-keystroke; it is clamped only where an amount is read
-  // (the label, the submit) and when the field loses focus. UI-only state.
-  const [draftText, setDraftText] = useState<string>(
-    String(sizer?.shortAllInTarget ?? sizer?.min ?? 0),
-  );
-  const draft = sizer ? parseDraft(draftText, sizer.min, sizer.max) : null;
-
-  // Re-clamp the draft amount to the current sizer bounds whenever a new
-  // decision's `legal_actions` arrive. `sizer.max` (`max_target`) must be a
-  // dependency too: the actor's stack - and so the max - can shrink between
-  // decisions while `min_full_target`/`short_all_in_target` repeat, and the
-  // draft must never be left (rendered or submitted) above the current
-  // legal maximum, nor below the current legal minimum (C6.2 §2.3).
-  const sizerMin = sizer?.min;
-  const sizerMax = sizer?.max;
-  const sizerShortAllIn = sizer?.shortAllInTarget;
-  useEffect(() => {
-    if (sizerMin === undefined || sizerMax === undefined) return;
-    setDraftText((prev) => {
-      if (sizerShortAllIn !== null && sizerShortAllIn !== undefined) return String(sizerShortAllIn);
-      return String(parseDraft(prev, sizerMin, sizerMax) ?? sizerMin);
-    });
-  }, [sizerMin, sizerMax, sizerShortAllIn]);
-
-  return (
-    <>
-      {legal.can_fold && (
-        <Button
-          variant="neutral"
-          disabled={disabled}
-          onClick={() => onAct({ action: "fold", target: null })}
-        >
-          Fold
-        </Button>
-      )}
-      {legal.can_check && (
-        <Button
-          variant="secondary"
-          disabled={disabled}
-          onClick={() => onAct({ action: "check", target: null })}
-        >
-          Check
-        </Button>
-      )}
-      {legal.can_call && (
-        <Button
-          variant="secondary"
-          disabled={disabled}
-          onClick={() => onAct({ action: "call", target: null })}
-        >
-          {callLabel(legal)}
-        </Button>
-      )}
-      {sizer &&
-        (sizer.shortAllInTarget !== null ? (
-          <Button
-            variant="primary"
-            disabled={disabled}
-            onClick={() => onAct({ action: sizer.kind, target: sizer.shortAllInTarget as number })}
-          >
-            {betOrRaiseLabel(legal, sizer.shortAllInTarget)}
-          </Button>
-        ) : (
-          <div className={styles.sizer}>
-            <Button
-              variant="neutral"
-              disabled={disabled}
-              onClick={() => setDraftText(String(sizer.min))}
-            >
-              Min
-            </Button>
-            <input
-              type="range"
-              className={styles.slider}
-              min={sizer.min}
-              max={sizer.max}
-              value={draft ?? sizer.min}
-              disabled={disabled}
-              aria-label="Bet amount"
-              onChange={(e) =>
-                setDraftText(String(clamp(Number(e.target.value), sizer.min, sizer.max)))
-              }
-            />
-            <input
-              type="number"
-              className={styles.numberInput}
-              min={sizer.min}
-              max={sizer.max}
-              value={draftText}
-              disabled={disabled}
-              aria-label="Bet amount (exact)"
-              onChange={(e) => setDraftText(e.target.value)}
-              onBlur={() => {
-                if (draft !== null) setDraftText(String(draft));
-              }}
-            />
-            <Button
-              variant="neutral"
-              disabled={disabled}
-              onClick={() => setDraftText(String(sizer.max))}
-            >
-              All-in
-            </Button>
-            <Button
-              variant="primary"
-              disabled={disabled || draft === null}
-              onClick={() => {
-                if (draft !== null) onAct({ action: sizer.kind, target: draft });
-              }}
-            >
-              {betOrRaiseLabel(legal, draft)}
-            </Button>
-          </div>
-        ))}
-    </>
-  );
-}
-
-/** The dock, from `legal_actions` and `showdown_actions` (C6.2 plan §3.2). */
+/**
+ * The Action Dock (A1, `docs/design/ACTION_DOCK.md`): one fixed two-row frame
+ * in every table state, so the table never moves when a turn starts or ends.
+ * Buttons come only from `legal_actions` and `showdown_actions` (C6.2 §2.3).
+ */
 export function ActionDock({
   view,
-  disabled,
+  status,
+  lastRejection,
+  handEpoch,
+  guardMs = GUARD_MS,
   onAct,
   onShowdownDecision,
   onStartGame,
+  onDismissRejection,
 }: ActionDockProps) {
-  const hand = view.hand;
-  const legal = hand?.legal_actions ?? null;
-  const showdownActions = hand?.showdown_actions ?? null;
+  const statusId = useId();
+  const frame = useRef<HTMLElement>(null);
+  const focusInside = useRef(false);
+  const state = dockState(view, status);
+  const { mode } = state;
+  const connectionLive = state.connection === "live";
+  // The decision's identity comes from the game state, never from the shared
+  // revision, which also changes for unrelated transitions (a join, a host
+  // change). It keys the betting controls (a new decision resets the draft and
+  // the Fold confirmation) and the arrival guard.
+  const identity = decisionIdentity(view, handEpoch);
+  const decisionKey = identity === null ? null : `decision:${identity}`;
+  const guardArmed = useArrivalGuard(connectionLive ? decisionKey : null, guardMs);
+  // `unavailable` truly disables the controls. The arrival guard only drops
+  // activations, so it never costs focus (AM3).
+  const unavailable = !connectionLive || state.pending;
+  const blocked = unavailable || guardArmed;
 
-  if (legal) {
-    return (
-      // biome-ignore lint/a11y/useSemanticElements: an action dock is not a form fieldset
-      <div className={styles.dock} role="group" aria-label="Actions">
-        <BettingControls legal={legal} disabled={disabled} onAct={onAct} />
-      </div>
+  // The control whose command is in flight, by stable identity; cleared when
+  // the command completes (UI-only).
+  const [pressed, setPressed] = useState<PressedAction | null>(null);
+  const wasPending = useRef(state.pending);
+  useEffect(() => {
+    if (wasPending.current && !state.pending) setPressed(null);
+    wasPending.current = state.pending;
+  }, [state.pending]);
+
+  // A control disabled under the pointer or the keyboard loses focus; keep
+  // it in the dock, never on the page body.
+  useLayoutEffect(() => {
+    if (!state.pending && connectionLive) return;
+    const element = frame.current;
+    if (element === null) return;
+    const active = document.activeElement;
+    const lostInside =
+      active instanceof HTMLButtonElement || active instanceof HTMLInputElement
+        ? element.contains(active) && active.disabled
+        : (active === null || active === document.body) && focusInside.current;
+    if (lostInside) element.focus();
+  }, [state.pending, connectionLive]);
+
+  // A command the connection refused to send leaves no pressed state: it
+  // would otherwise label the next, unrelated pending command.
+  function track(action: PressedAction, sent: boolean) {
+    setPressed(sent ? action : null);
+    return sent;
+  }
+
+  function sendShowdown(action: PressedAction, decision: ShowdownDecision) {
+    if (blocked) return;
+    track(action, onShowdownDecision(decision));
+  }
+
+  const connectionText = connectionStatusText(state.connection);
+  const statusParts = {
+    connection:
+      connectionText !== null ? <span className={styles.notice}>{connectionText}</span> : null,
+    sending: state.pending && pressed !== null ? <span>Sending {pressed.text}…</span> : null,
+    rejection:
+      lastRejection !== null ? (
+        <RejectionNotice rejection={lastRejection} onDismiss={onDismissRejection} />
+      ) : null,
+    mode: (
+      <span className={identity !== null ? styles.yourTurn : undefined}>
+        {modeStatusText(mode)}
+      </span>
+    ),
+  };
+  const leaveChip = state.leavePending ? (
+    <span className={styles.chip}>Leaving after this hand</span>
+  ) : null;
+  const busy = state.pending ? pressed : null;
+
+  let content: ReactNode;
+  if (mode.kind === "betting") {
+    content = (
+      <BettingControls
+        key={decisionKey ?? "decision"}
+        legal={mode.legal}
+        structure={view.settings.betting_structure}
+        statusId={statusId}
+        status={statusParts}
+        asideExtra={leaveChip}
+        unavailable={unavailable}
+        guarded={guardArmed}
+        connectionLive={connectionLive}
+        busy={busy}
+        onSend={(action, args) => !blocked && track(action, onAct(args))}
+      />
+    );
+  } else if (mode.kind === "showdown") {
+    content = (
+      <DockRows
+        statusId={statusId}
+        status={pickStatus(statusParts)}
+        aside={leaveChip}
+        controlsLabel="Actions"
+        controls={
+          <>
+            <Button
+              variant="primary"
+              disabled={unavailable}
+              aria-disabled={guardArmed || undefined}
+              busy={busy?.id === "show"}
+              onClick={() => sendShowdown({ id: "show", text: "Show", label: "Show" }, "show")}
+            >
+              Show
+            </Button>
+            <Button
+              variant="neutral"
+              disabled={unavailable}
+              aria-disabled={guardArmed || undefined}
+              busy={busy?.id === "muck"}
+              onClick={() => sendShowdown({ id: "muck", text: "Muck", label: "Muck" }, "muck")}
+            >
+              Muck
+            </Button>
+          </>
+        }
+      />
+    );
+  } else {
+    content = (
+      <DockRows
+        statusId={statusId}
+        status={pickStatus(statusParts)}
+        aside={leaveChip}
+        controls={
+          mode.kind === "notStarted" && mode.isHost ? (
+            <div className={styles.startSlot}>
+              <Button
+                variant="primary"
+                disabled={unavailable}
+                busy={busy?.id === "start_game"}
+                onClick={() =>
+                  track(
+                    { id: "start_game", text: "Start game", label: "Start game" },
+                    onStartGame(),
+                  )
+                }
+              >
+                Start game
+              </Button>
+            </div>
+          ) : null
+        }
+      />
     );
   }
 
-  if (showdownActions) {
-    return (
-      // biome-ignore lint/a11y/useSemanticElements: an action dock is not a form fieldset
-      <div className={styles.dock} role="group" aria-label="Actions">
-        <Button variant="primary" disabled={disabled} onClick={() => onShowdownDecision("show")}>
-          Show
-        </Button>
-        <Button variant="neutral" disabled={disabled} onClick={() => onShowdownDecision("muck")}>
-          Muck
-        </Button>
-      </div>
-    );
-  }
+  return (
+    <section
+      ref={frame}
+      className={styles.dock}
+      aria-label="Action dock"
+      tabIndex={-1}
+      data-pending={state.pending || undefined}
+      data-arming={guardArmed || undefined}
+      onFocus={() => {
+        focusInside.current = true;
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        focusInside.current = next instanceof Node && event.currentTarget.contains(next);
+      }}
+    >
+      {content}
+    </section>
+  );
+}
 
-  if (view.phase === "not_started") {
-    return (
-      <div className={styles.waiting}>
-        {view.you.is_host ? (
-          <Button variant="primary" disabled={disabled} onClick={onStartGame}>
-            Start game
-          </Button>
-        ) : (
-          "Waiting for the host to start"
-        )}
-      </div>
-    );
-  }
-
-  if (view.phase === "waiting_for_players") {
-    return <div className={styles.waiting}>Waiting for players</div>;
-  }
-
-  if (view.phase === "hand_complete") {
-    return <div className={styles.waiting}>Next hand starting</div>;
-  }
-
-  return null;
+function RejectionNotice({
+  rejection,
+  onDismiss,
+}: {
+  rejection: LastRejection;
+  onDismiss: () => void;
+}) {
+  const quiet = isQuietRejection(rejection.code);
+  return (
+    <span className={quiet ? styles.quiet : styles.rejection} role={quiet ? "status" : "alert"}>
+      {!quiet && <span aria-hidden="true">⊘ </span>}
+      {rejectionText(rejection.code)}
+      <button type="button" className={styles.dismiss} onClick={onDismiss} aria-label="Dismiss">
+        ×
+      </button>
+    </span>
+  );
 }

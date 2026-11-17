@@ -1,17 +1,28 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import type { ConnectionStatus } from "../connection/ConnectionController";
 import type { TableView } from "../protocol/types";
 import { readFixtureJson, readScenario } from "../testing/fixtures";
 import { ActionDock } from "./ActionDock";
 import { TableStage } from "./TableStage";
+import { laterDecision, withLegal } from "./testViews";
 
 function view(fixture: string): TableView {
   return readFixtureJson<{ view: TableView }>(`messages/server/${fixture}`).view;
 }
 
+const LIVE: ConnectionStatus = {
+  phase: "live",
+  pending: false,
+  reconciling: false,
+  attempt: 0,
+  reason: null,
+};
+
 function noop() {
-  // intentionally empty: these render tests never trigger a command
+  // these render tests never trigger a command
+  return true;
 }
 
 describe("TableStage rendering", () => {
@@ -93,10 +104,13 @@ describe("ActionDock rendering", () => {
     render(
       <ActionDock
         view={view("snapshot.call_is_all_in.decision.json")}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
     expect(screen.getByRole("button", { name: /Call .*\(All-in\)/ })).toBeDefined();
@@ -106,25 +120,31 @@ describe("ActionDock rendering", () => {
     render(
       <ActionDock
         view={view("snapshot.side_pots.short_all_in_decision.json")}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
     expect(screen.getByRole("button", { name: "All-in $990" })).toBeDefined();
     expect(screen.queryByRole("slider")).toBeNull();
-    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   it("renders a call-only dock with no bet or raise controls", () => {
     render(
       <ActionDock
         view={view("snapshot.side_pots.call_only.json")}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
     expect(screen.getByRole("button", { name: /Call/ })).toBeDefined();
@@ -136,55 +156,62 @@ describe("ActionDock rendering", () => {
     render(
       <ActionDock
         view={view("snapshot.heads_up.showdown_decision.json")}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
     expect(screen.getByRole("button", { name: "Show" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Muck" })).toBeDefined();
   });
 
-  it("re-clamps the sizer draft when max_target shrinks on the actor's next decision, even if min_full_target repeats (no stale state across decisions)", async () => {
+  it("resets the sizer draft when max_target shrinks on the actor's next decision, even if min_full_target repeats (no stale state across decisions)", async () => {
     const actorView = view("snapshot.heads_up.preflop.actor.json");
     const { rerender } = render(
       <ActionDock
         view={actorView}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
-    // The player drags to the full all-in amount ($1,000) but does not submit.
-    await userEvent.click(screen.getByRole("button", { name: "All-in" }));
+    // The player selects the full all-in amount ($1,000) but does not submit.
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
     expect(screen.getByRole("button", { name: "All-in $1,000" })).toBeDefined();
 
     // A later decision for the same seat: `min_full_target` repeats (still
     // $20, a realistic coincidence across streets/hands with the same
     // blinds), but the actor's stack - and so `max_target` - has shrunk to
     // $900, with no short_all_in_target.
-    const nextDecisionView = view("snapshot.heads_up.preflop.actor.json");
-    if (nextDecisionView.hand?.legal_actions) {
-      nextDecisionView.hand.legal_actions.max_target = 900;
-    }
+    // The next decision is a later point in the hand (the log has grown), so
+    // it is a new decision even where legal actions repeat.
+    const nextDecisionView = laterDecision(withLegal(actorView, { max_target: 900 }));
     rerender(
       <ActionDock
         view={nextDecisionView}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
 
-    // The sizer must never offer, or submit, a target above the current
-    // legal maximum (C6.2 §2.3: clamping to the server's range is the only
-    // client-side exception allowed). A stale $1,000 draft here would both
-    // mislabel the button ("Raise to $1,000" instead of "All-in") and send
-    // an out-of-range target that the server must reject.
-    expect(screen.queryByRole("button", { name: "Raise to $1,000" })).toBeNull();
+    // A new decision starts a fresh draft at the new minimum: the stale
+    // $1,000 is never offered, labelled or sent, and nothing is clamped.
+    expect(screen.queryByRole("button", { name: /\$1,000/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Raise to $20" })).toBeDefined();
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
     expect(screen.getByRole("button", { name: "All-in $900" })).toBeDefined();
   });
 
@@ -192,10 +219,13 @@ describe("ActionDock rendering", () => {
     render(
       <ActionDock
         view={view("snapshot.heads_up.preflop.actor.json")}
-        disabled={false}
+        status={LIVE}
+        lastRejection={null}
+        guardMs={0}
         onAct={noop}
         onShowdownDecision={noop}
         onStartGame={noop}
+        onDismissRejection={noop}
       />,
     );
     expect(screen.getByRole("button", { name: "Call $5" })).toBeDefined();

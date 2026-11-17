@@ -1,15 +1,19 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ConnectionStatus } from "../connection/ConnectionController";
-import type { Settings } from "../protocol/types";
+import type { TableView } from "../protocol/types";
 import { Button } from "../ui/Button";
 import { ProductLogo } from "../ui/ProductLogo";
+import { dockConnection } from "./dockState";
+import { LeaveDialog } from "./LeaveDialog";
+import { leaveCopy } from "./leaveCopy";
 import styles from "./TableHeader.module.css";
+import { TableMenu } from "./TableMenu";
 
 export interface TableHeaderProps {
-  settings: Settings;
-  joinCode: string;
+  view: TableView;
   status: ConnectionStatus;
-  onLeave: () => void;
+  /** Whether the `leave` command was actually sent. */
+  onLeave: () => boolean;
 }
 
 function connectionLabel(status: ConnectionStatus): string {
@@ -19,8 +23,12 @@ function connectionLabel(status: ConnectionStatus): string {
   return "Disconnected";
 }
 
-export function TableHeader({ settings, joinCode, status, onLeave }: TableHeaderProps) {
+export function TableHeader({ view, status, onLeave }: TableHeaderProps) {
+  const { settings, join_code: joinCode } = view;
   const [copied, setCopied] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const restoreFocus = useRef<(() => void) | null>(null);
+  const leaveAvailable = dockConnection(status) === "live" && !status.pending;
 
   async function copyCode() {
     try {
@@ -54,9 +62,26 @@ export function TableHeader({ settings, joinCode, status, onLeave }: TableHeader
       <div className={styles.status} data-phase={status.phase}>
         {connectionLabel(status)}
       </div>
-      <Button variant="neutral" onClick={onLeave}>
-        Leave
-      </Button>
+      {view.you.pending_leave && <span className={styles.leaving}>Leaving after this hand</span>}
+      <TableMenu
+        leaveAvailable={leaveAvailable}
+        leavePending={view.you.pending_leave}
+        onLeaveRequested={(restore) => {
+          restoreFocus.current = restore;
+          setLeaveOpen(true);
+        }}
+      />
+      {leaveOpen && (
+        <LeaveDialog
+          lines={leaveCopy(view)}
+          available={leaveAvailable}
+          onConfirm={onLeave}
+          onClose={() => {
+            setLeaveOpen(false);
+            restoreFocus.current?.();
+          }}
+        />
+      )}
     </header>
   );
 }

@@ -1,15 +1,11 @@
 import type { ReactNode } from "react";
 import type { ConnectionStatus } from "../connection/ConnectionController";
-import type { LastRejection } from "../session/store";
 import { Button } from "../ui/Button";
-import { isQuietRejection, rejectionText } from "./rejectionText";
 import styles from "./StatusLayer.module.css";
 
 export interface StatusLayerProps {
   status: ConnectionStatus;
-  lastRejection: LastRejection | null;
   wasLeaving: boolean;
-  onDismissRejection: () => void;
   onUseHere: () => void;
   onBackToEntry: () => void;
 }
@@ -23,14 +19,7 @@ function TerminalScreen({ title, action }: { title: string; action?: ReactNode }
   );
 }
 
-export function StatusLayer({
-  status,
-  lastRejection,
-  wasLeaving,
-  onDismissRejection,
-  onUseHere,
-  onBackToEntry,
-}: StatusLayerProps) {
+export function StatusLayer({ status, wasLeaving, onUseHere, onBackToEntry }: StatusLayerProps) {
   if (status.phase === "closed") {
     switch (status.reason) {
       case "protocol_mismatch":
@@ -94,22 +83,6 @@ export function StatusLayer({
       {status.reconciling && status.phase === "live" && (
         <div className={styles.banner} role="status">
           No response — reconnecting
-        </div>
-      )}
-      {lastRejection && (
-        <div
-          className={isQuietRejection(lastRejection.code) ? styles.quiet : styles.toast}
-          role={isQuietRejection(lastRejection.code) ? "status" : "alert"}
-        >
-          {rejectionText(lastRejection.code)}
-          <button
-            type="button"
-            className={styles.dismiss}
-            onClick={onDismissRejection}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
         </div>
       )}
     </div>

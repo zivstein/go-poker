@@ -77,17 +77,20 @@ export function TableSession({
     }
   }, [state.status, tableId]);
 
-  function handleAct(args: ActArgs) {
-    controller?.sendCommand({ name: "act", args });
+  // Each handler reports whether the command was actually sent: the
+  // controller refuses (`null`) when the connection is not live, a command is
+  // in flight, or the outcome of an earlier one is uncertain.
+  function handleAct(args: ActArgs): boolean {
+    return controller?.sendCommand({ name: "act", args }) != null;
   }
-  function handleShowdownDecision(decision: ShowdownDecision) {
-    controller?.sendCommand({ name: "showdown_decision", args: { decision } });
+  function handleShowdownDecision(decision: ShowdownDecision): boolean {
+    return controller?.sendCommand({ name: "showdown_decision", args: { decision } }) != null;
   }
-  function handleStartGame() {
-    controller?.sendCommand({ name: "start_game", args: {} });
+  function handleStartGame(): boolean {
+    return controller?.sendCommand({ name: "start_game", args: {} }) != null;
   }
-  function handleLeave() {
-    controller?.sendCommand({ name: "leave", args: {} });
+  function handleLeave(): boolean {
+    return controller?.sendCommand({ name: "leave", args: {} }) != null;
   }
   function handleUseHere() {
     // The current controller is terminally closed (superseded): a new
@@ -102,9 +105,7 @@ export function TableSession({
     return (
       <StatusLayer
         status={state.status}
-        lastRejection={state.lastRejection}
         wasLeaving={controller?.wasLeaving ?? false}
-        onDismissRejection={handleDismissRejection}
         onUseHere={handleUseHere}
         onBackToEntry={onBackToEntry}
       />
@@ -114,6 +115,7 @@ export function TableSession({
   return (
     <TableScreen
       view={displayed.view}
+      handEpoch={displayed.handEpoch}
       status={state.status}
       lastRejection={state.lastRejection}
       wasLeaving={controller?.wasLeaving ?? false}

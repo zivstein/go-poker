@@ -53,6 +53,15 @@
   --seat-gap: 4px;
   --seat-note-h: 14px;
 
+  /* The Action Dock: fixed two rows in every state (A1, S0 Option B). At the
+     1024x576 minimum stage, header + 8px body padding + stage + dock fit
+     1280x720 with no vertical scroll. */
+  --dock-h: 70px;
+  --dock-pad-y: 6px;
+  --dock-row-gap: 4px;
+  --dock-top-h: 18px;
+  --dock-controls-h: 35px;
+
   /* The hand-result panel's largest box (see RESULT_BOX in seatLayout.ts). */
   --result-max-w: 560px;
   --result-max-h: 96px;
