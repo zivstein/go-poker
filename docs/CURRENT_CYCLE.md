@@ -4,6 +4,8 @@
 
 Milestone 7 is complete. Its behavior is recorded in `ARCHITECTURE.md`, its boundary contracts in [ADR 0005](adr/0005-player-view-and-table-session-boundary.md) and [ADR 0006](adr/0006-shared-table-revision-and-private-intents.md), and its history in Git.
 
+**Status snapshot (2026-11-19, verified against GitHub and `master` at `033f945`):** no Cycle is in progress. A1 (PR #16) and the Core pot-settlement fix (PR #21, Issue #2 closed) are merged. The next primary engineering Cycle is R1 Backend Stability; see [Planned Cycles](#planned-cycles).
+
 Milestone status lives in `ROADMAP.md`. The milestone plan — each Cycle's purpose and completion artifact, the dependencies, and the exit gates — is in [M8 Plan](milestones/M8_PLAN.md). This file holds the Cycle working state.
 
 ## Planning Gate
@@ -30,21 +32,33 @@ M8 Web follow-up Cycles after C6.4. They improve the playable table without chan
 | Cycle | Status | Detail |
 | --- | --- | --- |
 | Visual Rescue | Complete (merged 2026-11-15, PR #15) | Table readability and layout: card readability, seat collisions, clipping, chip positions |
-| A1 — Betting and Action Safety | Implemented on `web/a1-action-safety`, awaiting Owner review (2026-11-16) | A fixed two-row, 70 px Action Dock in every state; Min and Max as draft selectors only; invalid or out-of-range typed amounts never clamp and cannot commit; a two-press Fold while Check is free; the provisional 350 ms turn-arrival guard; inline pending, rejection and reconnect feedback; Leave in a secondary table menu with a native confirmation dialog. Contract amendments AM1–AM3 are [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md) revision 3; the component states are [`ACTION_DOCK.md`](design/ACTION_DOCK.md) (AM4) |
-| A2 — Player Action Feedback | Next, prioritized by the Owner | Before pre-actions and keyboard shortcuts |
+| A1 — Betting and Action Safety | Complete (merged 2026-11-17, PR #16) | A fixed two-row, 70 px Action Dock in every state; Min and Max as draft selectors only; invalid or out-of-range typed amounts never clamp and cannot commit; a two-press Fold while Check is free; the provisional 350 ms turn-arrival guard; inline pending, rejection and reconnect feedback; Leave in a secondary table menu with a native confirmation dialog. Contract amendments AM1–AM3 are [C6.2 plan](milestones/M8_C6_2_WEB_PLAN.md) revision 3; the component states are [`ACTION_DOCK.md`](design/ACTION_DOCK.md) (AM4). Non-blocking review findings are tracked as Issues #17–#20 |
+| A2 — Player Action Feedback | Planned; not started (Issue #23, with #17 and #20) | Prioritized by the Owner before pre-actions and keyboard shortcuts. Timed transitions wait for the B0 motion contracts |
+
+## Planned Cycles
+
+Nothing below has started, and none is marked In Progress until work begins. Scope and Issue numbers are in [`ROADMAP.md`](ROADMAP.md).
+
+| Cycle | Status | Detail |
+| --- | --- | --- |
+| R0 — Core Correctness | Complete (2026-11-17) | Issue #2 via PR #21 |
+| **R1 — Backend Stability** | **Next primary engineering Cycle (planned)** | Issues #3–#7. Start with #3 (cancel and await WebSocket reader/writer tasks) and #4 (next-hand timer re-arm). Needs a Cycle Brief; #5–#7 follow or join the Brief at the Owner's choice |
+| F0 — Friends Session Contracts | Planned parallel design Cycle | Issue #22: specification, authority, persistence, privacy and failure semantics, reconciled with the Product Contract's wallet model, before any decomposition. May run beside R1 |
+| R2 — Web Connectivity & Secure Hosting | Planned | Issues #10–#13. #10 needs the Friends Alpha origin/hosting decision first |
+| A2 — Player Action Feedback | Planned | Issues #23, #17, #20 |
+| B0 — Motion contracts and showdown experience | Planned | Issues #24, #14, #19 |
+| Show/Muck 3-second timer | Planned, not implemented | Issue #25. Needs an approved server/protocol/design contract first |
+| Offline Variant Lab | Ongoing personal track, not a release gate | Issue #26; [offline guide](company/OFFLINE_DEVELOPMENT_GUIDE.md) |
 
 ## Pending Gates
 
 None active for C6.
 
-**Friends Alpha blockers** (mandatory before the Friends Alpha):
-- **A known Core correctness defect: equivalent pot layers and odd chips.** Fix implemented on `core/pot-settlement-correctness`, awaiting Owner review (2026-11-17, GitHub issue #2).
-  - `pots()` never merged adjacent pot layers with identical eligible-seat sets, and settlement split each layer independently (ADR 0001 §1).
-  - With a tie, the odd chips could then differ from the merged pot. A reproduced five-player case paid 66 / 64 instead of 65 / 65 for an aggregate 130-chip pot. Chips were conserved and winner eligibility was correct.
-  - It was accepted for the C6.4 POC only.
-  - **The fix:** a Core Cycle after C6.4 that clarifies ADR 0001, merges equivalent adjacent layers in Core, and adds regression tests for ties, odd chips, eligibility and conservation. The affected fixtures are then updated under C6.3 P17.
-  - **Implemented:** the ADR 0001 clarification note; `pots()` merges adjacent layers with identical eligible seats, so the reproduced case pays 65 / 65; regression tests; `three_way_side_pots` hand 1 regenerated under P17 (one 810 pot instead of 30 + 780), with notes in ADR 0009 §10 and the fixtures README.
-  - Detail: [C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) §7.
+**Friends Alpha blockers** (mandatory, or explicitly re-approved by the Owner, before the Friends Alpha). The Issues are the source of truth; the grouping is in [`ROADMAP.md`](ROADMAP.md#release-blockers).
+
+- **Resolved: equivalent pot layers and odd chips** (GitHub Issue #2, closed 2026-11-19). `pots()` now merges adjacent layers with identical eligible seats, so the reproduced case pays 65 / 65. Merged as PR #21 (`033f945`): the ADR 0001 clarification note, regression and chip-oracle tests, and the `three_way_side_pots` fixture regenerated under C6.3 P17 (ADR 0009 §10 and the fixtures README). Detail: [C6.3 plan](milestones/M8_C6_3_WIRE_CONTRACT_PLAN.md) §7.
+- **Open, labelled `release-blocker`:** #3, #4, #5, #6, #7 (Backend, R1) and #10, #11, #12 (Web, R2).
+- **Also required, not labelled:** #22 Friends Session (`priority:p1`, Product Contract P0).
 
 The C5.6 gates (the public repository's `pull_request_target` policy, live `ownership` enforcement on a real PR, and the first mode switch) are deferred with C5.6. They apply only if multi-lane activation is approved later.
 
@@ -61,6 +75,10 @@ For C6:
 - **Deferred C6.2 items:** pot-based sizing presets (W21), defined in a later game/betting contract cycle before any preset button is built.
 - **Bet sizer slider increments** (raised in A1, 2026-11-16): the slider moves in $1 steps. The engine accepts every whole-number target in `[min_full_target, max_target]`, and no chip denomination or betting increment exists in the engine, the view or the protocol. Snapping the slider to multiples of the small blind would not change legality, but it means client-computed amounts, which C6.2 §2.3 rule 7 forbids. It needs either a rule 7 clarification (UI-only selection granularity, with the exact minimum, maximum and short all-in always selectable and typed entry unchanged) or an authoritative chip-unit or increment in the game contract.
 - **Display-only money arithmetic** (A1 D1, 2026-11-16): deferred to a separate follow-up; rule 7 is unchanged.
+- **Friends Alpha hosting origin** (Issue #10, 2026-11-19): the browser origin strategy for non-local clients (HTTPS/WSS) is undecided. It gates R2 and release validation.
+- **Friends Session versus Wallet** (Issue #22, 2026-11-19): the Product Contract describes a persistent wallet, grants and rebuys; Issue #22 describes a session ledger with external Settle Up. F0 reconciles them.
+- **Show/Muck timer contract** (Issue #25, 2026-11-19): deadline ownership, legality of auto-Show, reconnect and race semantics, and any wire change, before implementation.
+- **Where the archived approved decisions live** (2026-11-19): the roadmap rewrite left their text in [`milestones/ROADMAP_ARCHIVE_2026-11-19.md`](milestones/ROADMAP_ARCHIVE_2026-11-19.md). The Owner decides whether to move them to ADRs, `ARCHITECTURE.md` or the Product Contract.
 - **Deferred C6.1 decisions:** E3, the showdown-timeout rule (with the action timer); E5, Host versus Table Owner (C7); the E14 Quick Play pool details (Quick Play design); the E16 recovery mechanism (C7).
 
 Deferred C5.2 organization decisions, each decided at its gate:
@@ -76,13 +94,13 @@ Deferred C5.2 organization decisions, each decided at its gate:
 
 Identified for follow-up; none is resolved by changing an approved product decision.
 
-Stale `ROADMAP.md` product descriptions that the Friends Alpha Product Contract governs (precedence approved on 2026-11-09). The roadmap text still needs editorial reconciliation:
+Stale product descriptions in the archived roadmap ([`milestones/ROADMAP_ARCHIVE_2026-11-19.md`](milestones/ROADMAP_ARCHIVE_2026-11-19.md), formerly `ROADMAP.md`) that the Friends Alpha Product Contract governs (precedence approved on 2026-11-09). The roadmap text still needs editorial reconciliation:
 
-- [Reach a Friends Alpha](ROADMAP.md#reach-a-friends-alpha): "a simple guest identity", "visual polish can be modest" and the non-goal "complex accounts or authentication", against the contract's persistent anonymous server accounts, persistent wallet and ledger, and a branded, visibly designed lobby and table.
+- [Reach a Friends Alpha](milestones/ROADMAP_ARCHIVE_2026-11-19.md#reach-a-friends-alpha): "a simple guest identity", "visual polish can be modest" and the non-goal "complex accounts or authentication", against the contract's persistent anonymous server accounts, persistent wallet and ledger, and a branded, visibly designed lobby and table.
 - The same section's non-goals "reconnect perfection", against the contract's exact reconnect, sit-out and grace timings, and "social features, matchmaking, and lobby discovery", against the contract's P0 lobby (matchmaking stays deferred in both).
 - The approved decisions on rebuy ("may be added") and Leave ("rebuy/top-up stays deferred"), against Rebuys and Top-ups in Friends Alpha P0.
 - The Leave decision that a user who left "cannot rejoin the same table session", against the 30-minute anti-ratholing claim on the same Session (D36), which implies a return to it.
-- [Grow the Platform](ROADMAP.md#grow-the-platform) and the milestone table: accounts and persistence (Milestone 16) after the Alpha, replacing guest-only, in-memory tables, against persistent accounts, wallets and saved tables in Friends Alpha.
+- [Grow the Platform](milestones/ROADMAP_ARCHIVE_2026-11-19.md#grow-the-platform) and the milestone table: accounts and persistence (Milestone 16) after the Alpha, replacing guest-only, in-memory tables, against persistent accounts, wallets and saved tables in Friends Alpha.
 
 Open for C7 or a Product Owner decision, not covered by the precedence rule:
 
